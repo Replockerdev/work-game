@@ -1,10 +1,9 @@
 # Work Game — Three Lines
 
-One continuous ski mountain, one chairlift, and three routes that rejoin at the base: a wide groomer, a park with three terrain jumps, and tree glades. No village, quests, shops, or sidebar.
+One chairlift and three connected runs: groomer, three-jump park, and glades. A Colorado-inspired surrounding range uses connected ridgelines, exposed rock, and layered spruce forests. Procedural snow grain, wind ripples, corduroy, ski tracks, and shadows provide surface detail.
 
-## Controls
-A/D or left/right: turn the entire skier and skis. W/up: pole forward and tuck. S/down: brake. Space: jump. E: board at the mint lift-base ring when moving slowly. Automatic unloading at the summit after a 20-second ride. M: optional trail map. R: recover to lift base. P/Escape: pause.
+Controls: A/D or arrows steer the whole skier and skis. W pushes/tucks, S brakes, Space jumps. E boards from anywhere inside the wide, invisible base-clearing circle. M toggles the map, R recovers to base, P pauses.
 
-The runs share one terrain surface. Skis follow the skier heading. Park lips launch the skier using terrain height and momentum. All runs merge above the lift plaza. Lap count saves locally. Three.js is vendored under its included MIT license.
+Boarding is available across a 58-metre radius around the shared run-out. Occupied and empty chairs use one cable-height function. The two chair lanes straddle center-mounted lift towers with clearance below their crossbeams.
 
-Serve this directory over HTTP; no build step. Static Vercel hosting, WebGL required. PWA manifest and offline cache included. Prior prototypes remain in Git history.
+Static HTTP hosting; no build step. WebGL required. Three.js is self-hosted under its included MIT license. Offline cache and PWA manifest included. Previous prototypes remain in Git history.
