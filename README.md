@@ -1,13 +1,9 @@
-# Touchline 3D
+# Work Game — Juniper Mountain
 
-Low-poly five-a-side soccer with animated players, a follow camera, physically lofted balls, AI opponents, and goalkeeper saves.
+A cozy 3D ski adventure: village exploration, two trails, four quests, hidden bells, gear upgrades, and saved progress.
 
-## Controls
-WASD / arrows: move. Space: hold and release to shoot. X / M: pass or tackle. E: lofted pass. Q: chip shot. C: switch player. Shift: sprint. V: toggle wide camera. P / Escape: pause. Use the pitch corner button for fullscreen.
+Controls: WASD/arrows move; A/D carve, W tuck, S brake, Space jump, E talk, P pause.
 
-Quick match, saved career seasons with upgrades, and a simplified World Cup tournament are included. Progress stays in browser localStorage.
+Install through Chrome or Edge, then pin the app to the Windows taskbar. Load once online for offline caching. Progress stays in localStorage; journal supports export/restore.
 
-## Run and deploy
-Serve this directory through any static HTTP server. Import this repository on Vercel with the Other preset, no build command, and output directory `.`. WebGL is required. The Three.js rendering library is vendored locally; its MIT license is in vendor/THREE-LICENSE.txt.
-
-Original independent arcade football game; not affiliated with FIFA, EA, or Super Liquid Soccer.
+Serve this directory over HTTP. No build step. Requires WebGL. Three.js is vendored under the included MIT license. Previous soccer prototype: /soccer.html.
