@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,liftTowers,liftCableHeight,SUMMIT_TERMINAL,RIDE_SECONDS,chairProgress} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,liftTowers,liftCableHeight,SUMMIT_TERMINAL,RIDE_SECONDS,chairProgress,bowlX,bowlWidth,inBowl,bowlRocks} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {makeSkier} from './skier-model.js';
 const surfaceHeight=(x,z)=>Math.abs(x)<=215&&z>=-40&&z<=690?height(x,z):rangeHeight(x,z);
@@ -36,10 +36,17 @@ export function createMountain(canvas){
   return panel;
  }
  const geo=new T.PlaneGeometry(430,730,172,365);geo.rotateX(-Math.PI/2);geo.translate(0,0,325);const pos=geo.attributes.position,colors=[];
- for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);pos.setY(i,height(x,z));let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<90||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>100&&z<560)color.multiplyScalar(.88);const n=Math.sin(x*.31+z*.047)*.024; color.offsetHSL(0,0,n);colors.push(color.r,color.g,color.b);}
+ const bowlSnow=new T.Color('#eef5fa');
+ for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);pos.setY(i,height(x,z));let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<90||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>100&&z<560)color.multiplyScalar(.88);
+  if(inBowl(x,z)){
+   const edgeFade=T.MathUtils.smoothstep(bowlWidth(z)-Math.abs(x-bowlX(z)),0,10);
+   const endFade=T.MathUtils.smoothstep(z,152,190)*(1-T.MathUtils.smoothstep(z,467,518));
+   color.lerp(bowlSnow,.72*edgeFade*endFade);
+  }
+  const n=Math.sin(x*.31+z*.047)*.024; color.offsetHSL(0,0,n);colors.push(color.r,color.g,color.b);}
  geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
  // Visible trail-edge poles and arrows make all three routes converge at the base.
- for(const r of routes){for(let z=100;z<=560;z+=35){for(const side of [-1,1]){const x=pathX(z,r)+r.width*side;box(.14,1.6,.14,r.color,x,height(x,z)+.8,z);box(.55,.25,.12,r.color,x,height(x,z)+1.55,z);}}
+ for(const r of routes){for(let z=100;z<=560;z+=35){for(const side of [-1,1]){const x=pathX(z,r)+r.width*side;if(r.id==='groomer'&&side===-1&&inBowl(x,z,3))continue;box(.14,1.6,.14,r.color,x,height(x,z)+.8,z);box(.55,.25,.12,r.color,x,height(x,z)+1.55,z);}}
  const z=110,x=pathX(z,r)+r.width*.65,y=height(x,z);
  const colors={groomer:'#237449',park:'#98500e',glades:'#254d77'};
  box(.15,1.75,.15,'#68523f',x,y+.87,z);
@@ -56,6 +63,13 @@ export function createMountain(canvas){
   trailSign('Lift base  →',x,y+1.65,z,'#355663');
  }
  const trees=obstacles();const forest=detailedTrees(scene,[...trees,...surroundingForest()]);addRange(scene);
+ const rockShape=new T.DodecahedronGeometry(1,0);
+ for(const [i,{x,z,size}] of bowlRocks.entries()){
+  const rock=mesh(rockShape,i%2?'#69767b':'#535e64');
+  rock.scale.set(size,size*.72,size*.85);
+  rock.rotation.set(.18*i,.63*i,-.27);
+  rock.position.set(x,height(x,z)+size*.18,z);
+ }
  // One continuous chairlift, with a visible cable, towers, terminals and moving chairs.
  const cable=[];for(let z=12;z<=BASE.z;z+=2)cable.push([LIFT.upX,liftCableHeight(z),z]);
  for(const z of liftTowers.slice(1,-1)){const h=height(LIFT.towerX,z),c=liftCableHeight(z),beam=c+LIFT.crossbeamClearance;box(LIFT.towerWidth,beam-h,.9,'#607580',LIFT.towerX,(beam+h)/2,z);box(21,.5,1.1,'#526874',LIFT.towerX,beam,z);box(2,.5,2,'#777b73',LIFT.towerX,h+.1,z);for(const x of [LIFT.upX,LIFT.downX]){for(const dz of [-1.1,-.4,.4,1.1]){const wheel=mesh(new T.CylinderGeometry(.34,.34,.18,12),'#354a57');wheel.rotation.z=Math.PI/2;wheel.position.set(x,c+.34,z+dz);}box(1.1,.18,3.4,'#647983',x,c+.85,z);}for(let y=h+1;y<beam-1;y+=.9)box(.7,.06,.16,'#9aa7a6',LIFT.towerX+.55,y,z);}
@@ -214,5 +228,5 @@ export function createMountain(canvas){
  sun.target.updateMatrixWorld();
  forest.clearSightline(camera.position,skier.position,dt);
  renderer.render(scene,camera);}
- return {render,trees,resetCamera(){camReady=false;previous=null;}};
+ return {render,trees:[...trees,...bowlRocks],resetCamera(){camReady=false;previous=null;}};
 }
