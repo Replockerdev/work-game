@@ -1,9 +1,10 @@
-# Work Game — Juniper Mountain
+# Work Game — Three Lines
 
-A cozy 3D ski adventure: village exploration, two trails, four quests, hidden bells, gear upgrades, and saved progress.
+One continuous ski mountain, one chairlift, and three routes that rejoin at the base: a wide groomer, a park with three terrain jumps, and tree glades. No village, quests, shops, or sidebar.
 
-Controls: WASD/arrows move; A/D carve, W tuck, S brake, Space jump, E talk, P pause.
+## Controls
+A/D or left/right: turn the entire skier and skis. W/up: pole forward and tuck. S/down: brake. Space: jump. E: board at the mint lift-base ring when moving slowly. Automatic unloading at the summit after a 20-second ride. M: optional trail map. R: recover to lift base. P/Escape: pause.
 
-Install through Chrome or Edge, then pin the app to the Windows taskbar. Load once online for offline caching. Progress stays in localStorage; journal supports export/restore.
+The runs share one terrain surface. Skis follow the skier heading. Park lips launch the skier using terrain height and momentum. All runs merge above the lift plaza. Lap count saves locally. Three.js is vendored under its included MIT license.
 
-Serve this directory over HTTP. No build step. Requires WebGL. Three.js is vendored under the included MIT license. Previous soccer prototype: /soccer.html.
+Serve this directory over HTTP; no build step. Static Vercel hosting, WebGL required. PWA manifest and offline cache included. Prior prototypes remain in Git history.
