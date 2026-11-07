@@ -6,7 +6,7 @@ export function createView(canvas){
  const scene=new T.Scene();scene.background=new T.Color('#a7d7db');scene.fog=new T.Fog('#a7d7db',135,240);
  const camera=new T.PerspectiveCamera(46,1,.1,350);camera.position.set(50,57,99);
  scene.add(new T.HemisphereLight(0xd8f1ff,0x477443,2.5));
- const sun=new T.DirectionalLight(0xffeed0,3.1);sun.position.set(-25,80,30);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-80,right:80,top:70,bottom:-70,near:1,far:170});sun.shadow.bias=-.0008;scene.add(sun);
+ const sun=new T.DirectionalLight(0xffeed0,3.1);sun.position.set(-25,80,30);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-80,right:80,top:70,bottom:-70,near:1,far:170});sun.shadow.bias=-.0008;scene.add(sun);
  const mats={};function mat(color){return mats[color]??=new T.MeshStandardMaterial({color,roughness:.95,flatShading:true});}
  function box(w,h,d,color,x,y,z,parent=scene){const mesh=new T.Mesh(new T.BoxGeometry(w,h,d),mat(color));mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh;}
  function line(points,color='#f6f5da',opacity=1){const geo=new T.BufferGeometry().setFromPoints(points.map(p=>new T.Vector3(p[0],p[1]??.045,p[2])));const l=new T.Line(geo,new T.LineBasicMaterial({color,transparent:opacity<1,opacity}));scene.add(l);return l;}
@@ -25,12 +25,12 @@ export function createView(canvas){
  for(const z of [-7,69])for(let r=0;r<4;r++)for(let j=0;j<64;j++){dummy.position.set(-8+j*1.85,r*1.1+1.5,z+(z<0?-r*2.3:r*2.3));dummy.updateMatrix();crowd.setMatrixAt(idx,dummy.matrix);crowd.setColorAt(idx,new T.Color(palette[(j+r*3)%palette.length]));idx++;}crowd.count=idx;scene.add(crowd);
  for(const z of [-1,63])for(let j=0;j<8;j++)box(11,.9,.25,j%2?'#173d39':'#d6ed93',8+j*12,.45,z);
  for(const x of [-4,104])for(const z of [-3,65]){box(.25,15,.25,'#758a88',x,7.5,z);box(4,1,.6,'#f9f4cb',x,15,z);}
- function makePlayer(team,id,index){const root=new T.Group(),body=new T.Group();root.add(body);scene.add(root);const kit=id===0?'#66bfd4':team?'#f8896f':'#c5ed69',shorts=team?'#f8eacb':'#163f37',skin=['#c78a60','#e7b587','#805333','#d09c75','#b77c56'][index%5];
+ function makePlayer(team,id,index){const root=new T.Group(),body=new T.Group();root.add(body);body.scale.setScalar(1.35);scene.add(root);const kit=id===0?'#66bfd4':team?'#f8896f':'#c5ed69',shorts=team?'#f8eacb':'#163f37',skin=['#c78a60','#e7b587','#805333','#d09c75','#b77c56'][index%5];
  box(1.12,1.25,.6,kit,0,1.83,0,body);box(1.05,.46,.61,shorts,0,1.03,0,body);
  const head=new T.Mesh(new T.IcosahedronGeometry(.45,1),mat(skin));head.position.set(0,2.85,0);body.add(head);box(.69,.18,.66,'#30312c',0,3.1,0,body);
  const legs=[],arms=[];for(const side of [-1,1]){const leg=new T.Group();leg.position.set(side*.3,1,0);body.add(leg);box(.33,.55,.35,skin,0,-.23,0,leg);box(.34,.32,.36,kit,0,-.62,0,leg);box(.39,.22,.68,'#253735',0,-.84,.15,leg);legs.push(leg);const arm=new T.Group();arm.position.set(side*.72,2.3,0);body.add(arm);box(.33,.55,.36,kit,0,-.22,0,arm);box(.28,.55,.3,skin,0,-.7,0,arm);arms.push(arm);}
  const ring=new T.Mesh(new T.RingGeometry(1.22,1.4,32),new T.MeshBasicMaterial({color:'#efff88',side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.08;root.add(ring);
- const arrow=new T.Mesh(new T.ConeGeometry(.38,.65,3),mat('#eaff7a'));arrow.rotation.z=Math.PI;arrow.position.y=4.1;root.add(arrow);
+ const arrow=new T.Mesh(new T.ConeGeometry(.38,.65,3),mat('#eaff7a'));arrow.rotation.z=Math.PI;arrow.position.y=4.9;root.add(arrow);
  return {root,body,legs,arms,ring,arrow,x:0,z:0,walk:0,angle:team?-Math.PI/2:Math.PI/2};}
  const models=Array.from({length:10},(_,i)=>makePlayer(i<5?0:1,i%5,i));
  const football=new T.Group(),sphere=new T.Mesh(new T.IcosahedronGeometry(.59,2),mat('#fffae8'));sphere.castShadow=true;football.add(sphere);
@@ -41,11 +41,11 @@ export function createView(canvas){
  function render(state,dt){const w=canvas.clientWidth,h=canvas.clientHeight;if(w!==lastW||h!==lastH){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();lastW=w;lastH=h;}
  const {players,ball,active,charge,playing,lastAim}=state;
  for(let i=0;i<players.length;i++){const p=players[i],m=models[i],x=p.x/10,z=p.y/10,speed=Math.hypot(x-m.x,z-m.z)/Math.max(dt,.016);if(speed>.08&&speed<100){m.walk+=dt*Math.min(speed,25)*1.05;const target=Math.atan2(x-m.x,z-m.z);let delta=(target-m.angle+Math.PI*3)%(Math.PI*2)-Math.PI;m.angle+=delta*Math.min(1,dt*15);}m.x=x;m.z=z;m.root.position.set(x,0,z);m.body.rotation.y=m.angle;
- const stride=playing?Math.min(speed/16,1):0;m.legs[0].rotation.x=Math.sin(m.walk)*.85*stride;m.legs[1].rotation.x=-Math.sin(m.walk)*.85*stride;m.arms[0].rotation.x=-Math.sin(m.walk)*.7*stride;m.arms[1].rotation.x=Math.sin(m.walk)*.7*stride;m.body.position.y=Math.abs(Math.sin(m.walk))*stride*.14;m.body.rotation.z=playing?Math.sin(m.walk*.5)*stride*.07:0;m.ring.visible=m.arrow.visible=i===active;m.arrow.position.y=4.1+Math.sin(performance.now()*.004)*.12;}
+ const stride=playing?Math.min(speed/16,1):0;m.legs[0].rotation.x=Math.sin(m.walk)*.85*stride;m.legs[1].rotation.x=-Math.sin(m.walk)*.85*stride;m.arms[0].rotation.x=-Math.sin(m.walk)*.7*stride;m.arms[1].rotation.x=Math.sin(m.walk)*.7*stride;m.body.position.y=Math.abs(Math.sin(m.walk))*stride*.14;m.body.rotation.z=playing?Math.sin(m.walk*.5)*stride*.07:0;m.ring.visible=m.arrow.visible=i===active;m.arrow.position.y=4.9+Math.sin(performance.now()*.004)*.12;}
  football.position.set(ball.x/10,.6+(ball.z||0)/10,ball.y/10);football.rotation.z-=ball.vx*dt*.025;football.rotation.x+=ball.vy*dt*.025;ballShadow.position.set(ball.x/10,.09,ball.y/10);ballShadow.scale.setScalar(1+(ball.z||0)*.012);ballShadow.material.opacity=Math.max(.12,.4-(ball.z||0)*.004);
  aim.visible=charge>0&&ball.owner===active;const p=players[active];if(p){aim.position.set(p.x/10+lastAim.x*2.6,.15,p.y/10+lastAim.y*2.6);aim.rotation.z=-Math.atan2(lastAim.x,lastAim.y);aim.scale.setScalar(.75+charge*.7);}
  const targetX=T.MathUtils.clamp(ball.x/10*.65+players[active].x/10*.35,23,77),targetZ=T.MathUtils.clamp(ball.y/10,20,42);camX+=(targetX-camX)*(1-Math.exp(-dt*3));camZ+=(targetZ-camZ)*(1-Math.exp(-dt*2));
- const wide=state.wide;camera.position.set(camX,wide?78:51,camZ+(wide?85:62));camera.lookAt(camX,0,camZ-3);renderer.render(scene,camera);
+ const wide=state.wide;camera.position.set(camX,wide?68:35,camZ+(wide?75:43));camera.lookAt(camX,0,camZ-3);renderer.render(scene,camera);
  }
  return {render};
 }
