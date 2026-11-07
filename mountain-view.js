@@ -200,7 +200,8 @@ export function createMountain(canvas){
  const eyeX=p.x-forwardX*behind,eyeZ=p.z-forwardZ*behind;
  const lookX=p.x+forwardX*ahead,lookZ=p.z+forwardZ*ahead;
  const eyeY=Math.max(p.y+(lift?6:8.5),surfaceHeight(eyeX,eyeZ)+3);
- const lookY=lift?p.y+2:Math.max(p.y-6,surfaceHeight(lookX,lookZ)+.6);
+ const rearView=T.MathUtils.smoothstep(-forwardZ,.45,1)*(1-T.MathUtils.smoothstep(p.z,50,105));
+ const lookY=lift?p.y+2:Math.max(p.y-6,surfaceHeight(lookX,lookZ)+.6)+rearView*4;
  desired.set(eyeX,eyeY,eyeZ);
  if(!camReady){camPos.copy(desired);look.y=lookY;camReady=true;}
  camPos.lerp(desired,1-Math.exp(-dt*10));
