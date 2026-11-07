@@ -32,6 +32,50 @@ export function detailedTrees(scene,items){
  function geometry(a){const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(a,3));g.computeVertexNormals();return g;}
  const barkCanvas=document.createElement('canvas');barkCanvas.width=128;barkCanvas.height=256;const bx=barkCanvas.getContext('2d');bx.fillStyle='#847261';bx.fillRect(0,0,128,256);for(let i=0;i<130;i++){bx.strokeStyle=i%2?'#665749':'#a28d74';bx.lineWidth=.5+hash(i,2)*2;bx.beginPath();const x=hash(i,3)*128,y=hash(i,4)*256;bx.moveTo(x,y);bx.lineTo(x+hash(i,7)*3,y+12+hash(i,8)*60);bx.stroke();}const bark=new T.CanvasTexture(barkCanvas);bark.colorSpace=T.SRGBColorSpace;bark.wrapT=T.RepeatWrapping;bark.repeat.y=3;
  const trunk=new T.InstancedMesh(new T.CylinderGeometry(.15,.4,9,7),new T.MeshStandardMaterial({map:bark,roughness:1}),items.length),leaves=new T.InstancedMesh(geometry(foliage),new T.MeshStandardMaterial({color:'#e3eadd',side:T.DoubleSide,roughness:1}),items.length),snow=new T.InstancedMesh(geometry(snowy),new T.MeshStandardMaterial({color:'#dce8ef',side:T.DoubleSide,roughness:.96}),items.length);const d=new T.Object3D();items.forEach((p,i)=>{const scale=p.s||1;d.position.set(p.x,p.y??height(p.x,p.z),p.z);d.scale.set(scale*(.8+hash(i,10)*.35),scale*(.85+hash(i,15)*.3),scale*(.8+hash(i,12)*.35));d.rotation.y=hash(i,33)*Math.PI*2;d.updateMatrix();leaves.setMatrixAt(i,d.matrix);snow.setMatrixAt(i,d.matrix);d.position.y+=4.5*d.scale.y;d.updateMatrix();trunk.setMatrixAt(i,d.matrix);leaves.setColorAt(i,new T.Color().setHSL(.38+hash(i,18)*.07,.23+hash(i,8)*.12,.25+hash(i,24)*.12));});leaves.castShadow=leaves.receiveShadow=snow.castShadow=true;scene.add(trunk,leaves,snow);
+ const visibility=new Float32Array(items.length).fill(1);
+ const visibilityAttribute=new T.InstancedBufferAttribute(visibility,1);
+ visibilityAttribute.setUsage(T.DynamicDrawUsage);
+ for(const mesh of [trunk,leaves,snow]){
+  mesh.geometry.setAttribute('treeVisibility',visibilityAttribute);
+  mesh.material.onBeforeCompile=shader=>{
+   shader.vertexShader='attribute float treeVisibility; varying float vTreeVisibility;\n'+shader.vertexShader;
+   shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvTreeVisibility=treeVisibility;');
+   shader.fragmentShader='varying float vTreeVisibility;\n'+shader.fragmentShader;
+   shader.fragmentShader=shader.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+    if(vTreeVisibility < 1.0){
+     float threshold=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))));
+     if(threshold >= vTreeVisibility) discard;
+    }`);
+  };
+ }
+ const trees=items.map(tree=>({...tree,ground:tree.y??height(tree.x,tree.z),scale:tree.s||1}));
+ return {
+  clearSightline(camera,skier,dt){
+   const dx=skier.x-camera.x,dz=skier.z-camera.z,dy=skier.y+1.3-camera.y;
+   const lengthSquared=Math.max(.001,dx*dx+dz*dz);
+   const fadeBack=1-Math.exp(-dt*9);
+   let changed=false;
+   for(let i=0;i<trees.length;i++){
+    const tree=trees[i];
+    const x=tree.x-camera.x,z=tree.z-camera.z;
+    const along=(x*dx+z*dz)/lengthSquared;
+    const closest=T.MathUtils.clamp(along,0,1);
+    const rayY=camera.y+closest*dy;
+    let target=1;
+    if(along<1&&rayY>tree.ground-.5&&rayY<tree.ground+13*tree.scale){
+     const distance=Math.hypot(x-closest*dx,z-closest*dz);
+     target=T.MathUtils.smoothstep(distance,2.9*tree.scale,4.2*tree.scale);
+    }
+    const current=visibility[i];
+    const next=target<current?target:current+(target-current)*fadeBack;
+    if(Math.abs(next-current)>.001||target===1&&current>.999&&current!==1){
+     visibility[i]=next>.999?1:next;
+     changed=true;
+    }
+   }
+   if(changed)visibilityAttribute.needsUpdate=true;
+  }
+ };
 }
 export function surroundingForest(){const a=[];for(let i=0;i<2300;i++){const x=(hash(i,26)-.5)*2000,z=-300+hash(i,55)*2150;if(Math.abs(x)<215&&z>-40&&z<690)continue;const y=rangeHeight(x,z),sx=(rangeHeight(x+6,z)-rangeHeight(x-6,z))/12,sz=(rangeHeight(x,z+6)-rangeHeight(x,z-6))/12;if(y>430||y<-20||Math.hypot(sx,sz)>.7)continue;a.push({x,z,y,s:.65+hash(i,43)*.9});}return a;}
 

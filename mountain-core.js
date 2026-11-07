@@ -19,7 +19,18 @@ export function board(p){if(!canBoard(p))return false;p.mode='lift';p.ride=0;p.s
 export function step(p,input,dt,trees=[]){const events=[];if(p.mode==='lift'){p.ride=Math.min(1,p.ride+dt/20);const t=p.ride;p.x=LIFT.upX;p.z=BASE.z+(12-BASE.z)*t;p.y=liftCableHeight(p.z)-4.6;p.angle=0;if(t>=1){p.mode='ski';p.x=TOP.x;p.z=TOP.z;p.y=height(p.x,p.z);p.speed=2;p.vy=0;p.groundV=0;p.passedTop=true;p.route='Summit · pick a line';events.push('unload');}return events;}
  p.bump=Math.max(0,p.bump-dt);const direction=(input.left?1:0)-(input.right?1:0);const steering=(p.air?.7:1)*(input.brake?1.9:1.25);p.yaw+=(direction*steering-p.yaw)*(1-Math.exp(-dt*10));p.angle+=p.yaw*dt;
  const eps=.3,slope=(height(p.x,p.z-eps)-height(p.x,p.z+eps))/(eps*2),sideSlope=(height(p.x-eps,p.z)-height(p.x+eps,p.z))/(eps*2),g=18,grade=slope*Math.cos(p.angle)+sideSlope*Math.sin(p.angle);const gravity=g*grade;
- p.drive=input.tuck&&!input.brake&&!p.air?(grade>.025&&p.speed>=7?'tuck':p.speed<11?'skate':'glide'):'glide';if(p.drive==='skate')p.skatePhase=(p.skatePhase||0)+dt*(1.35+Math.min(6,p.speed)*.07)*Math.PI*2;
+ // Read the main slope over several ski lengths so a bump or ramp lip
+ // cannot change the stance. The loading area always behaves as flat.
+ const headingZ=Math.cos(p.angle);
+ const downhillGrade=p.z>=590?0:(baseHeight(p.z-12*headingZ)-baseHeight(p.z+12*headingZ))/24;
+ const wasTucking=p.drive==='tuck';
+ const canTuck=downhillGrade>=(wasTucking?.055:.085)&&p.speed>=(wasTucking?6:7.5);
+ p.drive='glide';
+ if(input.tuck&&!input.brake&&!p.air){
+  if(canTuck)p.drive='tuck';
+  else if(p.speed<11)p.drive='skate';
+ }
+ if(p.drive==='skate')p.skatePhase=(p.skatePhase||0)+dt*(1.35+Math.min(6,p.speed)*.07)*Math.PI*2;
  const push=p.drive==='skate'?8.8*Math.max(0,1-p.speed/10)+.9*Math.max(0,Math.sin(p.skatePhase*2)):0,drag=(p.drive==='tuck'?.0065:.009)*p.speed*p.speed+(onTrail(p.x,p.z)?.28:1.5)+Math.abs(p.yaw)*.55;
  p.speed=clamp(p.speed+(gravity+push-drag-(input.brake?10:0))*dt,0,p.drive==='tuck'?28:23);if(!p.air&&p.speed<.05)p.speed=0;
  const oldY=p.y,oldGroundV=p.groundV,dx=Math.sin(p.angle)*p.speed*dt,dz=Math.cos(p.angle)*p.speed*dt;p.x=clamp(p.x+dx,-205,205);p.z=clamp(p.z+dz,-5,657);p.distance+=Math.hypot(dx,dz);const ground=height(p.x,p.z);
