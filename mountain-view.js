@@ -1,7 +1,8 @@
 import * as T from './vendor/three.module.js';
 import {height,pathX,routes,jumps,BASE,obstacles,LIFT,liftTowers,liftCableHeight,SUMMIT_TERMINAL,RIDE_SECONDS,chairProgress} from './mountain-core.js';
-import {snowMaterial,addRange,detailedTrees,surroundingForest} from './mountain-environment.js';
+import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {makeSkier} from './skier-model.js';
+const surfaceHeight=(x,z)=>Math.abs(x)<=215&&z>=-40&&z<=690?height(x,z):rangeHeight(x,z);
 export function createMountain(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
  const scene=new T.Scene();scene.background=new T.Color('#a5c9dc');scene.fog=new T.Fog('#c0d4e2',1200,5500);const camera=new T.PerspectiveCamera(64,1,.15,9200);
@@ -172,7 +173,8 @@ export function createMountain(canvas){
  const max=6000,trackPositions=new Float32Array(max*6),trackGeo=new T.BufferGeometry();trackGeo.setAttribute('position',new T.BufferAttribute(trackPositions,3));trackGeo.setDrawRange(0,0);const tracks=new T.LineSegments(trackGeo,new T.LineBasicMaterial({color:'#9cbacb',transparent:true,opacity:.55}));scene.add(tracks);let trackCount=0,previous=null;
  tracks.frustumCulled=false;
  const puffPositions=new Float32Array(60*3),puffs=new T.Points(new T.BufferGeometry(),new T.PointsMaterial({color:'#fff',size:.22,transparent:true,opacity:.75}));puffs.geometry.setAttribute('position',new T.BufferAttribute(puffPositions,3));puffs.frustumCulled=false;scene.add(puffs);
- let w=0,h=0,time=0,camReady=false;const camPos=new T.Vector3(),look=new T.Vector3();
+ let w=0,h=0,time=0,camReady=false,camHeading=0;
+ const camPos=new T.Vector3(),look=new T.Vector3(),desired=new T.Vector3();
  function render(p,dt,paused=false){time+=paused?0:dt;if(w!==canvas.clientWidth||h!==canvas.clientHeight){w=canvas.clientWidth;h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
  const lift=p.mode==='lift';skier.position.set(lift?p.x-.44:p.x,p.y+.12,p.z);skier.rotation.y=lift?Math.PI:p.angle;skier.rotation.z=lift?0:-p.yaw*Math.min(.25,p.speed*.015);skier.rotation.x=lift?0:Math.atan2(height(p.x,p.z+.4)-height(p.x,p.z-.4),.8)*-.65;rig.animate(p,time);for(const wheel of bullwheels)wheel.rotation.y=time*.7;
  occupied.visible=lift||p.mode==='unload';
@@ -190,7 +192,26 @@ export function createMountain(canvas){
 
  if(!lift&&!p.air&&p.speed>1&&!paused){if(previous&&Math.hypot(p.x-previous.x,p.z-previous.z)<3){for(const side of [-1,1]){const ox=Math.cos(p.angle)*.29*side,oz=-Math.sin(p.angle)*.29*side;const k=(trackCount++%max)*6;trackPositions.set([previous.x+ox,previous.y+.04,previous.z+oz,p.x+ox,height(p.x+ox,p.z+oz)+.04,p.z+oz],k);}trackGeo.attributes.position.needsUpdate=true;trackGeo.setDrawRange(0,Math.min(trackCount,max)*2);}previous={x:p.x,y:p.y,z:p.z};}else previous=null;
  for(let i=0;i<60;i++){const t=(time*2+i*.17)%1,spread=Math.abs(p.yaw)*.8+.15;puffPositions[i*3]=p.x+Math.cos(i*8.7)*t*spread;puffPositions[i*3+1]=p.y+t*.7;puffPositions[i*3+2]=p.z-t*2;}puffs.geometry.attributes.position.needsUpdate=true;puffs.visible=!lift&&!p.air&&p.speed>4;
- const desired=new T.Vector3(p.x,p.y+(lift?6:8.5),p.z-(lift?17:13.5));const ahead=lift?38:14;if(!camReady){camPos.copy(desired);look.set(p.x,lift?p.y+2:height(p.x,p.z+ahead)+.6,p.z+ahead);camReady=true;}camPos.lerp(desired,1-Math.exp(-dt*7));camera.position.copy(camPos);const aheadY=lift?p.y+2:height(p.x,p.z+ahead)+.6;look.lerp(new T.Vector3(p.x,aheadY,p.z+ahead),1-Math.exp(-dt*6));camera.lookAt(look);sun.position.set(p.x-45,p.y+85,p.z-25);sun.target.position.set(p.x,p.y,p.z+15);sun.target.updateMatrixWorld();forest.clearSightline(camera.position,skier.position,dt);renderer.render(scene,camera);}
+ const heading=p.mode==='ski'?p.angle:0;
+ const turn=heading-camHeading;
+ camHeading=camReady?camHeading+Math.atan2(Math.sin(turn),Math.cos(turn))*(1-Math.exp(-dt*7)):heading;
+ const forwardX=Math.sin(camHeading),forwardZ=Math.cos(camHeading);
+ const behind=lift?17:13.5,ahead=lift?38:14;
+ const eyeX=p.x-forwardX*behind,eyeZ=p.z-forwardZ*behind;
+ const lookX=p.x+forwardX*ahead,lookZ=p.z+forwardZ*ahead;
+ const eyeY=Math.max(p.y+(lift?6:8.5),surfaceHeight(eyeX,eyeZ)+3);
+ const lookY=lift?p.y+2:Math.max(p.y-6,surfaceHeight(lookX,lookZ)+.6);
+ desired.set(eyeX,eyeY,eyeZ);
+ if(!camReady){camPos.copy(desired);look.y=lookY;camReady=true;}
+ camPos.lerp(desired,1-Math.exp(-dt*10));
+ camPos.y=Math.max(camPos.y,surfaceHeight(camPos.x,camPos.z)+3);
+ camera.position.copy(camPos);
+ look.set(lookX,T.MathUtils.lerp(look.y,lookY,1-Math.exp(-dt*6)),lookZ);
+ camera.lookAt(look);
+ sun.position.set(p.x-45,p.y+85,p.z-25);
+ sun.target.position.set(p.x+forwardX*15,p.y,p.z+forwardZ*15);
+ sun.target.updateMatrixWorld();
+ forest.clearSightline(camera.position,skier.position,dt);
+ renderer.render(scene,camera);}
  return {render,trees,resetCamera(){camReady=false;previous=null;}};
 }
-

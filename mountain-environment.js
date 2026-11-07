@@ -79,7 +79,20 @@ export function detailedTrees(scene,items){
   }
  };
 }
-export function surroundingForest(){const a=[];for(let i=0;i<2300;i++){const x=(hash(i,26)-.5)*2000,z=-300+hash(i,55)*2150;if(Math.abs(x)<215&&z>-40&&z<690)continue;const y=rangeHeight(x,z),sx=(rangeHeight(x+6,z)-rangeHeight(x-6,z))/12,sz=(rangeHeight(x,z+6)-rangeHeight(x,z-6))/12;if(y>430||y<-20||Math.hypot(sx,sz)>.7)continue;a.push({x,z,y,s:.65+hash(i,43)*.9});}return a;}
-
+export function surroundingForest(){
+ const trees=[];
+ for(let i=0;i<2300;i++){
+  const back=i%6===0;
+  const x=(hash(i,26)-.5)*(back?1360:2000);
+  const z=back?-610+hash(i,55)*540:-300+hash(i,55)*2150;
+  if(Math.abs(x)<215&&z>-40&&z<690)continue;
+  const y=rangeHeight(x,z);
+  const sx=(rangeHeight(x+6,z)-rangeHeight(x-6,z))/12;
+  const sz=(rangeHeight(x,z+6)-rangeHeight(x,z-6))/12;
+  if(y>430||y<(back?-100:-20)||Math.hypot(sx,sz)>.7)continue;
+  trees.push({x,z,y,s:.65+hash(i,43)*.9});
+ }
+ return trees;
+}
 
 
