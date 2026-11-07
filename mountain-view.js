@@ -23,8 +23,68 @@ export function createMountain(canvas){
  // One continuous chairlift, with a visible cable, towers, terminals and moving chairs.
  const cable=[];for(let z=12;z<=BASE.z;z+=2)cable.push([LIFT.upX,liftCableHeight(z),z]);
  for(const z of liftTowers.slice(1,-1)){const h=height(LIFT.towerX,z),c=liftCableHeight(z),beam=c+LIFT.crossbeamClearance;box(LIFT.towerWidth,beam-h,.9,'#607580',LIFT.towerX,(beam+h)/2,z);box(21,.5,1.1,'#526874',LIFT.towerX,beam,z);box(2,.5,2,'#777b73',LIFT.towerX,h+.1,z);for(const x of [LIFT.upX,LIFT.downX]){for(const dz of [-1.1,-.4,.4,1.1]){const wheel=mesh(new T.CylinderGeometry(.34,.34,.18,12),'#354a57');wheel.rotation.z=Math.PI/2;wheel.position.set(x,c+.34,z+dz);}box(1.1,.18,3.4,'#647983',x,c+.85,z);}for(let y=h+1;y<beam-1;y+=.9)box(.7,.06,.16,'#9aa7a6',LIFT.towerX+.55,y,z);}
- function terminal(z,name){const y=height(LIFT.towerX,z),c=liftCableHeight(z);for(const x of [-45,-15])box(.6,c-y+1.5,.6,'#647b82',x,(c+y+1.5)/2,z);box(31,.6,5,'#456573',-30,c+1.5,z);box(8,3.3,6,'#4b6571',-49,y+1.6,z);box(1.4,1.2,.12,'#b4d5de',-49,y+2,z-3.1);box(9,.25,7,'#e3ebea',-49,y+3.4,z);text(name,-11,y+4,z-7,'#355e63',.85);for(const x of [-44,-13]){for(let d=-8;d<=8;d+=4){box(.15,1.2,.15,'#8a9996',x,y+.6,z+d);}box(.1,.1,16,'#d7b575',x,y+1,z);} }
- terminal(BASE.z,'JUNIPER CHAIR · E TO BOARD');terminal(12,'SUMMIT · THREE WAYS DOWN');
+ function terminal(z,name,isBase){
+  const center=LIFT.towerX;
+  const cableY=liftCableHeight(z);
+  const approach=isBase?-1:1;
+  const eaveY=cableY+2;
+  const shedZ=z-approach*3;
+  const steel='#445a62',roof='#36515b',wood='#9a785a';
+
+  // Four columns sit outside both chair lanes and carry a shallow gable.
+  for(const x of [center-11.5,center+11.5]){
+   for(const postZ of [shedZ-6.5,shedZ+6.5]){
+    const groundY=height(x,postZ);
+    box(.85,.48,.85,'#a4aba8',x,groundY+.2,postZ);
+    box(.42,eaveY-groundY,.42,steel,x,(groundY+eaveY)/2,postZ);
+   }
+   box(.38,.54,15.5,steel,x,eaveY,shedZ);
+  }
+  for(const sign of [-1,1]){
+   const panel=box(12.7,.26,17,roof,center+sign*6.15,eaveY+1.15,shedZ);
+   panel.rotation.z=-sign*.17;
+   const snowCap=box(12.6,.12,16.9,'#e3ebee',panel.position.x,panel.position.y+.16,shedZ);
+   snowCap.rotation.z=panel.rotation.z;
+  }
+  box(24,.48,.5,steel,center,eaveY,shedZ-7.5);
+  box(24,.48,.5,steel,center,eaveY,shedZ+7.5);
+  box(6.8,1.05,5.5,'#68818a',center,cableY+.9,z);
+  for(let x=center-2.5;x<=center+2.5;x+=.5){
+   box(.06,.35,.04,steel,x,cableY+.9,z+approach*2.77);
+  }
+
+  // The operator booth is beside the loading lane, clear of the cable and skis.
+  const boothX=center-14.7;
+  const boothY=height(boothX,shedZ);
+  box(4.3,3.2,5.2,wood,boothX,boothY+1.6,shedZ);
+  box(4.65,.23,5.65,roof,boothX,boothY+3.26,shedZ);
+  box(4.5,.10,5.5,'#e3ebee',boothX,boothY+3.41,shedZ);
+  box(.06,1.2,2.25,'#334b56',boothX+2.16,boothY+2.05,shedZ);
+  box(.07,.95,1.95,'#a9c9d2',boothX+2.18,boothY+2.08,shedZ);
+  box(.1,1.05,.07,steel,boothX+2.21,boothY+2.08,shedZ);
+  const signX=LIFT.upX+9;
+  const signZ=z+approach*10;
+  const signY=height(signX,signZ)+2.2;
+  box(.17,2.25,.17,steel,signX,signY-1.1,signZ);
+  const sign=text(name,signX,signY,signZ+approach*.1,'#355e63',.65);
+  sign.rotation.y=isBase?Math.PI:0;
+
+  // Low ropes mark the entrance without putting a raised floor over the snow.
+  if(isBase){
+   for(const x of [LIFT.upX-2.8,LIFT.upX+2.8]){
+    const rope=[];
+    for(let d=8;d<=20;d+=4){
+     const postZ=z-d;
+     const groundY=height(x,postZ);
+     box(.13,1.02,.13,steel,x,groundY+.51,postZ);
+     rope.push([x,groundY+.86,postZ]);
+    }
+    line(rope,'#a87b43');
+   }
+  }
+ }
+ terminal(BASE.z,'JUNIPER CHAIR · E TO BOARD',true);
+ terminal(12,'SUMMIT · THREE WAYS DOWN',false);
  const frameMat=new T.MeshStandardMaterial({color:'#586d79',roughness:.4,metalness:.65});
  function pipe(points,r=.055,parent=scene){const curve=new T.CatmullRomCurve3(points.map(p=>new T.Vector3(...p)));const o=new T.Mesh(new T.TubeGeometry(curve,Math.max(6,points.length*3),r,6,false),frameMat);o.castShadow=true;parent.add(o);return o;}
  const cableMaterial=new T.MeshStandardMaterial({color:'#303c43',roughness:.62});

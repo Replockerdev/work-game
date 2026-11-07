@@ -64,12 +64,14 @@ export function detailedTrees(scene,items){
     let target=1;
     if(along<1&&rayY>tree.ground-.5&&rayY<tree.ground+13*tree.scale){
      const distance=Math.hypot(x-closest*dx,z-closest*dz);
-     target=T.MathUtils.smoothstep(distance,2.9*tree.scale,4.2*tree.scale);
+     // Preserve a see-through silhouette even when the camera is in the canopy.
+     target=.24+.76*T.MathUtils.smoothstep(distance,2.9*tree.scale,4.2*tree.scale);
     }
     const current=visibility[i];
-    const next=target<current?target:current+(target-current)*fadeBack;
-    if(Math.abs(next-current)>.001||target===1&&current>.999&&current!==1){
-     visibility[i]=next>.999?1:next;
+    const blend=target<current?1-Math.exp(-dt*25):fadeBack;
+    const next=Math.abs(target-current)<.006?target:current+(target-current)*blend;
+    if(Math.abs(next-current)>.0001){
+     visibility[i]=next;
      changed=true;
     }
    }
