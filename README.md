@@ -1,18 +1,13 @@
-# Touchline — Solo Soccer
+# Touchline 3D
 
-Play five-a-side soccer against AI with Chromebook keyboard controls.
-
-- Quick match: two-minute games.
-- Career: seven-game seasons, credits, pace and shot upgrades, league titles.
-- World Cup: three group games, quarterfinal, semifinal, final; golden goal for tied knockouts.
-- Progress saves in this browser using localStorage.
+Low-poly five-a-side soccer with animated players, a follow camera, physically lofted balls, AI opponents, and goalkeeper saves.
 
 ## Controls
-WASD / arrows: move and aim. Hold then release Space: shoot. X: pass / tackle. C: switch player. Shift: sprint. P / Escape: pause. Enter: start / continue.
+WASD / arrows: move. Space: hold and release to shoot. X / M: pass or tackle. E: lofted pass. Q: chip shot. C: switch player. Shift: sprint. V: toggle wide camera. P / Escape: pause. Use the pitch corner button for fullscreen.
 
-Attack the goal on the right. Click Kick off to focus the pitch. The lime ring marks your player.
+Quick match, saved career seasons with upgrades, and a simplified World Cup tournament are included. Progress stays in browser localStorage.
 
-## Run
-Open `index.html` in a browser, or serve the repository with any static HTTP server. No build step or dependencies. On Vercel, import this repository with framework preset Other, no build command, and output directory `.`.
+## Run and deploy
+Serve this directory through any static HTTP server. Import this repository on Vercel with the Other preset, no build command, and output directory `.`. WebGL is required. The Three.js rendering library is vendored locally; its MIT license is in vendor/THREE-LICENSE.txt.
 
-Original arcade game; not affiliated with FIFA, EA, or national teams. The World Cup mode is a simplified fictional tournament.
+Original independent arcade football game; not affiliated with FIFA, EA, or Super Liquid Soccer.
