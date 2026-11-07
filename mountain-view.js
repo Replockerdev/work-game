@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,baseHeight,pathX,routes,jumps,BASE,TOP,obstacles,LIFT,liftTowers,liftCableHeight} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,liftTowers,liftCableHeight,SUMMIT_TERMINAL,RIDE_SECONDS,chairProgress} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest} from './mountain-environment.js';
 import {makeSkier} from './skier-model.js';
 export function createMountain(canvas){
@@ -10,15 +10,50 @@ export function createMountain(canvas){
  function mesh(geo,c,parent=scene){const m=new T.Mesh(geo,mat(c));m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
  function box(w,h,d,c,x,y,z,parent=scene){const m=mesh(new T.BoxGeometry(w,h,d),c,parent);m.position.set(x,y,z);return m;}
  function line(points,c,parent=scene){const l=new T.Line(new T.BufferGeometry().setFromPoints(points.map(p=>new T.Vector3(...p))),new T.LineBasicMaterial({color:c}));parent.add(l);return l;}
- function text(s,x,y,z,color='#27434d',scale=1){const c=document.createElement('canvas');c.width=1024;c.height=180;const ctx=c.getContext('2d');ctx.fillStyle='#f7f5e7';ctx.fillRect(0,0,1024,180);ctx.strokeStyle=color;ctx.lineWidth=12;ctx.strokeRect(6,6,1012,168);ctx.fillStyle=color;ctx.font='bold 57px Arial';ctx.textAlign='center';ctx.fillText(s,512,112);const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;const o=new T.Mesh(new T.PlaneGeometry(11*scale,1.94*scale),new T.MeshBasicMaterial({map:tex,side:T.DoubleSide}));o.position.set(x,y,z);o.rotation.y=Math.PI;scene.add(o);return o;}
+ function trailSign(label,x,y,z,color,width=3.5,facing=-1){
+  const canvas=document.createElement('canvas');
+  canvas.width=768;
+  canvas.height=150;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle=color;
+  ctx.fillRect(0,0,768,150);
+  ctx.strokeStyle='#f0f4ef';
+  ctx.lineWidth=4;
+  ctx.strokeRect(11,11,746,128);
+  ctx.fillStyle='#ffffff';
+  ctx.font='bold 64px Arial';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(label,384,78,695);
+  const map=new T.CanvasTexture(canvas);
+  map.colorSpace=T.SRGBColorSpace;
+  const panel=new T.Mesh(new T.PlaneGeometry(width,.69),new T.MeshBasicMaterial({map}));
+  panel.position.set(x,y,z+facing*.073);
+  panel.rotation.y=facing<0?Math.PI:0;
+  scene.add(panel);
+  box(width,.69,.14,'#343e3e',x,y,z);
+  return panel;
+ }
  const geo=new T.PlaneGeometry(430,730,172,365);geo.rotateX(-Math.PI/2);geo.translate(0,0,325);const pos=geo.attributes.position,colors=[];
  for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);pos.setY(i,height(x,z));let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<90||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>100&&z<560)color.multiplyScalar(.88);const n=Math.sin(x*.31+z*.047)*.024; color.offsetHSL(0,0,n);colors.push(color.r,color.g,color.b);}
  geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
  // Visible trail-edge poles and arrows make all three routes converge at the base.
  for(const r of routes){for(let z=100;z<=560;z+=35){for(const side of [-1,1]){const x=pathX(z,r)+r.width*side;box(.14,1.6,.14,r.color,x,height(x,z)+.8,z);box(.55,.25,.12,r.color,x,height(x,z)+1.55,z);}}
- const z=110,x=pathX(z,r);box(.23,4,.23,'#707c78',x,height(x,z)+2,z);text((r.id==='groomer'?'● ':r.id==='park'?'▲ ':'♠ ')+r.name.toUpperCase(),x,height(x,z)+4,z,r.color,.9);}
+ const z=110,x=pathX(z,r)+r.width*.65,y=height(x,z);
+ const colors={groomer:'#237449',park:'#98500e',glades:'#254d77'};
+ box(.15,1.75,.15,'#68523f',x,y+.87,z);
+ trailSign(r.name,x,y+1.65,z,colors[r.id]);}
+ const guideZ=65,guideX=-5,guideY=height(guideX,guideZ);
+ box(.18,3,.18,'#68523f',guideX,guideY+1.5,guideZ);
+ trailSign('Groomer  →',guideX,guideY+2.7,guideZ,'#237449');
+ trailSign('Park  ↑',guideX,guideY+1.95,guideZ,'#98500e');
+ trailSign('←  Glades',guideX,guideY+1.2,guideZ,'#254d77');
  for(const j of jumps){for(const side of [-1,1]){box(.16,2.2,.16,'#e9a66e',side*(j.width+1),height(side*(j.width+1),j.z)+1.1,j.z);box(1.2,.7,.08,'#e9a66e',side*(j.width+1),height(side*(j.width+1),j.z)+1.8,j.z);}line([[-j.width,height(0,j.z-.05)+.09,j.z-.05],[j.width,height(0,j.z-.05)+.09,j.z-.05]],'#e3a66e');}
- for(const z of [565,594]){const x=z===565?0:-10;box(.18,3,.18,'#728b87',x,height(x,z)+1.5,z);text('↓  ALL RUNS → LIFT BASE',x,height(x,z)+3.3,z,'#476b67',.85);}
+ for(const z of [565,594]){
+  const x=7,y=height(x,z);
+  box(.15,1.75,.15,'#68523f',x,y+.87,z);
+  trailSign('Lift base  →',x,y+1.65,z,'#355663');
+ }
  const trees=obstacles();const forest=detailedTrees(scene,[...trees,...surroundingForest()]);addRange(scene);
  // One continuous chairlift, with a visible cable, towers, terminals and moving chairs.
  const cable=[];for(let z=12;z<=BASE.z;z+=2)cable.push([LIFT.upX,liftCableHeight(z),z]);
@@ -66,8 +101,7 @@ export function createMountain(canvas){
   const signZ=z+approach*10;
   const signY=height(signX,signZ)+2.2;
   box(.17,2.25,.17,steel,signX,signY-1.1,signZ);
-  const sign=text(name,signX,signY,signZ+approach*.1,'#355e63',.65);
-  sign.rotation.y=isBase?Math.PI:0;
+  trailSign(name,signX,signY,signZ,'#355663',4.2,approach);
 
   // Low ropes mark the entrance without putting a raised floor over the snow.
   if(isBase){
@@ -83,8 +117,24 @@ export function createMountain(canvas){
    }
   }
  }
- terminal(BASE.z,'JUNIPER CHAIR · E TO BOARD',true);
- terminal(12,'SUMMIT · THREE WAYS DOWN',false);
+ terminal(BASE.z,'Juniper Chair  ·  Load',true);
+ terminal(SUMMIT_TERMINAL,'Juniper Summit',false);
+ const rampVertices=[];
+ for(let z=4;z<17;z++){
+  const left=LIFT.upX-1.9,right=LIFT.upX+1.9;
+  const a=[left,height(left,z)+.06,z],b=[right,height(right,z)+.06,z];
+  const c=[left,height(left,z+1)+.06,z+1],d=[right,height(right,z+1)+.06,z+1];
+  rampVertices.push(...a,...c,...b,...b,...c,...d);
+ }
+ const rampGeometry=new T.BufferGeometry();
+ rampGeometry.setAttribute('position',new T.Float32BufferAttribute(rampVertices,3));
+ rampGeometry.computeVertexNormals();
+ const ramp=mesh(rampGeometry,'#cbdde1');
+ ramp.castShadow=false;
+ const unloadSignX=LIFT.upX+3.1,unloadSignZ=14;
+ const unloadSignY=height(unloadSignX,unloadSignZ);
+ box(.14,1.8,.14,'#445a62',unloadSignX,unloadSignY+.9,unloadSignZ);
+ trailSign('Unload  ↗',unloadSignX,unloadSignY+1.65,unloadSignZ,'#237449',2.5,1);
  const frameMat=new T.MeshStandardMaterial({color:'#586d79',roughness:.4,metalness:.65});
  function pipe(points,r=.055,parent=scene){const curve=new T.CatmullRomCurve3(points.map(p=>new T.Vector3(...p)));const o=new T.Mesh(new T.TubeGeometry(curve,Math.max(6,points.length*3),r,6,false),frameMat);o.castShadow=true;parent.add(o);return o;}
  const cableMaterial=new T.MeshStandardMaterial({color:'#303c43',roughness:.62});
@@ -96,6 +146,26 @@ export function createMountain(canvas){
  haulRope(cable.map(([x,y,z])=>[LIFT.downX,y,z]));
  function chair(){const g=new T.Group();scene.add(g);for(let i=0;i<4;i++){const x=-1.3+i*.87;box(.8,.19,1.25,'#a57455',x,1,0,g);box(.8,.65,.15,'#a57455',x,1.55,-.62,g);box(.75,.035,1.15,'#c19471',x,1.11,0,g);}pipe([[-1.75,1,-.6],[-1.75,2.7,-.6],[0,3.3,-.6],[1.75,2.7,-.6],[1.75,1,-.6]],.065,g);pipe([[0,3.3,-.6],[0,4.65,-.45],[0,5.2,0]],.075,g);box(.25,.16,.5,'#303c43',0,5.2,0,g);pipe([[-1.65,2.1,-.5],[-1.65,1.65,.7],[1.65,1.65,.7],[1.65,2.1,-.5]],.045,g);for(const x of[-.9,.9]){pipe([[x,1.65,.7],[x,.62,1.02],[x,.62,1.4]],.035,g);}return g;}
  const chairs=Array.from({length:12},chair),occupied=chair();occupied.visible=false;occupied.rotation.y=Math.PI;
+ const turnSeconds=3,cycleSeconds=2*(RIDE_SECONDS+turnSeconds);
+ function turnChair(chair,progress,atSummit){
+  const angle=Math.PI*progress,direction=atSummit?1:-1;
+  const terminalZ=atSummit?SUMMIT_TERMINAL:BASE.z;
+  chair.position.set(LIFT.towerX+direction*8*Math.cos(angle),liftCableHeight(terminalZ)-5.2,terminalZ-direction*8*Math.sin(angle));
+  chair.rotation.y=atSummit?Math.PI+angle:angle;
+ }
+ function moveChair(chair,seconds){
+  const position=(seconds%cycleSeconds+cycleSeconds)%cycleSeconds;
+  const uphill=position<RIDE_SECONDS+turnSeconds;
+  const phase=position-(uphill?0:RIDE_SECONDS+turnSeconds);
+  if(phase>=RIDE_SECONDS){
+   turnChair(chair,(phase-RIDE_SECONDS)/turnSeconds,uphill);
+   return;
+  }
+  const t=chairProgress(phase/RIDE_SECONDS);
+  const z=uphill?BASE.z+(SUMMIT_TERMINAL-BASE.z)*t:SUMMIT_TERMINAL+(BASE.z-SUMMIT_TERMINAL)*t;
+  chair.position.set(uphill?LIFT.upX:LIFT.downX,liftCableHeight(z)-5.2,z);
+  chair.rotation.y=uphill?Math.PI:0;
+ }
  const rig=makeSkier(scene),skier=rig.root;
  const bullwheels=[];for(const z of[12,BASE.z]){const c=liftCableHeight(z),g=new T.Group();g.position.set(LIFT.towerX,c+.25,z);scene.add(g);const rim=new T.Mesh(new T.TorusGeometry(8,.18,6,36),frameMat);rim.rotation.x=Math.PI/2;g.add(rim);const hub=new T.Mesh(new T.CylinderGeometry(.9,.9,.8,12),frameMat);g.add(hub);for(let i=0;i<8;i++){const spoke=box(7.8,.15,.15,'#657985',0,0,0,g);spoke.position.set(Math.cos(i*Math.PI/4)*4,0,Math.sin(i*Math.PI/4)*4);spoke.rotation.y=-i*Math.PI/4;}bullwheels.push(g);const arc=[];for(let i=0;i<=40;i++){const a=i/40*Math.PI;arc.push([LIFT.towerX+Math.cos(a)*8,c,z+(z===12?-1:1)*Math.sin(a)*8]);}haulRope(arc);}
  // Two persistent ski tracks follow every grounded turn.
@@ -105,7 +175,18 @@ export function createMountain(canvas){
  let w=0,h=0,time=0,camReady=false;const camPos=new T.Vector3(),look=new T.Vector3();
  function render(p,dt,paused=false){time+=paused?0:dt;if(w!==canvas.clientWidth||h!==canvas.clientHeight){w=canvas.clientWidth;h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
  const lift=p.mode==='lift';skier.position.set(lift?p.x-.44:p.x,p.y+.12,p.z);skier.rotation.y=lift?Math.PI:p.angle;skier.rotation.z=lift?0:-p.yaw*Math.min(.25,p.speed*.015);skier.rotation.x=lift?0:Math.atan2(height(p.x,p.z+.4)-height(p.x,p.z-.4),.8)*-.65;rig.animate(p,time);for(const wheel of bullwheels)wheel.rotation.y=time*.7;
- occupied.visible=lift;if(lift)occupied.position.set(p.x,p.y-.6,p.z);for(let i=0;i<chairs.length;i++){const t=(time*.018+i/chairs.length)%1,up=t<.5,k=up?t*2:(1-t)*2,z=BASE.z+(12-BASE.z)*k;chairs[i].position.set(up?LIFT.upX:LIFT.downX,liftCableHeight(z)-5.2,z);chairs[i].rotation.y=up?Math.PI:0;chairs[i].visible=!(lift&&up&&Math.abs(z-p.z)<12);}
+ occupied.visible=lift||p.mode==='unload';
+ if(lift){
+  occupied.position.set(p.x,p.y-.6,p.z);
+  occupied.rotation.y=Math.PI;
+ }else if(p.mode==='unload'){
+  turnChair(occupied,p.unloadTime/turnSeconds,true);
+ }
+ for(let i=0;i<chairs.length;i++){
+  const empty=chairs[i];
+  moveChair(empty,time+i*cycleSeconds/chairs.length);
+  empty.visible=!occupied.visible||empty.position.distanceToSquared(occupied.position)>16;
+ }
 
  if(!lift&&!p.air&&p.speed>1&&!paused){if(previous&&Math.hypot(p.x-previous.x,p.z-previous.z)<3){for(const side of [-1,1]){const ox=Math.cos(p.angle)*.29*side,oz=-Math.sin(p.angle)*.29*side;const k=(trackCount++%max)*6;trackPositions.set([previous.x+ox,previous.y+.04,previous.z+oz,p.x+ox,height(p.x+ox,p.z+oz)+.04,p.z+oz],k);}trackGeo.attributes.position.needsUpdate=true;trackGeo.setDrawRange(0,Math.min(trackCount,max)*2);}previous={x:p.x,y:p.y,z:p.z};}else previous=null;
  for(let i=0;i<60;i++){const t=(time*2+i*.17)%1,spread=Math.abs(p.yaw)*.8+.15;puffPositions[i*3]=p.x+Math.cos(i*8.7)*t*spread;puffPositions[i*3+1]=p.y+t*.7;puffPositions[i*3+2]=p.z-t*2;}puffs.geometry.attributes.position.needsUpdate=true;puffs.visible=!lift&&!p.air&&p.speed>4;
