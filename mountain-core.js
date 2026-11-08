@@ -181,7 +181,7 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const shelf=1-smooth((local.z-356)/34);
   // Carry the summit west into the enclosing ridge. Fan the north shoulder
   // out uphill and narrow its toe where it meets the existing Juniper runs.
-  const shoulderWidth=101+156*smooth((-x-287)/330);
+  const shoulderWidth=101+292*smooth((-x-275)/460);
   const northDistance=Math.max(0,-local.x-9);
   const contour=(12*Math.sin(local.z*.028)+5*Math.sin(local.z*.059+1.2))*smooth(northDistance/40);
   const southSlope=1-smooth((local.x-118)/94);
@@ -192,7 +192,9 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const drainage=smooth((northDistance-20)/42)*(1-smooth((northDistance-155)/85));
   const upperGully=(local.along+306-northDistance*.36)/30;
   const lowerGully=(local.along+154-northDistance*.55)/36;
-  const erosion=drainage*(54*Math.exp(-upperGully*upperGully)+38*Math.exp(-lowerGully*lowerGully));
+  const ribs=Math.sin(local.along*.041+northDistance*.026)
+   +.42*Math.sin(local.along*.077-northDistance*.034);
+  const erosion=drainage*(54*Math.exp(-upperGully*upperGully)+38*Math.exp(-lowerGully*lowerGully)-ribs*9);
   y+=(335*fall*shelf+ridgeBack-erosion)*crossSlope+expertRelief(local.x,local.z);
   const terminalWidth=1-smooth((Math.abs(local.x)-20)/12);
   const summitDeck=terminalWidth*(1-smooth((Math.abs(local.along-EXPERT.top)-11)/19));
@@ -229,6 +231,13 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
   const x=-25+side*(48+rand()*110);
   const z=SNOW_NORTH+8+rand()*54;
   a.push({x,z,r:.8,s:.65+rand()*.65});
+ }
+ for(let i=0;i<100;i++){
+  const x=-848+rand()*436,z=260+rand()*218;
+  const slope=Math.hypot(height(x+2,z)-height(x-2,z),height(x,z+2)-height(x,z-2))/4;
+  if(slope<.92&&height(x,z)<312&&Math.abs(expertLocal(x,z).x)>18&&!inBowl(x,z,9)&&!onExpertFace(x,z)){
+   a.push({x,z,r:.8,s:.5+rand()*.6});
+  }
  }
  return a;
 }
