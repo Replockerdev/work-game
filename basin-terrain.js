@@ -1,4 +1,4 @@
-import {height,smooth} from './mountain-core.js';
+import {height,smooth,clamp,SNOW_WEST,SNOW_EAST} from './mountain-core.js';
 const frac=x=>x-Math.floor(x),mix=(a,b,t)=>a+(b-a)*t;
 const hash=(x,z)=>frac(Math.sin(x*127.1+z*311.7)*43758.5453);
 export function terrainNoise(x,z){const a=Math.floor(x),b=Math.floor(z),u=smooth(frac(x)),v=smooth(frac(z));return mix(mix(hash(a,b),hash(a+1,b),u),mix(hash(a,b+1),hash(a+1,b+1),u),v);}
@@ -24,7 +24,7 @@ export const drainage=[
  {name:'Lower Snow Bowl',from:[60,1300],to:[0,705],width:112,depth:75}
 ];
 function segment(x,z,a,b){const vx=b[0]-a[0],vz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*vx+(z-a[1])*vz)/(vx*vx+vz*vz)));return {t,d:Math.hypot(x-a[0]-vx*t,z-a[1]-vz*t)};}
-export function basinHeight(x,z){const ex=Math.max(0,Math.abs(x)-215),ez=Math.max(0,-40-z,z-690),blend=smooth(Math.max(ex/205,ez/235)),edge=height(Math.max(-215,Math.min(215,x)),Math.max(-40,Math.min(690,z)));let land=-44+fbm(x*.001,z*.001)*60;
+export function basinHeight(x,z){const ex=Math.max(0,SNOW_WEST-x,x-SNOW_EAST),ez=Math.max(0,-40-z,z-690),blend=smooth(Math.max(ex/205,ez/235)),edge=height(clamp(x,SNOW_WEST,SNOW_EAST),clamp(z,-40,690));let land=-44+fbm(x*.001,z*.001)*60;
  for(const ridge of ridgeSpines)for(let i=0;i<ridge.points.length-1;i++){const a=ridge.points[i],b=ridge.points[i+1],p=segment(x,z,a,b),crest=mix(a[2],b[2],p.t),buttress=.84+.16*fbm(x*.008,z*.008),profile=Math.exp(-Math.pow(p.d/ridge.width,1.65));land=Math.max(land,crest*profile*buttress-32);}
  for(const channel of drainage){const p=segment(x,z,channel.from,channel.to),taper=Math.sin(p.t*Math.PI)*.65+.35;land-=channel.depth*Math.exp(-Math.pow(p.d/channel.width,2))*taper;}
  const rough=(fbm(x*.014,z*.014)-.5)*32+(fbm(x*.042,z*.042)-.5)*6;land+=rough*smooth(Math.max(ex,ez)/260);

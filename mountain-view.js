@@ -1,8 +1,8 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,liftTowers,liftCableHeight,SUMMIT_TERMINAL,RIDE_SECONDS,chairProgress,bowlX,bowlWidth,inBowl,bowlRocks} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,liftTowers,liftCableHeight,SUMMIT_TERMINAL,RIDE_SECONDS,chairProgress,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,SNOW_WEST,SNOW_EAST} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {makeSkier} from './skier-model.js';
-const surfaceHeight=(x,z)=>Math.abs(x)<=215&&z>=-40&&z<=690?height(x,z):rangeHeight(x,z);
+const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=-40&&z<=690?height(x,z):rangeHeight(x,z);
 export function createMountain(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
  const scene=new T.Scene();scene.background=new T.Color('#a5c9dc');scene.fog=new T.Fog('#c0d4e2',1200,5500);const camera=new T.PerspectiveCamera(64,1,.15,9200);
@@ -35,12 +35,13 @@ export function createMountain(canvas){
   box(width,.69,.14,'#343e3e',x,y,z);
   return panel;
  }
- const geo=new T.PlaneGeometry(430,730,172,365);geo.rotateX(-Math.PI/2);geo.translate(0,0,325);const pos=geo.attributes.position,colors=[];
+ const snowWidth=SNOW_EAST-SNOW_WEST;
+ const geo=new T.PlaneGeometry(snowWidth,730,snowWidth/2.5,365);geo.rotateX(-Math.PI/2);geo.translate((SNOW_WEST+SNOW_EAST)/2,0,325);const pos=geo.attributes.position,colors=[];
  const bowlSnow=new T.Color('#eef5fa');
  for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);pos.setY(i,height(x,z));let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<90||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>100&&z<560)color.multiplyScalar(.88);
   if(inBowl(x,z)){
    const edgeFade=T.MathUtils.smoothstep(bowlWidth(z)-Math.abs(x-bowlX(z)),0,10);
-   const endFade=T.MathUtils.smoothstep(z,152,190)*(1-T.MathUtils.smoothstep(z,467,518));
+   const endFade=T.MathUtils.smoothstep(z,bowlStart,bowlStart+42)*(1-T.MathUtils.smoothstep(z,bowlEnd-55,bowlEnd));
    color.lerp(bowlSnow,.72*edgeFade*endFade);
   }
   const n=Math.sin(x*.31+z*.047)*.024; color.offsetHSL(0,0,n);colors.push(color.r,color.g,color.b);}
