@@ -1,6 +1,7 @@
 import * as T from './vendor/three.module.js';
 import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,SNOW_WEST,SNOW_EAST,traverseAt} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
+import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=-40&&z<=690?height(x,z):rangeHeight(x,z);
 export function createMountain(canvas){
@@ -40,7 +41,7 @@ export function createMountain(canvas){
  const bowlSnow=new T.Color('#eef5fa');
  const expertSnow=new T.Color('#e8eff8');
  const chuteSnow=new T.Color('#cfdfe9'),ledgeRock=new T.Color('#65717e');
- for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);pos.setY(i,height(x,z));let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<90||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>100&&z<560)color.multiplyScalar(.88);
+ for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<90||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>100&&z<560)color.multiplyScalar(.88);
   if(inBowl(x,z)){
    const edgeFade=T.MathUtils.smoothstep(bowlWidth(z)-Math.abs(x-bowlX(z)),0,10);
    const endFade=T.MathUtils.smoothstep(z,bowlStart,bowlStart+42)*(1-T.MathUtils.smoothstep(z,bowlEnd-55,bowlEnd));
@@ -57,6 +58,15 @@ export function createMountain(canvas){
    }
   }
   const traverse=traverseAt(x,z);
+  if(x<-365&&y>105){
+   const local=expertLocal(x,z);
+   const offTrail=Math.max(T.MathUtils.smoothstep(-local.x,17,45),T.MathUtils.smoothstep(-local.z,18,55));
+   const clearance=T.MathUtils.smoothstep(traverse?.distance??38,10,28);
+   const grade=Math.hypot(height(x+2,z)-height(x-2,z),height(x,z+2)-height(x,z-2))/4;
+   const layers=terrainNoise(x*.029+y*.011,z*.039-y*.018);
+   const talus=T.MathUtils.smoothstep(grade+(layers-.5)*.54,.48,.95);
+   color.lerp(ledgeRock,talus*offTrail*clearance*.66*T.MathUtils.smoothstep(-x,365,430));
+  }
   if(traverse){
    const edgeFade=1-T.MathUtils.smoothstep(traverse.distance,7,15);
    const endFade=T.MathUtils.smoothstep(traverse.progress,0,3)*(1-T.MathUtils.smoothstep(traverse.progress,35,40));

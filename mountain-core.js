@@ -191,15 +191,20 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
  const rampWidth=1-smooth((Math.abs(x-LIFT.upX)-2.2)/1.6);
  const rampLength=smooth((z-3)/8)*(1-smooth((z-13)/7));
  y+=.5*rampWidth*rampLength;
- if(x<-35&&z>345){
+ if(x<-35){
   const local=expertLocal(x,z);
   const shelf=1-smooth((local.z-356)/34);
-  const crown=1-smooth((-local.z-35)/75);
+  // Carry the summit west into the enclosing ridge. Fan the north shoulder
+  // out uphill and narrow its toe where it meets the existing Juniper runs.
+  const shoulderWidth=96+160*smooth((-x-287)/205);
+  const northDistance=Math.max(0,-local.x-9);
+  const contour=(12*Math.sin(local.z*.028)+5*Math.sin(local.z*.059+1.2))*smooth(northDistance/40);
   const southSlope=1-smooth((local.x-118)/40);
-  const northSlope=(1-smooth((-local.x-9)/160))*smooth((z-345)/100);
+  const northSlope=1-smooth(northDistance/(shoulderWidth+contour));
   const crossSlope=local.x>=-9?southSlope:northSlope;
   const fall=1-smooth((local.z-25)/310);
-  y+=198*fall*shelf*crown*crossSlope+expertRelief(local.x,local.z);
+  const ridgeBack=smooth((-local.z-22)/100)*23;
+  y+=(198*fall*shelf+ridgeBack)*crossSlope+expertRelief(local.x,local.z);
   const terminalWidth=1-smooth((Math.abs(local.x)-20)/12);
   const summitDeck=terminalWidth*(1-smooth((Math.abs(local.z)-11)/18));
   const loadingDeck=terminalWidth*(1-smooth((Math.abs(local.z-EXPERT.bottom)-11)/24));
