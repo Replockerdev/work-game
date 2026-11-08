@@ -1,5 +1,6 @@
 import {createMountain} from './mountain-view.js';
-import {spawn,step,board,boardingLift,BASE,LENGTH,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute} from './mountain-core.js';
+import {spawn,step,board,boardingLift,BASE,LENGTH,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute,bailoutRoute,traversePoints,bowlX} from './mountain-core.js';
+const expertRoutes=[expertRoute,chuteRoute,timberRoute,bailoutRoute];
 const $=id=>document.getElementById(id),canvas=$('game');let view;try{view=createMountain(canvas);}catch(e){$('overlay').querySelector('h1').textContent='3D graphics unavailable';$('overlay').querySelector('p').textContent='This mountain needs WebGL. Try Chrome or Edge with graphics acceleration enabled.';throw e;}
 let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0;try{p.laps=Math.max(0,Number(localStorage.getItem('work-game-three-lines-laps'))||0);}catch{}
 function toast(s,time=3){$('toast').textContent=s;$('toast').hidden=false;toastTime=time;}
@@ -31,13 +32,19 @@ function drawMap(){
   }
   c.stroke();
  }
+ c.strokeStyle=bailoutRoute.color;c.lineWidth=3;c.beginPath();
+ for(const point of traversePoints)c.lineTo(sx(point.x),sz(point.z));
+ c.stroke();
+ c.globalAlpha=.45;c.setLineDash([3,3]);c.beginPath();
+ for(let z=336;z<=580;z+=4)c.lineTo(sx(bowlX(z)),sz(z));
+ c.stroke();c.setLineDash([]);c.globalAlpha=1;
  c.font='9px Arial';c.fillStyle='#486570';c.textAlign='center';
  c.fillText('JUNIPER SUMMIT',77,12);c.fillText('JUNIPER BASE',77,326);c.fillText('TIMBERLINE',178,234);
+ c.fillText('JUNIPER TRAVERSE',190,149);
  c.fillStyle=p.mode==='lift'?'#d79b55':'#254e60';c.beginPath();c.arc(sx(p.x),sz(p.z),5,0,7);c.fill();c.strokeStyle='#fff';c.lineWidth=2;c.stroke();
 }
 function ui(){
  const lift=p.mode==='lift',near=boardingLift(p),expert=p.activeLift===EXPERT;
- const expertRoutes=[expertRoute,chuteRoute,timberRoute];
  const expertDescent=p.route==='Timberline Summit'||expertRoutes.some(route=>route.name===p.route);
  $('speed').textContent=lift?'—':Math.round(p.speed*3.6);
  $('laps').textContent=p.laps;

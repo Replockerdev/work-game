@@ -23,6 +23,7 @@ export function expertFaceX(z){return 35+17*smooth((z-28)/60)-33*smooth((z-244)/
 export const expertRoute={id:'expert',name:'Timberline Face',color:'#414e61'};
 export const chuteRoute={id:'chute',name:'Splitrock Chute',color:'#493d58'};
 export const timberRoute={id:'timber',name:'Pine Thread',color:'#466956'};
+export const bailoutRoute={id:'bailout',name:'Juniper Traverse',color:'#41778a'};
 export function chuteX(z){
  return 62+42*smooth((z-58)/72)+4*Math.sin((z-130)*.045)*smooth((z-124)/24)
   -52*smooth((z-220)/104);
@@ -81,6 +82,57 @@ export function liftGround(lift,x,z){
 export const chairProgress=t=>t-.86*Math.sin(t*2*Math.PI)/(2*Math.PI);
 export const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
+// Survey points from the upper Timberline Face to the floor of Juniper Bowl.
+const traverseSurvey=[
+ [-397,555,193],[-355,535,172],[-328,505,154],[-331,462,136],
+ [-359,420,114],[-379,376,91],[-355,342,73],[-321,326,64],[-288,336,57]
+];
+function spline(a,b,c,d,t){
+ return b+.5*t*(c-a+t*(2*a-5*b+4*c-d+t*(3*(b-c)+d-a)));
+}
+export const traversePoints=traverseSurvey.flatMap((point,i,points)=>{
+ if(i===points.length-1)return [{x:point[0],z:point[1],y:point[2]}];
+ const before=points[Math.max(0,i-1)],after=points[Math.min(i+2,points.length-1)];
+ return Array.from({length:5},(_,j)=>{
+  const values=point.map((value,k)=>spline(before[k],value,points[i+1][k],after[k],j/5));
+  return {x:values[0],z:values[1],y:values[2]};
+ });
+});
+const traverseSegments=traversePoints.slice(1).map((end,i)=>{
+ const start=traversePoints[i],dx=end.x-start.x,dz=end.z-start.z;
+ return {start,end,dx,dz,lengthSquared:dx*dx+dz*dz};
+});
+function surveyValue(progress,axis){
+ const index=Math.min(traverseSurvey.length-2,Math.floor(progress));
+ return spline(traverseSurvey[Math.max(0,index-1)][axis],traverseSurvey[index][axis],
+  traverseSurvey[index+1][axis],traverseSurvey[Math.min(traverseSurvey.length-1,index+2)][axis],progress-index);
+}
+export function traverseAt(x,z){
+ if(x<-435||x>-250||z<289||z>593)return null;
+ let best=39*39,progress=-1;
+ for(let i=0;i<traverseSegments.length;i++){
+  const {start,dx,dz,lengthSquared}=traverseSegments[i];
+  const rx=x-start.x,rz=z-start.z;
+  const t=clamp((rx*dx+rz*dz)/lengthSquared,0,1);
+  const distance=(rx-dx*t)**2+(rz-dz*t)**2;
+  if(distance<best){
+   best=distance;
+   progress=(i+t)/5;
+  }
+ }
+ if(progress<0)return null;
+ // Refine on the continuous curve so a turn cannot step between flat chords.
+ const end=traverseSurvey.length-1,epsilon=.005;
+ for(let i=0;i<3;i++){
+  const left=clamp(progress-epsilon,0,end),right=clamp(progress+epsilon,0,end);
+  const dx=(surveyValue(right,0)-surveyValue(left,0))/(right-left);
+  const dz=(surveyValue(right,1)-surveyValue(left,1))/(right-left);
+  const correction=((x-surveyValue(progress,0))*dx+(z-surveyValue(progress,1))*dz)/(dx*dx+dz*dz);
+  progress=clamp(progress+correction,0,end);
+ }
+ const distance=Math.hypot(x-surveyValue(progress,0),z-surveyValue(progress,1));
+ return distance<38?{y:surveyValue(progress,2),distance,progress:progress*5}:null;
+}
 export const expertRocks=[
  [112,-13,3.9],[120,-14.5,4.6],[138,12.5,4.1],[147,15.5,4.9],
  [167,-12,4.3],[173,-15,3.7],[191,12,4.1],[207,13,4.8],
@@ -112,13 +164,15 @@ export const bowlRocks=[
  {z:330,offset:51,size:5.9},{z:355,offset:56,size:4.4}
 ].map(({z,offset,size})=>({x:bowlX(z)+offset,z,size,r:size*.83}));
 export function trailAt(x,z){
+ const traverse=traverseAt(x,z);
+ if(traverse&&traverse.distance<11&&traverse.progress>1&&traverse.progress<traverseSegments.length-1)return bailoutRoute;
  const expert=expertLine(x,z);
  if(expert)return expert;
  if(inBowl(x,z)&&Math.abs(x-pathX(z,groomer))>groomer.width)return bowlRoute;
  if(z<85||z>570)return null;
  return routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b);
 }
-export function onTrail(x,z){return z<90||z>570||inBowl(x,z)||onExpertFace(x,z)||routes.some(r=>Math.abs(x-pathX(z,r))<r.width);}
+export function onTrail(x,z){return z<90||z>570||inBowl(x,z)||onExpertFace(x,z)||(traverseAt(x,z)?.distance??Infinity)<12||routes.some(r=>Math.abs(x-pathX(z,r))<r.width);}
 export const jumps=[{z:205,h:2.7,width:9},{z:315,h:3.8,width:10},{z:425,h:4.5,width:11}];
 export function baseHeight(z){return 148*(1-smooth((z-5)/610));}
 export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-130)/80);y+=edge*(6+Math.sin(z*.021)*3);
@@ -137,12 +191,13 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
  const rampWidth=1-smooth((Math.abs(x-LIFT.upX)-2.2)/1.6);
  const rampLength=smooth((z-3)/8)*(1-smooth((z-13)/7));
  y+=.5*rampWidth*rampLength;
- if(x<-35&&z>395){
+ if(x<-35&&z>345){
   const local=expertLocal(x,z);
   const shelf=1-smooth((local.z-356)/34);
   const crown=1-smooth((-local.z-35)/75);
-  const shoulder=local.x>29?89:68;
-  const crossSlope=1-smooth((Math.abs(local.x-29)-shoulder)/40);
+  const southSlope=1-smooth((local.x-118)/40);
+  const northSlope=(1-smooth((-local.x-9)/160))*smooth((z-345)/100);
+  const crossSlope=local.x>=-9?southSlope:northSlope;
   const fall=1-smooth((local.z-25)/310);
   y+=198*fall*shelf*crown*crossSlope+expertRelief(local.x,local.z);
   const terminalWidth=1-smooth((Math.abs(local.x)-20)/12);
@@ -150,13 +205,19 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const loadingDeck=terminalWidth*(1-smooth((Math.abs(local.z-EXPERT.bottom)-11)/24));
   y+=(211-y)*summitDeck+(3.4-y)*loadingDeck;
  }
+ const traverse=traverseAt(x,z);
+ if(traverse){
+  const width=1-smooth((traverse.distance-9)/29);
+  const ends=smooth(traverse.progress/3)*smooth((traverseSegments.length-traverse.progress)/5);
+  y+=(traverse.y-y)*width*ends;
+ }
  for(const j of jumps){const d=z-j.z;if(Math.abs(x)<j.width){if(d>=-17&&d<0)y+=j.h*smooth((d+17)/17);else if(d>=0&&d<2)y+=j.h*(1-smooth(d/2));}}return y;}
 export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}for(let i=0;i<900;i++){const z=95+rand()*465,x=-190+rand()*380;const near=routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b),distance=Math.abs(x-pathX(z,near));const inGlade=near.id==='glades'&&distance<34;const gap=inGlade?Math.abs(x-pathX(z,near))<6:false;if((distance>near.width+7||inGlade&&!gap)&&Math.abs(x+28)>7){const s=.75+rand()*.75;if(!inBowl(x,z,7)&&!onExpertFace(x,z)&&Math.hypot(x-expertLoading.x,z-expertLoading.z)>20)a.push({x,z,r:.8,s});}}
  for(let i=0;i<70;i++){
   const z=200+rand()*364;
   const x=bowlX(z)-bowlWidth(z)-8-rand()*45;
   const s=.65+rand()*.5;
-  if(x<-195&&x>SNOW_WEST+8&&!onExpertFace(x,z))a.push({x,z,r:.8,s});
+  if(x<-195&&x>SNOW_WEST+8&&!onExpertFace(x,z)&&(traverseAt(x,z)?.distance??Infinity)>15)a.push({x,z,r:.8,s});
  }
  // The trees frame a clear central line and a few pockets for wider turns.
  for(let i=0;i<32;i++){
@@ -236,8 +297,8 @@ export function step(p,input,dt,colliders=[]){const events=[];
  // Read the main slope over several ski lengths so a bump or ramp lip
  // cannot change the stance. The loading area always behaves as flat.
  const headingZ=Math.cos(p.angle),headingX=Math.sin(p.angle);
- const expert=expertLine(p.x,p.z);
- const downhillGrade=expert
+ const expert=expertLine(p.x,p.z),traverse=traverseAt(p.x,p.z);
+ const downhillGrade=expert||traverse?.distance<12
   ?(height(p.x-12*headingX,p.z-12*headingZ)-height(p.x+12*headingX,p.z+12*headingZ))/24
   :p.z>=590?0:(baseHeight(p.z-12*headingZ)-baseHeight(p.z+12*headingZ))/24;
  const wasTucking=p.drive==='tuck';
