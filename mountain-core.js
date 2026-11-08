@@ -211,6 +211,13 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const ends=smooth(traverse.progress/3)*smooth((traverseSegments.length-traverse.progress)/5);
   y+=(traverse.y-y)*width*ends;
  }
+ if(x<-304&&x>-492&&z>321&&z<504){
+  const shoulder=smooth((x+492)/45)*(1-smooth((x+347)/43));
+  const taper=smooth((z-321)/42)*(1-smooth((z-460)/44));
+  const trailClearance=smooth(((traverse?.distance??38)-14)/19);
+  const roll=Math.sin(x*.045+z*.025)+.48*Math.sin(z*.11-x*.036);
+  y+=roll*3.4*shoulder*taper*trailClearance;
+ }
  for(const j of jumps){const d=z-j.z;if(Math.abs(x)<j.width){if(d>=-17&&d<0)y+=j.h*smooth((d+17)/17);else if(d>=0&&d<2)y+=j.h*(1-smooth(d/2));}}return y;}
 export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}for(let i=0;i<900;i++){const z=95+rand()*465,x=-190+rand()*380;const near=routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b),distance=Math.abs(x-pathX(z,near));const inGlade=near.id==='glades'&&distance<34;const gap=inGlade?Math.abs(x-pathX(z,near))<6:false;if((distance>near.width+7||inGlade&&!gap)&&Math.abs(x+28)>7){const s=.75+rand()*.75;if(!inBowl(x,z,7)&&!onExpertFace(x,z)&&Math.hypot(x-expertLoading.x,z-expertLoading.z)>20)a.push({x,z,r:.8,s});}}
  for(let i=0;i<70;i++){
@@ -227,6 +234,15 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
   if(x<16)continue;
   const point=liftWorld(EXPERT,x,z);
   a.push({...point,r:.8,s:.5+rand()*.45});
+ }
+ for(let i=15;i<36;i++){
+  const point=traversePoints[i],next=traversePoints[i+1];
+  const dx=next.x-point.x,dz=next.z-point.z,length=Math.hypot(dx,dz);
+  const offset=(22+rand()*11)*(i%3===0?-1:1);
+  const x=point.x-dz*offset/length,z=point.z+dx*offset/length;
+  if(inBowl(x,z,6)||(traverseAt(x,z)?.distance??38)<20)continue;
+  const grade=Math.hypot(height(x+1,z)-height(x-1,z),height(x,z+1)-height(x,z-1))/2;
+  if(grade<.85)a.push({x,z,r:.8,s:.58+rand()*.5});
  }
  return a;
 }

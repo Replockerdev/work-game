@@ -16,10 +16,24 @@ export const rangeHeight=basinHeight;
 export function addRange(scene){
  // An irregular heightfield with connected ridgelines and exposed rock faces,
  // surrounding an exact hole for the playable snow surface.
- const xs=[];for(let x=-4200;x<-1200;x+=80)xs.push(x);for(let x=-1200;x<SNOW_WEST;x+=15)xs.push(x);xs.push(SNOW_WEST);for(let x=SNOW_WEST+25;x<SNOW_EAST;x+=25)xs.push(x);xs.push(SNOW_EAST);for(let x=SNOW_EAST+15;x<1200;x+=15)xs.push(x);for(let x=1200;x<=4200;x+=80)xs.push(x);
- const zs=[];for(let z=-3400;z<-900;z+=80)zs.push(z);for(let z=-900;z<-40;z+=15)zs.push(z);zs.push(-40);for(let z=-20;z<690;z+=20)zs.push(z);zs.push(690);for(let z=705;z<1800;z+=15)zs.push(z);for(let z=1800;z<=3900;z+=80)zs.push(z);
+ const xs=[];for(let x=-4200;x<-1200;x+=80)xs.push(x);for(let x=-1200;x<SNOW_WEST;x+=11)xs.push(x);xs.push(SNOW_WEST);for(let x=SNOW_WEST+25;x<SNOW_EAST;x+=25)xs.push(x);xs.push(SNOW_EAST);for(let x=SNOW_EAST+12;x<1200;x+=12)xs.push(x);for(let x=1200;x<=4200;x+=80)xs.push(x);
+ const zs=[];for(let z=-3400;z<-900;z+=80)zs.push(z);for(let z=-900;z<-40;z+=15)zs.push(z);zs.push(-40);for(let z=-26;z<690;z+=14)zs.push(z);zs.push(690);for(let z=705;z<1800;z+=15)zs.push(z);for(let z=1800;z<=3900;z+=80)zs.push(z);
  const verts=[],cols=[],normals=[];const snow=new T.Color('#d6e4ed'),rock=new T.Color('#58666f'),rockWarm=new T.Color('#8b8074');const cache=new Map();
- function point(x,z){const key=x+','+z;if(cache.has(key))return cache.get(key);const y=rangeHeight(x,z),e=6,n=new T.Vector3(rangeHeight(x-e,z)-rangeHeight(x+e,z),e*2,rangeHeight(x,z-e)-rangeHeight(x,z+e)).normalize(),wind=noise(x*.023,z*.023),steep=1-n.y,snowAmount=T.MathUtils.clamp((.45-steep)*3.2+(y>650?.12:0)+(wind-.4)*.45,0,1),color=rock.clone().lerp(rockWarm,wind*.5).lerp(snow,snowAmount);color.multiplyScalar(.86+fbm(x*.009,z*.009)*.26);const p={x,y,z,n,color};cache.set(key,p);return p;}function tri(a,b,c){for(const p of[a,b,c]){verts.push(p.x,p.y,p.z);normals.push(p.n.x,p.n.y,p.n.z);cols.push(p.color.r,p.color.g,p.color.b);}}
+ function point(x,z){
+  const key=x+','+z;
+  if(cache.has(key))return cache.get(key);
+  const y=rangeHeight(x,z),e=5;
+  const n=new T.Vector3(rangeHeight(x-e,z)-rangeHeight(x+e,z),e*2,rangeHeight(x,z-e)-rangeHeight(x,z+e)).normalize();
+  const strata=fbm(x*.024+y*.007,z*.024-y*.009);
+  const exposure=fbm(x*.013+13,z*.013-7);
+  const snowAmount=T.MathUtils.smoothstep(n.y+strata*.27+exposure*.31,.64,.91);
+  const color=rock.clone().lerp(rockWarm,T.MathUtils.smoothstep(exposure,.28,.74)*.67).lerp(snow,snowAmount);
+  color.multiplyScalar(.78+strata*.44+exposure*.12);
+  const p={x,y,z,n,color};
+  cache.set(key,p);
+  return p;
+ }
+ function tri(a,b,c){for(const p of[a,b,c]){verts.push(p.x,p.y,p.z);normals.push(p.n.x,p.n.y,p.n.z);cols.push(p.color.r,p.color.g,p.color.b);}}
  for(let j=0;j<zs.length-1;j++)for(let i=0;i<xs.length-1;i++){const x=xs[i],xx=xs[i+1],z=zs[j],zz=zs[j+1];if(x>=SNOW_WEST&&xx<=SNOW_EAST&&z>=-40&&zz<=690)continue;const a=point(x,z),b=point(xx,z),c=point(x,zz),d=point(xx,zz);tri(a,c,b);tri(b,c,d);}
  const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setAttribute('color',new T.Float32BufferAttribute(cols,3));geo.setAttribute('normal',new T.Float32BufferAttribute(normals,3));const rangeMat=new T.MeshStandardMaterial({vertexColors:true,roughness:1});rangeMat.onBeforeCompile=shader=>{shader.vertexShader='varying vec3 vRangeWorld;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvRangeWorld=(modelMatrix*vec4(transformed,1.0)).xyz;');shader.fragmentShader='varying vec3 vRangeWorld;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\nfloat rocky=1.0-smoothstep(.28,.55,dot(diffuseColor.rgb,vec3(.333)));float strata=sin(vRangeWorld.x*.19+vRangeWorld.y*.23+vRangeWorld.z*.07)*sin(vRangeWorld.y*.31-vRangeWorld.z*.11);float fleck=fract(sin(dot(floor(vRangeWorld.xz*2.0),vec2(12.9898,78.233)))*43758.5453);diffuseColor.rgb*=1.0-rocky*(.035+.045*strata+.025*fleck);');};const terrain=new T.Mesh(geo,rangeMat);terrain.receiveShadow=true;scene.add(terrain);
  const sky=new T.Mesh(new T.SphereGeometry(7800,32,16),new T.ShaderMaterial({side:T.BackSide,depthWrite:false,vertexShader:'varying vec3 vDir; void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:`varying vec3 vDir;void main(){vec3 d=normalize(vDir);float h=max(d.y,0.0);vec3 color=mix(vec3(.80,.88,.92),vec3(.29,.58,.79),pow(h,.42));float sun=pow(max(dot(d,normalize(vec3(-.7,.5,.25))),0.0),650.0);color+=vec3(1.0,.86,.60)*sun*.45;float streak=sin(d.x*28.0+d.z*14.0+sin(d.z*35.0)*.5);float cloud=smoothstep(.75,1.0,streak)*smoothstep(.15,.4,h)*(1.0-smoothstep(.4,.56,h));color=mix(color,vec3(.91,.94,.94),cloud*.24);gl_FragColor=vec4(color,1.0);}`}));sky.renderOrder=-100;scene.add(sky);
