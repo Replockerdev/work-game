@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
@@ -51,7 +51,7 @@ export function createMountain(canvas){
    const endFade=T.MathUtils.smoothstep(z,bowlStart,bowlStart+42)*(1-T.MathUtils.smoothstep(z,bowlEnd-55,bowlEnd));
    color.lerp(bowlSnow,.72*edgeFade*endFade);
   }
-  if(x<-85&&z>470){
+  if(x<-85&&z>440){
    const route=expertLine(x,z);
    if(route)color.lerp(route===chuteRoute?chuteSnow:expertSnow,.45);
    const local=expertLocal(x,z);
@@ -208,7 +208,7 @@ export function createMountain(canvas){
   liftBox(.14,1.8,.14,'#445a62',unloadSignX,unloadSignY+.9,unloadSignZ);
   liftSign('Unload  ↗',unloadSignX,unloadSignY+1.65,unloadSignZ,'#237449',2.5,1);
   if(config===EXPERT){
-   const x=expertFaceX(46)+23,z=46,y=groundHeight(x,z);
+   const x=expertFaceX(46)+23,z=timberlineZ(46),y=groundHeight(x,z);
    liftBox(.16,2.6,.16,'#445a62',x,y+1.3,z);
    liftSign('◆  Timberline Face  ↑',x,y+2.4,z,'#303944',5.5,-1);
    liftSign('◆◆  Splitrock  →',x,y+1.65,z,'#493d58',5.5,-1);
@@ -216,10 +216,10 @@ export function createMountain(canvas){
    const markerY=groundHeight(chuteMarkerX,chuteZ);
    liftBox(.13,1.7,.13,'#445a62',chuteMarkerX,markerY+.85,chuteZ);
    liftSign('◆◆',chuteMarkerX,markerY+1.55,chuteZ,'#493d58',1.45,-1);
-   const treeSignX=37,treeSignZ=176,treeSignY=groundHeight(treeSignX,treeSignZ);
+   const treeSignX=37,treeSignZ=timberlineZ(176),treeSignY=groundHeight(treeSignX,treeSignZ);
    liftBox(.13,1.85,.13,'#445a62',treeSignX,treeSignY+.92,treeSignZ);
    liftSign('←  Pine Thread',treeSignX,treeSignY+1.72,treeSignZ,'#466956',3.8,-1);
-   const runoutX=expertFaceX(358)+18,runoutZ=358,runoutY=groundHeight(runoutX,runoutZ);
+   const runoutX=expertFaceX(358)+18,runoutZ=timberlineZ(358),runoutY=groundHeight(runoutX,runoutZ);
    liftBox(.16,2.6,.16,'#445a62',runoutX,runoutY+1.3,runoutZ);
    liftSign('←  Timberline Chair',runoutX,runoutY+2.4,runoutZ,'#354356',4.8,-1);
    liftSign('Juniper Base  →',runoutX,runoutY+1.65,runoutZ,'#355663',4.8,-1);

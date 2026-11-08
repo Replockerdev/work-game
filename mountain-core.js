@@ -11,7 +11,7 @@ export function juniperSection(z){
  return 2*distance/(2.2+Math.sqrt(4.84-.0048*distance));
 }
 export const LENGTH=640, BASE={x:-28,z:622},TOP={x:-20,z:juniperZ(35)};
-export const SNOW_WEST=-575,SNOW_EAST=215,SNOW_NORTH=-340,SNOW_SOUTH=690;
+export const SNOW_WEST=-875,SNOW_EAST=215,SNOW_NORTH=-340,SNOW_SOUTH=690;
 export const BOARD_CENTER={x:0,z:610},BOARD_RADIUS=58;
 export const LIFT={upX:-22,downX:-38,towerX:-30,towerWidth:.9,crossbeamClearance:1.5,chairWidth:3.6};
 export const SUMMIT_TERMINAL=juniperZ(12);
@@ -20,16 +20,29 @@ export const UNLOAD_SECONDS=2.5;
 export const liftTowers=[12,65,118,170,225,275,330,380,435,485,590,622].map(juniperZ);
 export const JUNIPER={id:'juniper',name:'Juniper Chair',center:LIFT.towerX,top:SUMMIT_TERMINAL,bottom:BASE.z,
  rideSeconds:RIDE_SECONDS,towers:liftTowers,x:0,z:0,yaw:0,hand:1,exitX:TOP.x,exitZ:TOP.z};
-export const EXPERT={id:'expert',name:'Timberline Chair',center:0,top:0,bottom:390,
- rideSeconds:19,towers:[0,38,100,168,235,303,352,390],
- x:-465,z:510,yaw:1.45,hand:-1,exitX:24,exitZ:27,exitAngle:.23};
+export function timberlineZ(section){
+ if(section<=0)return section-280;
+ if(section>=360)return section;
+ return section-280*(1-section/360)**2;
+}
+const timberlineScale=1+560/360;
+function timberlineSection(z){
+ if(z<=-280)return z+280;
+ if(z>=360)return z;
+ const distance=z+280;
+ return 2*distance/(timberlineScale+Math.sqrt(timberlineScale**2-1120*distance/360**2));
+}
+export const EXPERT={id:'expert',name:'Timberline Chair',center:0,top:timberlineZ(0),bottom:390,
+ rideSeconds:29,towers:[0,27,57,90,126,165,208,253,305,352,390].map(timberlineZ),
+ x:-465,z:510,yaw:1.45,hand:-1,exitX:24,exitZ:timberlineZ(17),exitAngle:.23};
 export function liftWorld(lift,x,z){
  const cos=Math.cos(lift.yaw),sin=Math.sin(lift.yaw);
  return {x:lift.x+cos*x*lift.hand+sin*z,z:lift.z-sin*x*lift.hand+cos*z};
 }
 export function expertLocal(x,z){
  const dx=x-EXPERT.x,dz=z-EXPERT.z,cos=Math.cos(EXPERT.yaw),sin=Math.sin(EXPERT.yaw);
- return {x:sin*dz-cos*dx,z:sin*dx+cos*dz};
+ const along=sin*dx+cos*dz;
+ return {x:sin*dz-cos*dx,z:timberlineSection(along),along};
 }
 export function expertFaceX(z){return 35+17*smooth((z-28)/60)-33*smooth((z-244)/120);}
 export const expertRoute={id:'expert',name:'Timberline Face',color:'#414e61'};
@@ -98,7 +111,7 @@ export const expertRocks=[
  [112,-13,3.9],[120,-14.5,4.6],[138,12.5,4.1],[147,15.5,4.9],
  [167,-12,4.3],[173,-15,3.7],[191,12,4.1],[207,13,4.8],
  [223,-13,4.5],[241,13.5,3.7],[262,13,3.4],[273,-14,2.9]
-].map(([z,offset,size])=>({...liftWorld(EXPERT,chuteX(z)+offset,z),size,r:size*.78}));
+].map(([z,offset,size])=>({...liftWorld(EXPERT,chuteX(z)+offset,timberlineZ(z)),size,r:size*.78}));
 export const routes=[{id:'groomer',name:'The Groomer',offset:-103,width:23,color:'#72bfb4'},{id:'park',name:'The Park',offset:0,width:24,color:'#e3a36b'},{id:'glades',name:'The Glades',offset:103,width:36,color:'#8da776'}];
 export const pathX=(z,r)=>r.offset*Math.sin(Math.PI*clamp((juniperSection(z)-60)/530,0,1));
 const groomer=routes[0];
@@ -168,23 +181,31 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const shelf=1-smooth((local.z-356)/34);
   // Carry the summit west into the enclosing ridge. Fan the north shoulder
   // out uphill and narrow its toe where it meets the existing Juniper runs.
-  const shoulderWidth=96+160*smooth((-x-287)/205);
+  const shoulderWidth=101+156*smooth((-x-287)/330);
   const northDistance=Math.max(0,-local.x-9);
   const contour=(12*Math.sin(local.z*.028)+5*Math.sin(local.z*.059+1.2))*smooth(northDistance/40);
-  const southSlope=1-smooth((local.x-118)/40);
+  const southSlope=1-smooth((local.x-118)/94);
   const northSlope=1-smooth(northDistance/(shoulderWidth+contour));
   const crossSlope=local.x>=-9?southSlope:northSlope;
-  const fall=1-smooth((local.z-25)/310);
-  const ridgeBack=smooth((-local.z-22)/100)*23;
-  const drainage=smooth((northDistance-19)/36)*(1-smooth((northDistance-143)/65));
-  const upperGully=(local.z+64-northDistance*.32)/20;
-  const lowerGully=(local.z-36-northDistance*.42)/24;
-  const erosion=drainage*(37*Math.exp(-upperGully*upperGully)+29*Math.exp(-lowerGully*lowerGully));
-  y+=(198*fall*shelf+ridgeBack-erosion)*crossSlope+expertRelief(local.x,local.z);
+  const fall=1-smooth((local.z-18)/319);
+  const ridgeBack=smooth((EXPERT.top-local.along-14)/138)*(103+35*smooth(northDistance/106));
+  const drainage=smooth((northDistance-20)/42)*(1-smooth((northDistance-155)/85));
+  const upperGully=(local.along+306-northDistance*.36)/30;
+  const lowerGully=(local.along+154-northDistance*.55)/36;
+  const erosion=drainage*(54*Math.exp(-upperGully*upperGully)+38*Math.exp(-lowerGully*lowerGully));
+  y+=(335*fall*shelf+ridgeBack-erosion)*crossSlope+expertRelief(local.x,local.z);
   const terminalWidth=1-smooth((Math.abs(local.x)-20)/12);
-  const summitDeck=terminalWidth*(1-smooth((Math.abs(local.z)-11)/18));
+  const summitDeck=terminalWidth*(1-smooth((Math.abs(local.along-EXPERT.top)-11)/19));
   const loadingDeck=terminalWidth*(1-smooth((Math.abs(local.z-EXPERT.bottom)-11)/24));
-  y+=(211-y)*summitDeck+(3.4-y)*loadingDeck;
+  y+=(354-y)*summitDeck+(3.4-y)*loadingDeck;
+ }
+ if(x<-560){
+  // These foothills continue the old backdrop across the wider playable mesh.
+  const distance=(x+880)/172;
+  const northSpur=(z-205)/210,southSpur=(z-330)/118;
+  const foothills=Math.exp(-distance*distance)*(325*Math.exp(-northSpur*northSpur)+125*Math.exp(-southSpur*southSpur));
+  const offPiste=1-smooth((z-395)/65);
+  y+=Math.max(0,foothills-y)*smooth((-x-560)/146)*offPiste;
  }
  for(const j of jumps){const d=z-j.z;if(Math.abs(x)<j.width){if(d>=-17&&d<0)y+=j.h*smooth((d+17)/17);else if(d>=0&&d<2)y+=j.h*(1-smooth(d/2));}}return y;}
 export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}for(let i=0;i<900;i++){const z=juniperZ(95+rand()*465),x=-190+rand()*380;const near=routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b),distance=Math.abs(x-pathX(z,near));const inGlade=near.id==='glades'&&distance<34;const gap=inGlade?Math.abs(x-pathX(z,near))<6:false;if((distance>near.width+7||inGlade&&!gap)&&Math.abs(x+28)>7){const s=.75+rand()*.75;if(!inBowl(x,z,7)&&!onExpertFace(x,z)&&Math.hypot(x-expertLoading.x,z-expertLoading.z)>20)a.push({x,z,r:.8,s});}}
@@ -200,7 +221,7 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
   const side=i%2===0?-1:1;
   const x=timberX(z)+side*(4.5+rand()*6);
   if(x<16)continue;
-  const point=liftWorld(EXPERT,x,z);
+  const point=liftWorld(EXPERT,x,timberlineZ(z));
   a.push({...point,r:.8,s:.5+rand()*.45});
  }
  for(let i=0;i<38;i++){

@@ -1,5 +1,5 @@
 import {createMountain} from './mountain-view.js';
-import {spawn,step,board,boardingLift,BASE,TOP,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute,juniperZ} from './mountain-core.js';
+import {spawn,step,board,boardingLift,BASE,TOP,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute,juniperZ,timberlineZ} from './mountain-core.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute];
 const $=id=>document.getElementById(id),canvas=$('game');let view;try{view=createMountain(canvas);}catch(e){$('overlay').querySelector('h1').textContent='3D graphics unavailable';$('overlay').querySelector('p').textContent='This mountain needs WebGL. Try Chrome or Edge with graphics acceleration enabled.';throw e;}
 let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0;try{p.laps=Math.max(0,Number(localStorage.getItem('work-game-three-lines-laps'))||0);}catch{}
@@ -9,7 +9,7 @@ function interact(){if(board(p)){keys={};view.resetCamera();toast(p.activeLift==
 function pause(){if(!started)return;paused=!paused;keys={};jump=false;$('pauseOverlay').hidden=!paused;$('pause').textContent=paused?'Resume · P':'Pause · P';if(!paused)canvas.focus();}
 function map(){$('trailMap').hidden=!$('trailMap').hidden;canvas.focus();}
 function drawMap(){
- const c=$('map').getContext('2d'),sx=x=>77-x*.29,sz=z=>20+(z-JUNIPER.top)/(BASE.z-JUNIPER.top)*285;
+ const c=$('map').getContext('2d'),sx=x=>64-x*.20,sz=z=>20+(z-JUNIPER.top)/(BASE.z-JUNIPER.top)*285;
  c.clearRect(0,0,250,330);
  c.strokeStyle='#7d919b';c.lineWidth=2;c.setLineDash([4,4]);
  for(const lift of [JUNIPER,EXPERT]){
@@ -27,13 +27,13 @@ function drawMap(){
   c.lineWidth=route===expertRoute?5:2.5;
   c.beginPath();
   for(let z=start;z<=end;z+=3){
-   const point=liftWorld(EXPERT,center(z),z);
+   const point=liftWorld(EXPERT,center(z),timberlineZ(z));
    c.lineTo(sx(point.x),sz(point.z));
   }
   c.stroke();
  }
  c.font='9px Arial';c.fillStyle='#486570';c.textAlign='center';
- c.fillText('JUNIPER SUMMIT',77,12);c.fillText('JUNIPER BASE',77,326);c.fillText('TIMBERLINE',178,260);
+ c.fillText('JUNIPER SUMMIT',64,12);c.fillText('JUNIPER BASE',64,326);c.fillText('TIMBERLINE',191,248);
  c.fillStyle=p.mode==='lift'?'#d79b55':'#254e60';c.beginPath();c.arc(sx(p.x),sz(p.z),5,0,7);c.fill();c.strokeStyle='#fff';c.lineWidth=2;c.stroke();
 }
 function ui(){
