@@ -1,4 +1,4 @@
-import {height,smooth,clamp,SNOW_WEST,SNOW_EAST} from './mountain-core.js';
+import {height,smooth,clamp,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH} from './mountain-core.js';
 const frac=x=>x-Math.floor(x),mix=(a,b,t)=>a+(b-a)*t;
 const hash=(x,z)=>frac(Math.sin(x*127.1+z*311.7)*43758.5453);
 export function terrainNoise(x,z){const a=Math.floor(x),b=Math.floor(z),u=smooth(frac(x)),v=smooth(frac(z));return mix(mix(hash(a,b),hash(a+1,b),u),mix(hash(a,b+1),hash(a+1,b+1),u),v);}
@@ -13,6 +13,9 @@ export const ridgeSpines=[
  {width:115,points:[[-817,412,496],[-720,360,344],[-651,284,196]]},
  {width:145,points:[[-825,486,426],[-733,527,319],[-635,549,274],[-580,538,266]]},
  {width:225,points:[[-690,-520,530],[-470,-740,535],[-240,-890,315],[30,-930,235],[275,-880,300],[510,-720,550],[690,-470,590]]},
+ {width:175,points:[[-440,-620,540],[-330,-513,480],[-210,-434,392],[-145,-350,310]]},
+ {width:170,points:[[510,-660,550],[325,-575,460],[175,-485,381],[123,-354,320]]},
+ {width:170,points:[[-160,-690,405],[-45,-568,382],[-25,-416,340]]},
  {width:320,points:[[-690,1240,390],[-350,1420,490],[90,1300,360],[420,1430,470],[810,1240,510]]},
  {width:530,points:[[-1800,-300,850],[-1550,800,1060],[-1000,1800,800]]},
  {width:600,points:[[1800,-800,1000],[2150,800,1200],[1500,2200,950]]},
@@ -22,7 +25,7 @@ export const ridgeSpines=[
 export const drainage=[
  {name:'West Chute',from:[-690,-70],to:[-245,175],width:22,depth:64},
  {name:'West Snow Bowl',from:[-740,610],to:[-240,675],width:96,depth:96},
- {name:'North Couloir',from:[-240,-890],to:[-80,-55],width:23,depth:61},
+ {name:'North Couloir',from:[-240,-890],to:[-80,-350],width:23,depth:61},
  {name:'East Chute',from:[710,65],to:[240,280],width:21,depth:70},
  {name:'East Upper Gully',from:[917,-146],to:[487,155],width:40,depth:96},
  {name:'East Fork',from:[953,108],to:[593,263],width:32,depth:70},
@@ -34,8 +37,8 @@ export const drainage=[
 ];
 function segment(x,z,a,b){const vx=b[0]-a[0],vz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*vx+(z-a[1])*vz)/(vx*vx+vz*vz)));return {t,d:Math.hypot(x-a[0]-vx*t,z-a[1]-vz*t)};}
 export function basinHeight(x,z){
- const ex=Math.max(0,SNOW_WEST-x,x-SNOW_EAST),ez=Math.max(0,-40-z,z-690);
- const edge=height(clamp(x,SNOW_WEST,SNOW_EAST),clamp(z,-40,690));
+ const ex=Math.max(0,SNOW_WEST-x,x-SNOW_EAST),ez=Math.max(0,SNOW_NORTH-z,z-SNOW_SOUTH);
+ const edge=height(clamp(x,SNOW_WEST,SNOW_EAST),clamp(z,SNOW_NORTH,SNOW_SOUTH));
  if(ex===0&&ez===0)return edge;
  const blend=smooth(Math.max(ex/255,ez/235));
  let land=-44+fbm(x*.001,z*.001)*60;
@@ -51,8 +54,5 @@ export function basinHeight(x,z){
  const talus=smooth((land-48)/185);
  const rough=(fbm(x*.012,z*.012)-.5)*(22+talus*54)+(fbm(x*.033,z*.033)-.5)*(5+talus*16);
  land+=rough*smooth(Math.max(ex,ez)/200);
- const rear=segment(x,z,[-42,-55],[96,-365]);
- // Below the summit ridge, a shaded basin drops away before the far peaks rise.
- land-=64*Math.exp(-Math.pow(rear.d/235,2))*smooth((-z-40)/145)*(1-smooth((-z-315)/155));
  return mix(edge,land,blend);
 }

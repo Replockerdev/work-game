@@ -1,9 +1,9 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,SNOW_WEST,SNOW_EAST,traverseAt} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
-const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=-40&&z<=690?height(x,z):rangeHeight(x,z);
+const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 export function createMountain(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
  const scene=new T.Scene();scene.background=new T.Color('#a5c9dc');scene.fog=new T.Fog('#c0d4e2',1200,5500);const camera=new T.PerspectiveCamera(64,1,.15,9200);
@@ -36,12 +36,16 @@ export function createMountain(canvas){
   box(width,.69,.14,'#343e3e',x,y,z,parent);
   return panel;
  }
- const snowWidth=SNOW_EAST-SNOW_WEST;
- const geo=new T.PlaneGeometry(snowWidth,730,snowWidth/2.5,365);geo.rotateX(-Math.PI/2);geo.translate((SNOW_WEST+SNOW_EAST)/2,0,325);const pos=geo.attributes.position,colors=[];
+ const snowWidth=SNOW_EAST-SNOW_WEST,snowLength=SNOW_SOUTH-SNOW_NORTH;
+ const geo=new T.PlaneGeometry(snowWidth,snowLength,snowWidth/2.5,snowLength/2);
+ geo.rotateX(-Math.PI/2);
+ geo.translate((SNOW_WEST+SNOW_EAST)/2,0,(SNOW_NORTH+SNOW_SOUTH)/2);
+ const pos=geo.attributes.position,colors=[];
+ const flatSummit=juniperZ(90),bankStart=juniperZ(100);
  const bowlSnow=new T.Color('#eef5fa');
  const expertSnow=new T.Color('#e8eff8');
  const chuteSnow=new T.Color('#cfdfe9'),ledgeRock=new T.Color('#65717e');
- for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<90||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>100&&z<560)color.multiplyScalar(.88);
+ for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<flatSummit||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>bankStart&&z<560)color.multiplyScalar(.88);
   if(inBowl(x,z)){
    const edgeFade=T.MathUtils.smoothstep(bowlWidth(z)-Math.abs(x-bowlX(z)),0,10);
    const endFade=T.MathUtils.smoothstep(z,bowlStart,bowlStart+42)*(1-T.MathUtils.smoothstep(z,bowlEnd-55,bowlEnd));
@@ -57,31 +61,24 @@ export function createMountain(canvas){
     color.lerp(ledgeRock,cross*face*.95);
    }
   }
-  const traverse=traverseAt(x,z);
   if(x<-365&&y>105){
    const local=expertLocal(x,z);
    const offTrail=Math.max(T.MathUtils.smoothstep(-local.x,17,45),T.MathUtils.smoothstep(-local.z,18,55));
-   const clearance=T.MathUtils.smoothstep(traverse?.distance??38,10,28);
    const grade=Math.hypot(height(x+2,z)-height(x-2,z),height(x,z+2)-height(x,z-2))/4;
    const layers=terrainNoise(x*.037+y*.016,z*.019-y*.028);
    const grain=terrainNoise(x*.087,z*.091);
    const talus=T.MathUtils.smoothstep(grade+(layers-.5)*.93+(grain-.5)*.24,.46,.95);
-   color.lerp(ledgeRock,talus*offTrail*clearance*.84*T.MathUtils.smoothstep(-x,365,415));
-  }
-  if(traverse){
-   const edgeFade=1-T.MathUtils.smoothstep(traverse.distance,7,15);
-   const endFade=T.MathUtils.smoothstep(traverse.progress,0,3)*(1-T.MathUtils.smoothstep(traverse.progress,35,40));
-   color.lerp(expertSnow,.7*edgeFade*endFade);
+   color.lerp(ledgeRock,talus*offTrail*.84*T.MathUtils.smoothstep(-x,365,415));
   }
   const n=Math.sin(x*.31+z*.047)*.024; color.offsetHSL(0,0,n);colors.push(color.r,color.g,color.b);}
  geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
  // Visible trail-edge poles and arrows make all three routes converge at the base.
- for(const r of routes){for(let z=100;z<=560;z+=35){for(const side of [-1,1]){const x=pathX(z,r)+r.width*side;if(r.id==='groomer'&&side===-1&&inBowl(x,z,3))continue;box(.14,1.6,.14,r.color,x,height(x,z)+.8,z);box(.55,.25,.12,r.color,x,height(x,z)+1.55,z);}}
- const z=110,x=pathX(z,r)+r.width*.65,y=height(x,z);
+ for(const r of routes){for(let section=100;section<=560;section+=30){const z=juniperZ(section);for(const side of [-1,1]){const x=pathX(z,r)+r.width*side;if(r.id==='groomer'&&side===-1&&inBowl(x,z,3))continue;box(.14,1.6,.14,r.color,x,height(x,z)+.8,z);box(.55,.25,.12,r.color,x,height(x,z)+1.55,z);}}
+ const z=juniperZ(110),x=pathX(z,r)+r.width*.65,y=height(x,z);
  const colors={groomer:'#237449',park:'#98500e',glades:'#254d77'};
  box(.15,1.75,.15,'#68523f',x,y+.87,z);
  trailSign(r.name,x,y+1.65,z,colors[r.id]);}
- const guideZ=65,guideX=-5,guideY=height(guideX,guideZ);
+ const guideZ=juniperZ(65),guideX=-5,guideY=height(guideX,guideZ);
  box(.18,3,.18,'#68523f',guideX,guideY+1.5,guideZ);
  trailSign('Groomer  →',guideX,guideY+2.7,guideZ,'#237449');
  trailSign('Park  ↑',guideX,guideY+1.95,guideZ,'#98500e');
@@ -96,11 +93,6 @@ export function createMountain(canvas){
  const expertSignY=height(expertSignX,expertSignZ);
  box(.16,2,.16,'#445a62',expertSignX,expertSignY+1,expertSignZ);
  trailSign('◆  Timberline Chair  →',expertSignX,expertSignY+1.85,expertSignZ,'#354356',5.4);
- for(const [x,z] of [[-319,501],[-355,444],[-391,388],[-364,334],[-318,315]]){
-  const y=height(x,z);
-  box(.12,1.5,.12,'#41778a',x,y+.75,z);
-  box(.28,.19,.19,'#b8d8e2',x,y+1.4,z);
- }
  const trees=obstacles();const forest=detailedTrees(scene,[...trees,...surroundingForest()]);addRange(scene);
  const rockShape=new T.DodecahedronGeometry(1,0);
  for(const [i,{x,z,size}] of bowlRocks.entries()){
@@ -135,7 +127,8 @@ export function createMountain(canvas){
   };
   const liftLine=(points,color)=>line(points,color,group);
   // One continuous chairlift, with a visible cable, towers, terminals and moving chairs.
-  const cable=[];for(let z=config.top;z<=config.bottom;z+=2)cable.push([upX,cableHeight(z),z]);
+  const cable=[];for(let z=config.top;z<config.bottom;z+=2)cable.push([upX,cableHeight(z),z]);
+  cable.push([upX,cableHeight(config.bottom),config.bottom]);
   for(const z of config.towers.slice(1,-1)){const h=groundHeight(config.center,z),c=cableHeight(z),beam=c+LIFT.crossbeamClearance;liftBox(LIFT.towerWidth,beam-h,.9,'#607580',config.center,(beam+h)/2,z);liftBox(21,.5,1.1,'#526874',config.center,beam,z);liftBox(2,.5,2,'#777b73',config.center,h+.1,z);for(const x of [upX,downX]){for(const dz of [-1.1,-.4,.4,1.1]){const wheel=mesh(new T.CylinderGeometry(.34,.34,.18,12),'#354a57',group);wheel.rotation.z=Math.PI/2;wheel.position.set(x,c+.34,z+dz);}liftBox(1.1,.18,3.4,'#647983',x,c+.85,z);}for(let y=h+1;y<beam-1;y+=.9)liftBox(.7,.06,.16,'#9aa7a6',config.center+.55,y,z);}
   function terminal(z,name,isBase){
    const center=config.center;
@@ -219,9 +212,6 @@ export function createMountain(canvas){
    liftBox(.16,2.6,.16,'#445a62',x,y+1.3,z);
    liftSign('◆  Timberline Face  ↑',x,y+2.4,z,'#303944',5.5,-1);
    liftSign('◆◆  Splitrock  →',x,y+1.65,z,'#493d58',5.5,-1);
-   const bailoutX=30,bailoutZ=58,bailoutY=groundHeight(bailoutX,bailoutZ);
-   liftBox(.14,2.15,.14,'#445a62',bailoutX,bailoutY+1.08,bailoutZ);
-   liftSign('←  Juniper Traverse',bailoutX,bailoutY+2,bailoutZ,'#41778a',5.3,-1);
    const chuteZ=103,chuteMarkerX=chuteX(chuteZ)+9;
    const markerY=groundHeight(chuteMarkerX,chuteZ);
    liftBox(.13,1.7,.13,'#445a62',chuteMarkerX,markerY+.85,chuteZ);
@@ -314,7 +304,7 @@ export function createMountain(canvas){
  const eyeX=p.x-forwardX*behind,eyeZ=p.z-forwardZ*behind;
  const lookX=p.x+forwardX*ahead,lookZ=p.z+forwardZ*ahead;
  const eyeY=Math.max(p.y+(lift?6:8.5),surfaceHeight(eyeX,eyeZ)+3);
- const rearView=T.MathUtils.smoothstep(-forwardZ,.45,1)*(1-T.MathUtils.smoothstep(p.z,50,105));
+ const rearView=T.MathUtils.smoothstep(-forwardZ,.45,1)*(1-T.MathUtils.smoothstep(p.z,juniperZ(50),juniperZ(105)));
  const lookY=lift?p.y+2:Math.max(p.y-6,surfaceHeight(lookX,lookZ)+.6)+rearView*4;
  desired.set(eyeX,eyeY,eyeZ);
  if(!camReady){camPos.copy(desired);look.y=lookY;camReady=true;}
