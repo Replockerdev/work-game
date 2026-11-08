@@ -204,7 +204,11 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const crossSlope=local.x>=-9?southSlope:northSlope;
   const fall=1-smooth((local.z-25)/310);
   const ridgeBack=smooth((-local.z-22)/100)*23;
-  y+=(198*fall*shelf+ridgeBack)*crossSlope+expertRelief(local.x,local.z);
+  const drainage=smooth((northDistance-19)/36)*(1-smooth((northDistance-143)/65));
+  const upperGully=(local.z+64-northDistance*.32)/20;
+  const lowerGully=(local.z-36-northDistance*.42)/24;
+  const erosion=drainage*(37*Math.exp(-upperGully*upperGully)+29*Math.exp(-lowerGully*lowerGully));
+  y+=(198*fall*shelf+ridgeBack-erosion)*crossSlope+expertRelief(local.x,local.z);
   const terminalWidth=1-smooth((Math.abs(local.x)-20)/12);
   const summitDeck=terminalWidth*(1-smooth((Math.abs(local.z)-11)/18));
   const loadingDeck=terminalWidth*(1-smooth((Math.abs(local.z-EXPERT.bottom)-11)/24));

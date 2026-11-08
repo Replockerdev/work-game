@@ -63,9 +63,10 @@ export function createMountain(canvas){
    const offTrail=Math.max(T.MathUtils.smoothstep(-local.x,17,45),T.MathUtils.smoothstep(-local.z,18,55));
    const clearance=T.MathUtils.smoothstep(traverse?.distance??38,10,28);
    const grade=Math.hypot(height(x+2,z)-height(x-2,z),height(x,z+2)-height(x,z-2))/4;
-   const layers=terrainNoise(x*.029+y*.011,z*.039-y*.018);
-   const talus=T.MathUtils.smoothstep(grade+(layers-.5)*.54,.48,.95);
-   color.lerp(ledgeRock,talus*offTrail*clearance*.66*T.MathUtils.smoothstep(-x,365,430));
+   const layers=terrainNoise(x*.037+y*.016,z*.019-y*.028);
+   const grain=terrainNoise(x*.087,z*.091);
+   const talus=T.MathUtils.smoothstep(grade+(layers-.5)*.93+(grain-.5)*.24,.46,.95);
+   color.lerp(ledgeRock,talus*offTrail*clearance*.84*T.MathUtils.smoothstep(-x,365,415));
   }
   if(traverse){
    const edgeFade=1-T.MathUtils.smoothstep(traverse.distance,7,15);
