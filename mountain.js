@@ -1,5 +1,5 @@
 import {createMountain} from './mountain-view.js';
-import {spawn,step,board,boardingLift,BASE,LENGTH,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute} from './mountain-core.js';
+import {spawn,step,board,boardingLift,BASE,LENGTH,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute} from './mountain-core.js';
 const $=id=>document.getElementById(id),canvas=$('game');let view;try{view=createMountain(canvas);}catch(e){$('overlay').querySelector('h1').textContent='3D graphics unavailable';$('overlay').querySelector('p').textContent='This mountain needs WebGL. Try Chrome or Edge with graphics acceleration enabled.';throw e;}
 let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0;try{p.laps=Math.max(0,Number(localStorage.getItem('work-game-three-lines-laps'))||0);}catch{}
 function toast(s,time=3){$('toast').textContent=s;$('toast').hidden=false;toastTime=time;}
@@ -21,24 +21,29 @@ function drawMap(){
   for(let z=35;z<=600;z+=5)c.lineTo(sx(pathX(z,r)),sz(z));
   c.stroke();
  }
- c.strokeStyle=expertRoute.color;c.beginPath();
- for(let z=26;z<=382;z+=4){
-  const point=liftWorld(EXPERT,expertFaceX(z),z);
-  c.lineTo(sx(point.x),sz(point.z));
+ for(const [route,center,start,end] of [[expertRoute,expertFaceX,26,382],[chuteRoute,chuteX,68,315],[timberRoute,timberX,182,322]]){
+  c.strokeStyle=route.color;
+  c.lineWidth=route===expertRoute?5:2.5;
+  c.beginPath();
+  for(let z=start;z<=end;z+=3){
+   const point=liftWorld(EXPERT,center(z),z);
+   c.lineTo(sx(point.x),sz(point.z));
+  }
+  c.stroke();
  }
- c.stroke();
  c.font='9px Arial';c.fillStyle='#486570';c.textAlign='center';
  c.fillText('JUNIPER SUMMIT',77,12);c.fillText('JUNIPER BASE',77,326);c.fillText('TIMBERLINE',178,234);
  c.fillStyle=p.mode==='lift'?'#d79b55':'#254e60';c.beginPath();c.arc(sx(p.x),sz(p.z),5,0,7);c.fill();c.strokeStyle='#fff';c.lineWidth=2;c.stroke();
 }
 function ui(){
  const lift=p.mode==='lift',near=boardingLift(p),expert=p.activeLift===EXPERT;
- const expertDescent=p.route===expertRoute.name||p.route==='Timberline Summit';
+ const expertRoutes=[expertRoute,chuteRoute,timberRoute];
+ const expertDescent=p.route==='Timberline Summit'||expertRoutes.some(route=>route.name===p.route);
  $('speed').textContent=lift?'—':Math.round(p.speed*3.6);
  $('laps').textContent=p.laps;
  $('movement').textContent=lift?'Chairlift · '+Math.round(p.ride*100)+'%':p.air?'In the air':p.drive==='skate'?'Skating · hold W to push':p.drive==='tuck'?'Tucking · release W to stand':p.speed<1?'Hold W to skate · A / D turns your skis':'Carve with A / D · S slows you down';
  $('route').textContent=lift?p.activeLift.name+' · Going up':p.mode==='unload'&&expert?'Timberline · unloading':p.route;
- $('routeDot').style.background=lift?'#d6a166':[...routes,expertRoute].find(r=>r.name===p.route)?.color||'#72bfb4';
+ $('routeDot').style.background=lift?'#d6a166':[...routes,...expertRoutes].find(r=>r.name===p.route)?.color||'#72bfb4';
  $('prompt').hidden=!near&&!lift&&p.mode!=='unload'&&(expertDescent||p.z<565&&p.z>75);
  $('interact').hidden=!near;
  $('promptText').textContent=lift?'Enjoy the ride. Unload automatically at the summit.':p.mode==='unload'?'Gliding off the chair.':near?'Press E to board '+near.name+'.':p.z<75?'Groomer →    Park straight ahead    ← Glades':'Juniper base '+Math.round(Math.hypot(p.x-BASE.x,p.z-BASE.z))+' m · head into the base clearing';
