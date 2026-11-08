@@ -242,11 +242,11 @@ export function createMountain(canvas){
  function render(p,dt,paused=false){time+=paused?0:dt;if(w!==canvas.clientWidth||h!==canvas.clientHeight){w=canvas.clientWidth;h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
  const lift=p.mode==='lift',config=p.activeLift??JUNIPER;
  const offset=liftWorld(config,-.44,0);
- skier.position.set(lift?p.x+offset.x-config.x:p.x,p.y+.12,lift?p.z+offset.z-config.z:p.z);
- skier.rotation.y=lift?config.yaw+Math.PI:p.angle;
- skier.rotation.z=lift?0:-p.yaw*Math.min(.25,p.speed*.015);
+ skier.position.set(lift?p.x+offset.x-config.x:p.x,p.y+(lift||p.air?.12:0),lift?p.z+offset.z-config.z:p.z);
  const skiX=Math.sin(p.angle)*.4,skiZ=Math.cos(p.angle)*.4;
- skier.rotation.x=lift?0:Math.atan2(height(p.x+skiX,p.z+skiZ)-height(p.x-skiX,p.z-skiZ),.8)*-.65;
+ const airPitch=!lift&&p.air?Math.atan2(height(p.x+skiX,p.z+skiZ)-height(p.x-skiX,p.z-skiZ),.8)*-.65:0;
+ const airBank=!lift&&p.air?-p.yaw*Math.min(.25,p.speed*.015):0;
+ skier.rotation.set(airPitch,lift?config.yaw+Math.PI:p.angle,airBank,'YXZ');
  rig.animate(p,time);
  animateJuniper(p,time);
  animateExpert(p,time);
