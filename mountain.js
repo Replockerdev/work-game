@@ -1,6 +1,7 @@
 import {createMountain} from './mountain-view.js';
 import {spawn,step,board,boardingLift,BASE,TOP,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute,juniperZ,timberlineZ} from './mountain-core.js';
-const expertRoutes=[expertRoute,chuteRoute,timberRoute];
+import {bowlRoute,bowlX,powderCenterZ} from './mountain-core.js';
+const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
 const $=id=>document.getElementById(id),canvas=$('game');let view;try{view=createMountain(canvas);}catch(e){$('overlay').querySelector('h1').textContent='3D graphics unavailable';$('overlay').querySelector('p').textContent='This mountain needs WebGL. Try Chrome or Edge with graphics acceleration enabled.';throw e;}
 let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0;try{p.laps=Math.max(0,Number(localStorage.getItem('work-game-three-lines-laps'))||0);}catch{}
 function toast(s,time=3){$('toast').textContent=s;$('toast').hidden=false;toastTime=time;}
@@ -32,8 +33,13 @@ function drawMap(){
   }
   c.stroke();
  }
+ c.strokeStyle=bowlRoute.color;c.lineWidth=4;c.beginPath();
+ for(let x=-692;x<=-288;x+=4)c.lineTo(sx(x),sz(powderCenterZ(x)));
+ for(let z=307;z<=580;z+=4)c.lineTo(sx(bowlX(z)),sz(z));
+ c.stroke();
  c.font='9px Arial';c.fillStyle='#486570';c.textAlign='center';
  c.fillText('JUNIPER SUMMIT',64,12);c.fillText('JUNIPER BASE',64,326);c.fillText('TIMBERLINE',191,248);
+ c.fillText('POWDER BOWL',161,204);
  c.fillStyle=p.mode==='lift'?'#d79b55':'#254e60';c.beginPath();c.arc(sx(p.x),sz(p.z),5,0,7);c.fill();c.strokeStyle='#fff';c.lineWidth=2;c.stroke();
 }
 function ui(){

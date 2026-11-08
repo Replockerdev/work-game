@@ -115,7 +115,7 @@ export const expertRocks=[
 export const routes=[{id:'groomer',name:'The Groomer',offset:-103,width:23,color:'#72bfb4'},{id:'park',name:'The Park',offset:0,width:24,color:'#e3a36b'},{id:'glades',name:'The Glades',offset:103,width:36,color:'#8da776'}];
 export const pathX=(z,r)=>r.offset*Math.sin(Math.PI*clamp((juniperSection(z)-60)/530,0,1));
 const groomer=routes[0];
-const bowlRoute={id:'bowl',name:'Juniper Bowl',color:'#638b91'};
+export const bowlRoute={id:'bowl',name:'Juniper Powder Bowl',color:'#638b91'};
 export const bowlStart=juniperZ(148),bowlEnd=juniperZ(584);
 export function bowlX(z){
  const section=juniperSection(z);
@@ -131,11 +131,30 @@ export function bowlWidth(z){
 export function inBowl(x,z,margin=0){
  return z>=bowlStart&&z<=bowlEnd&&Math.abs(x-bowlX(z))<bowlWidth(z)+margin;
 }
+export function powderCenterZ(x){
+ const west=-x-290;
+ return 305+145*smooth(west/410)+.08*west;
+}
+export function powderDepth(x,z){
+ const lower=inBowl(x,z)&&Math.abs(x-pathX(z,groomer))>groomer.width;
+ if(x>-287||x<-755||z<205||z>590)return lower?1:0;
+ const width=48+43*smooth((x+690)/140);
+ const edge=1-smooth((Math.abs(z-powderCenterZ(x))-width*.62)/(width*.38));
+ const entry=smooth((x+755)/52);
+ const merge=1-smooth((x+327)/40);
+ const offLift=smooth((-expertLocal(x,z).x-12)/21);
+ return Math.max(lower?1:0,edge*entry*merge*offLift);
+}
+export function powderCliffX(z){
+ return -516+.28*(z-403)+3.4*Math.sin((z-386)*.11);
+}
+export function powderCliffSpan(z){
+ return 1-smooth((Math.abs(z-403)-37)/16);
+}
 // Staggered outcrops frame the opening, then sit on either side of the chute.
 export const bowlRocks=[
  {z:180,offset:-20,size:4.4},{z:187,offset:-23,size:3.1},
  {z:208,offset:21,size:3.2},{z:216,offset:24,size:2.6},
- {z:275,offset:-43,size:4.4},{z:294,offset:-47,size:3.9},
  {z:266,offset:-10,size:3.1},{z:285,offset:-10,size:2.7},
  {z:330,offset:51,size:5.9},{z:355,offset:56,size:4.4}
 ].map(({z:section,offset,size})=>{
@@ -145,7 +164,7 @@ export const bowlRocks=[
 export function trailAt(x,z){
  const expert=expertLine(x,z);
  if(expert)return expert;
- if(inBowl(x,z)&&Math.abs(x-pathX(z,groomer))>groomer.width)return bowlRoute;
+ if(powderDepth(x,z)>.2)return bowlRoute;
  if(z<juniperZ(85)||z>570)return null;
  return routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b);
 }
@@ -165,10 +184,9 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const floor=1-smooth(Math.max(0,Math.abs(distance)-width*.53)/(width*.64+9));
   const chute=smooth((section-251)/35)*(1-smooth((section-303)/115));
   const chuteWidth=1-smooth(Math.abs(distance+26)/19);
-  const outerWall=smooth((-distance-width*.62)/28)*(1-smooth((-distance-width-18)/40));
   const ridgeDistance=Math.abs(x-pathX(z,groomer)+67);
   const ridge=(1-smooth(ridgeDistance/37))*smooth((section-226)/70)*(1-smooth((section-446)/90));
-  y+=floor*(4*lip-15*basin)-12*chute*chuteWidth+21*basin*outerWall+26*ridge;
+  y+=floor*(4*lip-15*basin)-12*chute*chuteWidth+26*ridge;
  }
  const rampWidth=1-smooth((Math.abs(x-LIFT.upX)-2.2)/1.6);
  const rampLength=smooth((z-SUMMIT_TERMINAL+9)/8)*(1-smooth((z-SUMMIT_TERMINAL-1)/7));
@@ -202,13 +220,26 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const loadingDeck=terminalWidth*(1-smooth((Math.abs(local.z-EXPERT.bottom)-11)/24));
   y+=(354-y)*summitDeck+(3.4-y)*loadingDeck;
  }
+ if(x>-570&&x<-490&&z>350&&z<456){
+  const distance=x-powderCliffX(z);
+  const shelf=smooth((distance+29)/22)*(1-smooth(distance/2.4));
+  y+=powderCliffSpan(z)*shelf*(12+2.5*Math.sin(z*.085));
+ }
+ if(x>-444&&x<-250){
+  // Round the former divide where the new bowl rolls into the old trough.
+  const across=z-powderCenterZ(x);
+  const width=1-smooth((Math.abs(across)-37)/28);
+  const ends=smooth((x+444)/56)*(1-smooth((x+281)/31));
+  const runout=78+(-x-280)*1.02+.18*across;
+  y+=(runout-y)*width*ends;
+ }
  for(const j of jumps){const d=z-j.z;if(Math.abs(x)<j.width){if(d>=-17&&d<0)y+=j.h*smooth((d+17)/17);else if(d>=0&&d<2)y+=j.h*(1-smooth(d/2));}}return y;}
 export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}for(let i=0;i<900;i++){const z=juniperZ(95+rand()*465),x=-190+rand()*380;const near=routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b),distance=Math.abs(x-pathX(z,near));const inGlade=near.id==='glades'&&distance<34;const gap=inGlade?Math.abs(x-pathX(z,near))<6:false;if((distance>near.width+7||inGlade&&!gap)&&Math.abs(x+28)>7){const s=.75+rand()*.75;if(!inBowl(x,z,7)&&!onExpertFace(x,z)&&Math.hypot(x-expertLoading.x,z-expertLoading.z)>20)a.push({x,z,r:.8,s});}}
  for(let i=0;i<70;i++){
   const z=juniperZ(200+rand()*364);
   const x=bowlX(z)-bowlWidth(z)-8-rand()*45;
   const s=.65+rand()*.5;
-  if(x<-195&&x>SNOW_WEST+8&&!onExpertFace(x,z))a.push({x,z,r:.8,s});
+  if(x<-195&&x>SNOW_WEST+8&&!onExpertFace(x,z)&&powderDepth(x,z)<.26)a.push({x,z,r:.8,s});
  }
  // The trees frame a clear central line and a few pockets for wider turns.
  for(let i=0;i<32;i++){
@@ -228,7 +259,7 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
  for(let i=0;i<100;i++){
   const x=-848+rand()*436,z=260+rand()*218;
   const slope=Math.hypot(height(x+2,z)-height(x-2,z),height(x,z+2)-height(x,z-2))/4;
-  if(slope<.92&&height(x,z)<312&&Math.abs(expertLocal(x,z).x)>18&&!inBowl(x,z,9)&&!onExpertFace(x,z)){
+  if(slope<.92&&height(x,z)<312&&Math.abs(expertLocal(x,z).x)>18&&powderDepth(x,z)<.26&&!inBowl(x,z,9)&&!onExpertFace(x,z)){
    a.push({x,z,r:.8,s:.5+rand()*.6});
   }
  }
@@ -301,8 +332,8 @@ export function step(p,input,dt,colliders=[]){const events=[];
  // Read the main slope over several ski lengths so a bump or ramp lip
  // cannot change the stance. The loading area always behaves as flat.
  const headingZ=Math.cos(p.angle),headingX=Math.sin(p.angle);
- const expert=expertLine(p.x,p.z);
- const downhillGrade=expert
+ const expert=expertLine(p.x,p.z),powder=powderDepth(p.x,p.z);
+ const downhillGrade=expert||powder>.2
   ?(height(p.x-12*headingX,p.z-12*headingZ)-height(p.x+12*headingX,p.z+12*headingZ))/24
   :p.z>=590?0:(baseHeight(p.z-12*headingZ)-baseHeight(p.z+12*headingZ))/24;
  const wasTucking=p.drive==='tuck';
@@ -313,11 +344,14 @@ export function step(p,input,dt,colliders=[]){const events=[];
   else if(p.speed<11)p.drive='skate';
  }
  if(p.drive==='skate')p.skatePhase=(p.skatePhase||0)+dt*(1.35+Math.min(6,p.speed)*.07)*Math.PI*2;
- const push=p.drive==='skate'?8.8*Math.max(0,1-p.speed/10)+.9*Math.max(0,Math.sin(p.skatePhase*2)):0,drag=(p.drive==='tuck'?.0065:.009)*p.speed*p.speed+(onTrail(p.x,p.z)?.28:1.5)+Math.abs(p.yaw)*.55;
+ const push=p.drive==='skate'?8.8*Math.max(0,1-p.speed/10)+.9*Math.max(0,Math.sin(p.skatePhase*2)):0;
+ const surfaceDrag=powder>.2?.28+powder*.65:onTrail(p.x,p.z)?.28:1.5;
+ const drag=((p.drive==='tuck'?.0065:.009)+powder*.004)*p.speed*p.speed+surfaceDrag+Math.abs(p.yaw)*.55;
  p.speed=clamp(p.speed+(gravity+push-drag-(input.brake?10:0))*dt,0,p.drive==='tuck'?28:23);if(!p.air&&p.speed<.05)p.speed=0;
- const oldY=p.y,oldGroundV=p.groundV,dx=Math.sin(p.angle)*p.speed*dt,dz=Math.cos(p.angle)*p.speed*dt;p.x=clamp(p.x+dx,SNOW_WEST+10,SNOW_EAST-10);p.z=clamp(p.z+dz,SNOW_NORTH+12,657);p.distance+=Math.hypot(dx,dz);const ground=height(p.x,p.z);
- if(!p.air&&input.jump&&p.speed>1){p.air=true;p.vy=oldGroundV+7;p.airtime=0;events.push('takeoff');}else if(!p.air&&ground<oldY+oldGroundV*dt-.075&&p.speed>5){p.air=true;p.vy=oldGroundV;p.airtime=0;events.push('takeoff');}
- if(p.air){p.vy-=g*dt;p.y+=p.vy*dt;p.airtime+=dt;if(p.y<=ground){p.y=ground;p.air=false;p.vy=0;if(p.airtime>.25){p.jumps++;events.push('land');}p.groundV=0;}}else{p.y=ground;p.groundV=clamp((ground-oldY)/dt,-20,20);}
+ const oldX=p.x,oldZ=p.z,oldY=p.y,oldGroundV=p.groundV,dx=Math.sin(p.angle)*p.speed*dt,dz=Math.cos(p.angle)*p.speed*dt;p.x=clamp(p.x+dx,SNOW_WEST+10,SNOW_EAST-10);p.z=clamp(p.z+dz,SNOW_NORTH+12,657);p.distance+=Math.hypot(dx,dz);const ground=height(p.x,p.z);
+ if(!p.air&&input.jump&&p.speed>1){p.air=true;p.vy=clamp(oldGroundV,-20,20)+7;p.airtime=0;events.push('takeoff');}else if(!p.air&&ground<oldY+oldGroundV*dt-.075&&p.speed>5){p.air=true;p.vy=oldGroundV;p.airtime=0;events.push('takeoff');}
+ // Keep the actual snow pitch through touchdown so steep snow doesn't launch the skis again.
+ if(p.air){p.vy-=g*dt;p.y+=p.vy*dt;p.airtime+=dt;if(p.y<=ground){p.y=ground;p.air=false;p.vy=0;if(p.airtime>.25){p.jumps++;events.push('land');}p.groundV=(ground-height(oldX,oldZ))/dt;}}else{p.y=ground;p.groundV=(ground-oldY)/dt;}
  for(const o of colliders){const d=Math.hypot(p.x-o.x,p.z-o.z),radius=(o.r??.8)+.4;if(d<radius&&p.y-ground<5&&p.bump<=0){const nx=(p.x-o.x)/(d||1),nz=(p.z-o.z)/(d||1);p.x=o.x+nx*(radius+.4);p.z=o.z+nz*(radius+.4);p.speed*=.25;p.bump=.8;events.push('bump');}}
  const route=trailAt(p.x,p.z);
  if(route&&(expert||p.z>juniperZ(105)&&p.z<570)){if(route.name!==p.route){p.route=route.name;events.push('route');}p.lastRoute=route.name;}

@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffX,powderCliffSpan,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
@@ -69,6 +69,14 @@ export function createMountain(canvas){
    const grain=terrainNoise(x*.087,z*.091);
    const talus=T.MathUtils.smoothstep(grade+(layers-.5)*.93+(grain-.5)*.24,.46,.95);
    color.lerp(ledgeRock,talus*offTrail*.84*T.MathUtils.smoothstep(-x,365,415));
+  }
+  if(x<-286&&z>205&&z<590){
+   const powder=powderDepth(x,z);
+   color.lerp(bowlSnow,powder*.72);
+   if(x>-533&&x<-490&&z>350&&z<456){
+    const band=1-T.MathUtils.smoothstep(Math.abs(x-powderCliffX(z)-1.7),1.8,5);
+    color.lerp(ledgeRock,band*powderCliffSpan(z)*.96);
+   }
   }
   const n=Math.sin(x*.31+z*.047)*.024; color.offsetHSL(0,0,n);colors.push(color.r,color.g,color.b);}
  geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
@@ -212,6 +220,9 @@ export function createMountain(canvas){
    liftBox(.16,2.6,.16,'#445a62',x,y+1.3,z);
    liftSign('◆  Timberline Face  ↑',x,y+2.4,z,'#303944',5.5,-1);
    liftSign('◆◆  Splitrock  →',x,y+1.65,z,'#493d58',5.5,-1);
+   const bowlSignX=16,bowlSignZ=timberlineZ(32),bowlSignY=groundHeight(bowlSignX,bowlSignZ);
+   liftBox(.14,2.25,.14,'#445a62',bowlSignX,bowlSignY+1.12,bowlSignZ);
+   liftSign('←  Powder Bowl',bowlSignX,bowlSignY+2,bowlSignZ,'#417587',5,-1);
    const chuteZ=103,chuteMarkerX=chuteX(chuteZ)+9;
    const markerY=groundHeight(chuteMarkerX,chuteZ);
    liftBox(.13,1.7,.13,'#445a62',chuteMarkerX,markerY+.85,chuteZ);
@@ -280,7 +291,17 @@ export function createMountain(canvas){
  // Two persistent ski tracks follow every grounded turn.
  const max=6000,trackPositions=new Float32Array(max*6),trackGeo=new T.BufferGeometry();trackGeo.setAttribute('position',new T.BufferAttribute(trackPositions,3));trackGeo.setDrawRange(0,0);const tracks=new T.LineSegments(trackGeo,new T.LineBasicMaterial({color:'#9cbacb',transparent:true,opacity:.55}));scene.add(tracks);let trackCount=0,previous=null;
  tracks.frustumCulled=false;
- const puffPositions=new Float32Array(60*3),puffs=new T.Points(new T.BufferGeometry(),new T.PointsMaterial({color:'#fff',size:.22,transparent:true,opacity:.75}));puffs.geometry.setAttribute('position',new T.BufferAttribute(puffPositions,3));puffs.frustumCulled=false;scene.add(puffs);
+ const puffStamp=document.createElement('canvas');puffStamp.width=puffStamp.height=32;
+ const puffContext=puffStamp.getContext('2d');
+ const fade=puffContext.createRadialGradient(16,16,0,16,16,16);
+ fade.addColorStop(0,'rgba(255,255,255,.85)');
+ fade.addColorStop(1,'rgba(255,255,255,0)');
+ puffContext.fillStyle=fade;puffContext.fillRect(0,0,32,32);
+ const puffPositions=new Float32Array(60*3);
+ const puffs=new T.Points(new T.BufferGeometry(),new T.PointsMaterial({
+  color:'#fff',map:new T.CanvasTexture(puffStamp),size:.22,transparent:true,opacity:.75,depthWrite:false
+ }));
+ puffs.geometry.setAttribute('position',new T.BufferAttribute(puffPositions,3));puffs.frustumCulled=false;scene.add(puffs);
  let w=0,h=0,time=0,camReady=false,camHeading=0;
  const camPos=new T.Vector3(),look=new T.Vector3(),desired=new T.Vector3();
  function render(p,dt,paused=false){time+=paused?0:dt;if(w!==canvas.clientWidth||h!==canvas.clientHeight){w=canvas.clientWidth;h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
@@ -295,7 +316,22 @@ export function createMountain(canvas){
  animateJuniper(p,time);
  animateExpert(p,time);
  if(!lift&&!p.air&&p.speed>1&&!paused){if(previous&&Math.hypot(p.x-previous.x,p.z-previous.z)<3){for(const side of [-1,1]){const ox=Math.cos(p.angle)*.29*side,oz=-Math.sin(p.angle)*.29*side;const k=(trackCount++%max)*6;trackPositions.set([previous.x+ox,previous.y+.04,previous.z+oz,p.x+ox,height(p.x+ox,p.z+oz)+.04,p.z+oz],k);}trackGeo.attributes.position.needsUpdate=true;trackGeo.setDrawRange(0,Math.min(trackCount,max)*2);}previous={x:p.x,y:p.y,z:p.z};}else previous=null;
- for(let i=0;i<60;i++){const t=(time*2+i*.17)%1,spread=Math.abs(p.yaw)*.8+.15;puffPositions[i*3]=p.x+Math.cos(i*8.7)*t*spread;puffPositions[i*3+1]=p.y+t*.7;puffPositions[i*3+2]=p.z-t*2;}puffs.geometry.attributes.position.needsUpdate=true;puffs.visible=!lift&&!p.air&&p.speed>4;
+ puffs.visible=!lift&&!p.air&&p.speed>4;
+ if(puffs.visible){
+  const powder=powderDepth(p.x,p.z),sin=Math.sin(p.angle),cos=Math.cos(p.angle);
+  const spread=.24+Math.abs(p.yaw)*.72+powder*.8;
+  const length=2+powder*2.2;
+  const rise=height(p.x-sin*length,p.z-cos*length)-p.y;
+  puffs.material.size=.22+powder*.72;
+  for(let i=0;i<60;i++){
+   const t=(time*2+i*.17)%1,lateral=Math.cos(i*8.7)*t*spread;
+   const behind=t*length;
+   puffPositions[i*3]=p.x+cos*lateral-sin*behind;
+   puffPositions[i*3+1]=p.y+rise*t+t*(.62+powder*.9)*(.55+.45*Math.sin(i*3.4)**2);
+   puffPositions[i*3+2]=p.z-sin*lateral-cos*behind;
+  }
+  puffs.geometry.attributes.position.needsUpdate=true;
+ }
  const heading=p.mode==='ski'?p.angle:config.yaw;
  const turn=heading-camHeading;
  camHeading=camReady?camHeading+Math.atan2(Math.sin(turn),Math.cos(turn))*(1-Math.exp(-dt*7)):heading;
