@@ -179,35 +179,28 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
  if(x<-35){
   const local=expertLocal(x,z);
   const shelf=1-smooth((local.z-356)/34);
-  // Carry the summit west into the enclosing ridge. Fan the north shoulder
-  // out uphill and narrow its toe where it meets the existing Juniper runs.
-  const shoulderWidth=101+292*smooth((-x-275)/460);
+  // Build the Juniper-facing slope as a broad rise from the basin to the ridge.
   const northDistance=Math.max(0,-local.x-9);
-  const contour=(12*Math.sin(local.z*.028)+5*Math.sin(local.z*.059+1.2))*smooth(northDistance/40);
   const southSlope=1-smooth((local.x-118)/94);
-  const northSlope=1-smooth(northDistance/(shoulderWidth+contour));
-  const crossSlope=local.x>=-9?southSlope:northSlope;
   const fall=1-smooth((local.z-18)/319);
-  const ridgeBack=smooth((EXPERT.top-local.along-14)/138)*(103+35*smooth(northDistance/106));
-  const drainage=smooth((northDistance-20)/42)*(1-smooth((northDistance-155)/85));
-  const upperGully=(local.along+306-northDistance*.36)/30;
-  const lowerGully=(local.along+154-northDistance*.55)/36;
-  const ribs=Math.sin(local.along*.041+northDistance*.026)
-   +.42*Math.sin(local.along*.077-northDistance*.034);
-  const erosion=drainage*(54*Math.exp(-upperGully*upperGully)+38*Math.exp(-lowerGully*lowerGully)-ribs*9);
-  y+=(335*fall*shelf+ridgeBack-erosion)*crossSlope+expertRelief(local.x,local.z);
+  const ridgeBack=smooth((EXPERT.top-local.along-14)/138)*103;
+  const timberlineFace=(335*fall*shelf+ridgeBack)*southSlope;
+  const uphill=smooth((-x-310)/430);
+  const behindPeak=smooth((-x-740)/140);
+  const basinApproach=smooth((z+170)/620);
+  const apron=(354+90*behindPeak-y)*uphill*basinApproach;
+  // Fill the trough up to a steady crossfall from the lift, then round the
+  // join with the longer uphill slope from Juniper.
+  const crossfall=timberlineFace-.52*northDistance;
+  const overlap=Math.max(0,1-Math.abs(apron-crossfall)/18);
+  const rise=Math.max(apron,crossfall);
+  const fill=rise+4.5*overlap*overlap*smooth(rise/14);
+  const northBlend=smooth(northDistance/28);
+  y+=timberlineFace*(1-northBlend)+fill*northBlend+expertRelief(local.x,local.z);
   const terminalWidth=1-smooth((Math.abs(local.x)-20)/12);
   const summitDeck=terminalWidth*(1-smooth((Math.abs(local.along-EXPERT.top)-11)/19));
   const loadingDeck=terminalWidth*(1-smooth((Math.abs(local.z-EXPERT.bottom)-11)/24));
   y+=(354-y)*summitDeck+(3.4-y)*loadingDeck;
- }
- if(x<-560){
-  // These foothills continue the old backdrop across the wider playable mesh.
-  const distance=(x+880)/172;
-  const northSpur=(z-205)/210,southSpur=(z-330)/118;
-  const foothills=Math.exp(-distance*distance)*(325*Math.exp(-northSpur*northSpur)+125*Math.exp(-southSpur*southSpur));
-  const offPiste=1-smooth((z-395)/65);
-  y+=Math.max(0,foothills-y)*smooth((-x-560)/146)*offPiste;
  }
  for(const j of jumps){const d=z-j.z;if(Math.abs(x)<j.width){if(d>=-17&&d<0)y+=j.h*smooth((d+17)/17);else if(d>=0&&d<2)y+=j.h*(1-smooth(d/2));}}return y;}
 export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}for(let i=0;i<900;i++){const z=juniperZ(95+rand()*465),x=-190+rand()*380;const near=routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b),distance=Math.abs(x-pathX(z,near));const inGlade=near.id==='glades'&&distance<34;const gap=inGlade?Math.abs(x-pathX(z,near))<6:false;if((distance>near.width+7||inGlade&&!gap)&&Math.abs(x+28)>7){const s=.75+rand()*.75;if(!inBowl(x,z,7)&&!onExpertFace(x,z)&&Math.hypot(x-expertLoading.x,z-expertLoading.z)>20)a.push({x,z,r:.8,s});}}
