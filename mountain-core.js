@@ -16,10 +16,9 @@ export const BOARD_CENTER={x:0,z:610},BOARD_RADIUS=58;
 export const LIFT={upX:-22,downX:-38,towerX:-30,towerWidth:.9,crossbeamClearance:1.5,chairWidth:3.6};
 export const SUMMIT_TERMINAL=juniperZ(12);
 export const RIDE_SECONDS=24;
-export const UNLOAD_SECONDS=2.5;
 export const liftTowers=[12,65,118,170,225,275,330,380,435,485,590,622].map(juniperZ);
 export const JUNIPER={id:'juniper',name:'Juniper Chair',center:LIFT.towerX,top:SUMMIT_TERMINAL,bottom:BASE.z,
- rideSeconds:RIDE_SECONDS,towers:liftTowers,x:0,z:0,yaw:0,hand:1,exitX:TOP.x,exitZ:TOP.z};
+ rideSeconds:RIDE_SECONDS,towers:liftTowers,x:0,z:0,yaw:0,hand:1};
 export function timberlineZ(section){
  if(section<=0)return section-280;
  if(section>=360)return section;
@@ -34,7 +33,7 @@ function timberlineSection(z){
 }
 export const EXPERT={id:'expert',name:'Timberline Chair',center:0,top:timberlineZ(0),bottom:390,
  rideSeconds:29,towers:[0,27,57,90,126,165,208,253,305,352,390].map(timberlineZ),
- x:-465,z:510,yaw:1.45,hand:-1,exitX:24,exitZ:timberlineZ(17),exitAngle:.23};
+ x:-465,z:510,yaw:1.45,hand:-1};
 export function liftWorld(lift,x,z){
  const cos=Math.cos(lift.yaw),sin=Math.sin(lift.yaw);
  return {x:lift.x+cos*x*lift.hand+sin*z,z:lift.z-sin*x*lift.hand+cos*z};
@@ -280,51 +279,27 @@ export function board(p){
  p.activeLift=lift;p.mode='lift';p.ride=0;p.speed=0;p.air=false;p.angle=lift.yaw;p.yaw=0;
  return true;
 }
+export const canUnload=p=>p.mode==='lift'&&p.ride>=1;
+export function unload(p){
+ if(!canUnload(p))return false;
+ const lift=p.activeLift;
+ // Stand on the ramp in the same lane, facing down the hill with no push to either side.
+ Object.assign(p,liftWorld(lift,lift.center+8,lift.top+4));
+ p.y=height(p.x,p.z);
+ p.mode='ski';p.angle=lift.yaw;p.speed=0;p.yaw=0;p.vy=0;p.groundV=0;p.drive='glide';
+ p.passedTop=true;
+ p.route=lift===EXPERT?'Timberline Summit':'Summit · pick a line';
+ return true;
+}
 export function step(p,input,dt,colliders=[]){const events=[];
  if(p.mode==='lift'){
+  if(canUnload(p))return events;
   const lift=p.activeLift??JUNIPER;
   p.ride=Math.min(1,p.ride+dt/lift.rideSeconds);
   const z=lift.bottom+(lift.top-lift.bottom)*chairProgress(p.ride);
   const point=liftWorld(lift,lift.center+8,z);
   p.x=point.x;p.z=point.z;p.y=liftCableHeight(z,lift)-4.6;
   p.angle=lift.yaw;
-  if(p.ride>=1){
-   p.mode='unload';
-   const seat=liftWorld(lift,lift.center+7.56,z);
-   p.x=seat.x;p.z=seat.z;
-   p.angle=lift.yaw+Math.PI;
-   p.unloadTime=0;
-   p.route='Summit · unloading';
-   p.drive='glide';
-  }
-  return events;
- }
- if(p.mode==='unload'){
-  const lift=p.activeLift??JUNIPER;
-  p.unloadTime=Math.min(UNLOAD_SECONDS,p.unloadTime+dt);
-  const t=p.unloadTime/UNLOAD_SECONDS,u=1-t;
-  // Glide uphill off the chair, swing around the outside of the station,
-  // then rejoin the marked summit area heading down the mountain.
-  const startX=lift.center+7.56,turnX=lift.center+23;
-  const x=(u*u*u+3*u*u*t)*startX+3*u*t*t*turnX+t*t*t*lift.exitX;
-  const z=u*u*u*lift.top+3*u*u*t*(lift.top-17)+3*u*t*t*(lift.top-8)+t*t*t*lift.exitZ;
-  const point=liftWorld(lift,x,z);
-  p.x=point.x;p.z=point.z;
-  p.y=height(p.x,p.z);
-  const dx=6*u*t*(turnX-startX)+3*t*t*(lift.exitX-turnX);
-  const dz=-51*u*u+54*u*t+3*t*t*(lift.exitZ-lift.top+8);
-  const straightening=smooth((t-.8)/.2);
-  const angle=Math.atan2(dx,dz)*(1-straightening)+(lift.exitAngle??0)*straightening;
-  p.angle=lift.yaw+lift.hand*angle;
-  if(t>=1){
-   p.mode='ski';
-   p.speed=2;
-   p.vy=0;
-   p.groundV=0;
-   p.passedTop=true;
-   p.route=lift===EXPERT?'Timberline Summit':'Summit · pick a line';
-   events.push('unload');
-  }
   return events;
  }
  p.bump=Math.max(0,p.bump-dt);const direction=(input.left?1:0)-(input.right?1:0);const steering=(p.air?.7:1)*(input.brake?1.9:1.25);p.yaw+=(direction*steering-p.yaw)*(1-Math.exp(-dt*10));p.angle+=p.yaw*dt;

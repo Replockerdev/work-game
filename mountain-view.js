@@ -214,7 +214,7 @@ export function createMountain(canvas){
   const unloadSignX=upX+3.1,unloadSignZ=config.top+2;
   const unloadSignY=groundHeight(unloadSignX,unloadSignZ);
   liftBox(.14,1.8,.14,'#445a62',unloadSignX,unloadSignY+.9,unloadSignZ);
-  liftSign('Unload  ↗',unloadSignX,unloadSignY+1.65,unloadSignZ,'#237449',2.5,1);
+  liftSign('E · Unload',unloadSignX,unloadSignY+1.65,unloadSignZ,'#237449',2.5,1);
   if(config===EXPERT){
    const x=expertFaceX(46)+23,z=timberlineZ(46),y=groundHeight(x,z);
    liftBox(.16,2.6,.16,'#445a62',x,y+1.3,z);
@@ -268,16 +268,20 @@ export function createMountain(canvas){
   }
 
   const bullwheels=[];for(const z of[config.top,config.bottom]){const c=cableHeight(z),g=new T.Group();g.position.set(config.center,c+.25,z);group.add(g);const rim=new T.Mesh(new T.TorusGeometry(8,.18,6,36),frameMat);rim.rotation.x=Math.PI/2;g.add(rim);const hub=new T.Mesh(new T.CylinderGeometry(.9,.9,.8,12),frameMat);g.add(hub);for(let i=0;i<8;i++){const spoke=liftBox(7.8,.15,.15,'#657985',0,0,0,g);spoke.position.set(Math.cos(i*Math.PI/4)*4,0,Math.sin(i*Math.PI/4)*4);spoke.rotation.y=-i*Math.PI/4;}bullwheels.push(g);const arc=[];for(let i=0;i<=40;i++){const a=i/40*Math.PI;arc.push([config.center+Math.cos(a)*8,c,z+(z===config.top?-1:1)*Math.sin(a)*8]);}haulRope(arc);}
+  let waiting=false,departure=-Infinity;
   return function animateLift(player,time){
    for(const wheel of bullwheels)wheel.rotation.y=time*.7;
    const active=player.activeLift===config;
-   occupied.visible=active&&(player.mode==='lift'||player.mode==='unload');
+   if(waiting&&active&&player.mode==='ski')departure=time;
+   waiting=active&&player.mode==='lift'&&player.ride===1;
+   const leaving=time-departure;
+   occupied.visible=active&&(player.mode==='lift'||leaving<turnSeconds);
    if(active&&player.mode==='lift'){
     const z=config.bottom+(config.top-config.bottom)*chairProgress(player.ride);
     occupied.position.set(upX,player.y-.6,z);
     occupied.rotation.y=Math.PI;
-   }else if(active&&player.mode==='unload'){
-    turnChair(occupied,player.unloadTime/turnSeconds,true);
+   }else if(occupied.visible){
+    turnChair(occupied,leaving/turnSeconds,true);
    }
    for(let i=0;i<chairs.length;i++){
     const empty=chairs[i];
