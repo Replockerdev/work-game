@@ -66,4 +66,27 @@ function frame(t){const dt=Math.min((t-last)/1000,.1)||0;last=t;if(!document.hid
 view.render(p,dt,paused||!started);toastTime-=paused?0:dt;if(toastTime<=0)$('toast').hidden=true;uiTimer+=dt;if(uiTimer>.12){ui();uiTimer=0;}}requestAnimationFrame(frame);}
 $('start').onclick=()=>{started=true;$('overlay').hidden=true;canvas.focus();toast('Press E anywhere in the base clearing to ride the chair.',5);};$('interact').onclick=interact;$('pause').onclick=pause;$('resume').onclick=pause;$('mapButton').onclick=map;$('closeMap').onclick=map;$('fullscreen').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else $('mountain').requestFullscreen().catch(()=>{});canvas.focus();};
 document.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;const k=e.key.length===1?e.key.toLowerCase():e.key;if([' ','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(k)&&e.target.tagName!=='BUTTON')e.preventDefault();if(!e.repeat){if(k==='p'||k==='Escape')pause();if(!paused&&started){if(k==='e')interact();if(k==='r')reset();if(k==='m')map();if(k===' '&&e.target.tagName!=='BUTTON')jump=true;}}if(e.target.tagName!=='BUTTON')keys[k]=true;});document.addEventListener('keyup',e=>keys[e.key.length===1?e.key.toLowerCase():e.key]=false);canvas.addEventListener('pointerdown',()=>canvas.focus());window.addEventListener('blur',()=>{keys={};if(started&&!paused)pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden){keys={};if(started&&!paused)pause();}});
-const touchMap={left:'a',right:'d',tuck:'w',brake:'s'};document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys[touchMap[b.dataset.key]]=true;};b.onpointerup=b.onpointercancel=()=>keys[touchMap[b.dataset.key]]=false;});$('touchJump').onpointerdown=e=>{e.preventDefault();jump=true;};if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});ui();requestAnimationFrame(frame);
+const touchMap={left:'a',right:'d',tuck:'w',brake:'s'};document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys[touchMap[b.dataset.key]]=true;};b.onpointerup=b.onpointercancel=()=>keys[touchMap[b.dataset.key]]=false;});$('touchJump').onpointerdown=e=>{e.preventDefault();jump=true;};
+if('serviceWorker'in navigator){
+ const worker=navigator.serviceWorker;
+ const release=Number(document.documentElement.dataset.release);
+ const checkActive=()=>worker.controller?.postMessage('work-game-release');
+ worker.addEventListener('message',({data})=>{
+  if(data?.type==='work-game-release'&&data.release>release)$('updateGame').hidden=false;
+ });
+ worker.addEventListener('controllerchange',checkActive);
+ $('updateGame').onclick=()=>location.reload();
+ worker.register('/sw.js',{updateViaCache:'none'}).then(registration=>{
+  checkActive();
+  let lastCheck=0;
+  const check=()=>{
+   if(document.hidden||Date.now()-lastCheck<10000)return;
+   lastCheck=Date.now();
+   registration.update().catch(()=>{});
+  };
+  document.addEventListener('visibilitychange',check);
+  window.addEventListener('focus',check);
+  setInterval(check,60000);
+ }).catch(()=>{});
+}
+ui();requestAnimationFrame(frame);
