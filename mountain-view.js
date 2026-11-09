@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffX,powderCliffSpan,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffX,powderCliffSpan,driftDepth,snowDepth,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
@@ -43,6 +43,7 @@ export function createMountain(canvas){
  const pos=geo.attributes.position,colors=[];
  const flatSummit=juniperZ(90),bankStart=juniperZ(100);
  const bowlSnow=new T.Color('#eef5fa');
+ const driftSnow=new T.Color('#edf5ff');
  const expertSnow=new T.Color('#e8eff8');
  const chuteSnow=new T.Color('#cfdfe9'),ledgeRock=new T.Color('#65717e');
  for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<flatSummit||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>bankStart&&z<560)color.multiplyScalar(.88);
@@ -78,6 +79,7 @@ export function createMountain(canvas){
     color.lerp(ledgeRock,band*powderCliffSpan(z)*.96);
    }
   }
+  color.lerp(driftSnow,driftDepth(x,z)*.78);
   const n=Math.sin(x*.31+z*.047)*.024; color.offsetHSL(0,0,n);colors.push(color.r,color.g,color.b);}
  geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
  // Visible trail-edge poles and arrows make all three routes converge at the base.
@@ -91,6 +93,9 @@ export function createMountain(canvas){
  trailSign('Groomer  →',guideX,guideY+2.7,guideZ,'#237449');
  trailSign('Park  ↑',guideX,guideY+1.95,guideZ,'#98500e');
  trailSign('←  Glades',guideX,guideY+1.2,guideZ,'#254d77');
+ const driftSignX=-61,driftSignZ=juniperZ(52),driftSignY=height(driftSignX,driftSignZ);
+ box(.16,2.25,.16,'#68523f',driftSignX,driftSignY+1.12,driftSignZ);
+ trailSign('Snowdrift Glade  →',driftSignX,driftSignY+2.05,driftSignZ,'#365c50',5.6);
  for(const j of jumps){for(const side of [-1,1]){box(.16,2.2,.16,'#e9a66e',side*(j.width+1),height(side*(j.width+1),j.z)+1.1,j.z);box(1.2,.7,.08,'#e9a66e',side*(j.width+1),height(side*(j.width+1),j.z)+1.8,j.z);}line([[-j.width,height(0,j.z-.05)+.09,j.z-.05],[j.width,height(0,j.z-.05)+.09,j.z-.05]],'#e3a66e');}
  for(const z of [565,594]){
   const x=7,y=height(x,z);
@@ -322,7 +327,7 @@ export function createMountain(canvas){
  if(!lift&&!p.air&&p.speed>1&&!paused){if(previous&&Math.hypot(p.x-previous.x,p.z-previous.z)<3){for(const side of [-1,1]){const ox=Math.cos(p.angle)*.29*side,oz=-Math.sin(p.angle)*.29*side;const k=(trackCount++%max)*6;trackPositions.set([previous.x+ox,previous.y+.04,previous.z+oz,p.x+ox,height(p.x+ox,p.z+oz)+.04,p.z+oz],k);}trackGeo.attributes.position.needsUpdate=true;trackGeo.setDrawRange(0,Math.min(trackCount,max)*2);}previous={x:p.x,y:p.y,z:p.z};}else previous=null;
  puffs.visible=!lift&&!p.air&&p.speed>4;
  if(puffs.visible){
-  const powder=powderDepth(p.x,p.z),sin=Math.sin(p.angle),cos=Math.cos(p.angle);
+  const powder=snowDepth(p.x,p.z),sin=Math.sin(p.angle),cos=Math.cos(p.angle);
   const spread=.24+Math.abs(p.yaw)*.72+powder*.8;
   const length=2+powder*2.2;
   const rise=height(p.x-sin*length,p.z-cos*length)-p.y;

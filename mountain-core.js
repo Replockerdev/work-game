@@ -115,6 +115,44 @@ export const routes=[{id:'groomer',name:'The Groomer',offset:-103,width:23,color
 export const pathX=(z,r)=>r.offset*Math.sin(Math.PI*clamp((juniperSection(z)-60)/530,0,1));
 const groomer=routes[0];
 export const bowlRoute={id:'bowl',name:'Juniper Powder Bowl',color:'#638b91'};
+export const driftRoute={id:'drift',name:'Snowdrift Glade',color:'#527d66'};
+const driftStart=juniperZ(32),driftEnd=juniperZ(300);
+const driftExitStart=juniperZ(263),driftExitEnd=juniperZ(310);
+export function driftX(section){
+ return -65-210*smooth((section-34)/130)+26*smooth((section-225)/60)
+  +9*Math.sin((section-120)*.039)*smooth((section-100)/55);
+}
+function driftMainX(section){return driftX(section)+9*Math.sin(section*.066);}
+function driftOuterX(section){
+ const split=smooth((section-96)/36)*(1-smooth((section-228)/40));
+ const outer=driftX(section)-41+12*Math.sin(section*.078+1.5);
+ return driftMainX(section)+(outer-driftMainX(section))*split;
+}
+export function driftExitX(section){
+ const main=driftMainX(section),merge=smooth((section-267)/34);
+ const z=juniperZ(section);
+ // Stay on the floor as the lower bowl bends around the Timberline flank.
+ const trough=-5+22*smooth((z-257)/34)+20*smooth((z-288)/54)
+  -54*smooth((z-405)/77)+29*smooth((z-482)/21)-12*smooth((z-505)/30);
+ return main+(bowlX(z)+trough-main)*merge;
+}
+export function driftDepth(x,z){
+ if(x>=-54||x<=-398||z<driftStart||z>driftEnd)return 0;
+ const section=juniperSection(z),width=48+50*smooth((section-60)/74);
+ const edge=1-smooth((Math.abs(x-driftX(section))-width*.58)/(width*.42));
+ const entry=smooth((section-32)/47),exit=1-smooth((section-252)/48);
+ const clearGroomer=smooth((pathX(z,groomer)-groomer.width-x-8)/32);
+ return edge*entry*exit*clearGroomer*smooth((-x-54)/25);
+}
+// Short powder lips have open approaches and landings; the wider lines pass around them.
+export const driftHits=[
+ {section:108,offset:-28,h:1.65,width:7,approach:13,landing:7},
+ {section:144,offset:23,h:2.4,width:9,approach:17,landing:8},
+ {section:178,offset:-36,h:2.1,width:8,approach:14,landing:7},
+ {section:208,offset:33,h:2.65,width:10,approach:17,landing:9},
+ {section:240,offset:-21,h:1.8,width:8,approach:14,landing:8}
+].map(hit=>({...hit,x:driftX(hit.section)+hit.offset,z:2*Math.round(juniperZ(hit.section)/2)}));
+export const snowDepth=(x,z)=>Math.max(driftDepth(x,z),powderDepth(x,z));
 export const bowlStart=juniperZ(148),bowlEnd=juniperZ(584);
 export function bowlX(z){
  const section=juniperSection(z);
@@ -154,7 +192,7 @@ export function powderCliffSpan(z){
 export const bowlRocks=[
  {z:180,offset:-20,size:4.4},{z:187,offset:-23,size:3.1},
  {z:208,offset:21,size:3.2},{z:216,offset:24,size:2.6},
- {z:266,offset:-10,size:3.1},{z:285,offset:-10,size:2.7},
+ {z:266,offset:-33,size:3.1},{z:285,offset:-39,size:2.7},
  {z:330,offset:51,size:5.9},{z:355,offset:56,size:4.4}
 ].map(({z:section,offset,size})=>{
  const z=juniperZ(section);
@@ -163,6 +201,7 @@ export const bowlRocks=[
 export function trailAt(x,z){
  const expert=expertLine(x,z);
  if(expert)return expert;
+ if(driftDepth(x,z)>.22)return driftRoute;
  if(powderDepth(x,z)>.2)return bowlRoute;
  if(z<juniperZ(85)||z>570)return null;
  return routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b);
@@ -175,6 +214,19 @@ export function baseHeight(z){
  return 148*(1-smooth((section-5)/610))+76*(1-smooth(section/465));
 }
 export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-130)/80);y+=edge*(6+Math.sin(z*.021)*3);
+ if(x<-54&&x>-398&&z>driftStart&&z<driftEnd){
+  const depth=driftDepth(x,z);
+  // A shallow drainage draws the snow toward the lower bowl; waves leave some room for turns.
+  const driftRoll=1.9*Math.sin(z*.038+x*.022)+.82*Math.sin(z*.096-x*.054);
+  y+=depth*(-11+driftRoll);
+  for(const hit of driftHits){
+   const d=z-hit.z;
+   if(d< -hit.approach||d>hit.landing||Math.abs(x-hit.x)>=hit.width)continue;
+   const cross=1-smooth((Math.abs(x-hit.x)/hit.width-.27)/.73);
+   const face=d<0?(1+d/hit.approach)**2:(1-d/hit.landing)**2;
+   y+=hit.h*cross*face;
+  }
+ }
  if(z>bowlStart&&z<bowlEnd){
   const section=juniperSection(z);
   const distance=x-bowlX(z),width=bowlWidth(z);
@@ -232,8 +284,14 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const runout=78+(-x-280)*1.02+.18*across;
   y+=(runout-y)*width*ends;
  }
+ if(x>-321&&x<-199&&z>driftExitStart&&z<driftExitEnd){
+  const s=juniperSection(z),across=x-driftExitX(s);
+  const blend=smooth((s-263)/11)*(1-smooth((s-294)/16))*(1-smooth((Math.abs(across)-13)/22));
+  const runout=119-(s-263)*.89+.10*across;
+  y+=(runout-y)*blend;
+ }
  for(const j of jumps){const d=z-j.z;if(Math.abs(x)<j.width){if(d>=-17&&d<0)y+=j.h*smooth((d+17)/17);else if(d>=0&&d<2)y+=j.h*(1-smooth(d/2));}}return y;}
-export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}for(let i=0;i<900;i++){const z=juniperZ(95+rand()*465),x=-190+rand()*380;const near=routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b),distance=Math.abs(x-pathX(z,near));const inGlade=near.id==='glades'&&distance<34;const gap=inGlade?Math.abs(x-pathX(z,near))<6:false;if((distance>near.width+7||inGlade&&!gap)&&Math.abs(x+28)>7){const s=.75+rand()*.75;if(!inBowl(x,z,7)&&!onExpertFace(x,z)&&Math.hypot(x-expertLoading.x,z-expertLoading.z)>20)a.push({x,z,r:.8,s});}}
+export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}for(let i=0;i<900;i++){const z=juniperZ(95+rand()*465),x=-190+rand()*380;const near=routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b),distance=Math.abs(x-pathX(z,near));const inGlade=near.id==='glades'&&distance<34;const gap=inGlade?Math.abs(x-pathX(z,near))<6:false;if((distance>near.width+7||inGlade&&!gap)&&Math.abs(x+28)>7){const s=.75+rand()*.75;if(!inBowl(x,z,7)&&!onExpertFace(x,z)&&driftDepth(x,z)<.14&&Math.hypot(x-expertLoading.x,z-expertLoading.z)>20)a.push({x,z,r:.8,s});}}
  for(let i=0;i<70;i++){
   const z=juniperZ(200+rand()*364);
   const x=bowlX(z)-bowlWidth(z)-8-rand()*45;
@@ -262,7 +320,21 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
    a.push({x,z,r:.8,s:.5+rand()*.6});
   }
  }
- return a;
+ const planted=[];
+ for(let i=0;i<1900&&planted.length<215;i++){
+  const section=41+246*rand(),z=juniperZ(section),center=driftX(section),x=center+(rand()-.5)*218;
+  const depth=driftDepth(x,z);
+  if(depth<.12)continue;
+  if(Math.abs(x-driftMainX(section))<9||Math.abs(x-driftOuterX(section))<10)continue;
+  if(driftHits.some(hit=>Math.abs(x-hit.x)<hit.width+5&&z>hit.z-hit.approach-9&&z<hit.z+hit.landing+14))continue;
+  const islands=.5+.24*Math.sin(x*.075+z*.056)+.21*Math.cos(z*.092-x*.038);
+  if(rand()>islands||planted.some(t=>(x-t.x)**2+(z-t.z)**2<51))continue;
+  const s=.53+rand()*.72;
+  planted.push({x,z,s,r:.55+s*.27});
+ }
+ a.push(...planted);
+ return a.filter(tree=>tree.z<driftExitStart||tree.z>driftExitEnd
+  ||Math.abs(tree.x-driftExitX(juniperSection(tree.z)))>17);
 }
 export function spawn(){return {x:BASE.x,z:BASE.z-10,y:height(BASE.x,BASE.z-10),angle:0,yaw:0,speed:0,vy:0,groundV:0,air:false,jumps:0,airtime:0,bump:0,mode:'ski',ride:0,laps:0,passedTop:false,route:'Lift base',lastRoute:'',distance:0,drive:'glide',skatePhase:0};}
 const expertLoading=liftWorld(EXPERT,8,EXPERT.bottom);
@@ -307,7 +379,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  // Read the main slope over several ski lengths so a bump or ramp lip
  // cannot change the stance. The loading area always behaves as flat.
  const headingZ=Math.cos(p.angle),headingX=Math.sin(p.angle);
- const expert=expertLine(p.x,p.z),powder=powderDepth(p.x,p.z);
+ const expert=expertLine(p.x,p.z),powder=snowDepth(p.x,p.z);
  const downhillGrade=expert||powder>.2
   ?(height(p.x-12*headingX,p.z-12*headingZ)-height(p.x+12*headingX,p.z+12*headingZ))/24
   :p.z>=590?0:(baseHeight(p.z-12*headingZ)-baseHeight(p.z+12*headingZ))/24;
@@ -324,13 +396,15 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const drag=((p.drive==='tuck'?.0065:.009)+powder*.004)*p.speed*p.speed+surfaceDrag+Math.abs(p.yaw)*.55;
  p.speed=clamp(p.speed+(gravity+push-drag-(input.brake?10:0))*dt,0,p.drive==='tuck'?28:23);if(!p.air&&p.speed<.05)p.speed=0;
  const oldX=p.x,oldZ=p.z,oldY=p.y,oldGroundV=p.groundV,dx=Math.sin(p.angle)*p.speed*dt,dz=Math.cos(p.angle)*p.speed*dt;p.x=clamp(p.x+dx,SNOW_WEST+10,SNOW_EAST-10);p.z=clamp(p.z+dz,SNOW_NORTH+12,657);p.distance+=Math.hypot(dx,dz);const ground=height(p.x,p.z);
- if(!p.air&&input.jump&&p.speed>1){p.air=true;p.vy=clamp(oldGroundV,-20,20)+7;p.airtime=0;events.push('takeoff');}else if(!p.air&&ground<oldY+oldGroundV*dt-.075&&p.speed>5){p.air=true;p.vy=oldGroundV;p.airtime=0;events.push('takeoff');}
+ const sideHit=powder>.2&&!p.air&&p.speed>9&&dz>0&&driftHits.some(hit=>oldZ<hit.z&&p.z>=hit.z&&Math.abs(p.x-hit.x)<hit.width*.61);
+ if(!p.air&&input.jump&&p.speed>1){p.air=true;p.vy=clamp(oldGroundV,-20,20)+7;p.airtime=0;events.push('takeoff');}
+ else if(sideHit||!p.air&&ground<oldY+oldGroundV*dt-.075&&p.speed>5){p.air=true;p.vy=sideHit?Math.max(oldGroundV,1.65):oldGroundV;p.airtime=0;events.push('takeoff');}
  // Keep the actual snow pitch through touchdown so steep snow doesn't launch the skis again.
  if(p.air){p.vy-=g*dt;p.y+=p.vy*dt;p.airtime+=dt;if(p.y<=ground){p.y=ground;p.air=false;p.vy=0;if(p.airtime>.25){p.jumps++;events.push('land');}p.groundV=(ground-height(oldX,oldZ))/dt;}}else{p.y=ground;p.groundV=(ground-oldY)/dt;}
  for(const o of colliders){const d=Math.hypot(p.x-o.x,p.z-o.z),radius=(o.r??.8)+.4;if(d<radius&&p.y-ground<5&&p.bump<=0){const nx=(p.x-o.x)/(d||1),nz=(p.z-o.z)/(d||1);p.x=o.x+nx*(radius+.4);p.z=o.z+nz*(radius+.4);p.speed*=.25;p.bump=.8;events.push('bump');}}
  const stillAtTimberline=p.route==='Timberline Summit'&&!expert&&powder<=.2&&expertLocal(p.x,p.z).z<20;
  const route=stillAtTimberline?null:trailAt(p.x,p.z);
- if(route&&(expert||p.z>juniperZ(105)&&p.z<570)){if(route.name!==p.route){p.route=route.name;events.push('route');}p.lastRoute=route.name;}
+ if(route&&(expert||route===driftRoute||p.z>juniperZ(105)&&p.z<570)){if(route.name!==p.route){p.route=route.name;events.push('route');}p.lastRoute=route.name;}
  const returnedToBase=p.z>585&&p.x>-86;
  const returnedToExpert=p.activeLift===EXPERT&&boardingLift(p)===EXPERT;
  if(p.passedTop&&(returnedToBase||returnedToExpert)){p.laps++;p.passedTop=false;events.push('lap');}
