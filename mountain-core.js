@@ -283,8 +283,8 @@ export const canUnload=p=>p.mode==='lift'&&p.ride>=1;
 export function unload(p){
  if(!canUnload(p))return false;
  const lift=p.activeLift;
- // Stand on the ramp in the same lane, facing down the hill with no push to either side.
- Object.assign(p,liftWorld(lift,lift.center+8,lift.top+4));
+ // Stand just past the ramp in the same lane, facing down the hill with no push to either side.
+ Object.assign(p,liftWorld(lift,lift.center+8,lift.top+7));
  p.y=height(p.x,p.z);
  p.mode='ski';p.angle=lift.yaw;p.speed=0;p.yaw=0;p.vy=0;p.groundV=0;p.drive='glide';
  p.passedTop=true;
@@ -328,7 +328,8 @@ export function step(p,input,dt,colliders=[]){const events=[];
  // Keep the actual snow pitch through touchdown so steep snow doesn't launch the skis again.
  if(p.air){p.vy-=g*dt;p.y+=p.vy*dt;p.airtime+=dt;if(p.y<=ground){p.y=ground;p.air=false;p.vy=0;if(p.airtime>.25){p.jumps++;events.push('land');}p.groundV=(ground-height(oldX,oldZ))/dt;}}else{p.y=ground;p.groundV=(ground-oldY)/dt;}
  for(const o of colliders){const d=Math.hypot(p.x-o.x,p.z-o.z),radius=(o.r??.8)+.4;if(d<radius&&p.y-ground<5&&p.bump<=0){const nx=(p.x-o.x)/(d||1),nz=(p.z-o.z)/(d||1);p.x=o.x+nx*(radius+.4);p.z=o.z+nz*(radius+.4);p.speed*=.25;p.bump=.8;events.push('bump');}}
- const route=trailAt(p.x,p.z);
+ const stillAtTimberline=p.route==='Timberline Summit'&&!expert&&powder<=.2&&expertLocal(p.x,p.z).z<20;
+ const route=stillAtTimberline?null:trailAt(p.x,p.z);
  if(route&&(expert||p.z>juniperZ(105)&&p.z<570)){if(route.name!==p.route){p.route=route.name;events.push('route');}p.lastRoute=route.name;}
  const returnedToBase=p.z>585&&p.x>-86;
  const returnedToExpert=p.activeLift===EXPERT&&boardingLift(p)===EXPERT;

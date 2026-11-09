@@ -340,12 +340,15 @@ export function createMountain(canvas){
  const turn=heading-camHeading;
  camHeading=camReady?camHeading+Math.atan2(Math.sin(turn),Math.cos(turn))*(1-Math.exp(-dt*7)):heading;
  const forwardX=Math.sin(camHeading),forwardZ=Math.cos(camHeading);
- const behind=lift?17:13.5,ahead=lift?38:14;
+ // Close in beneath the terminal roof before the usual trailing camera resumes.
+ const summit=liftWorld(config,config.center+8,config.top);
+ const dock=1-T.MathUtils.smoothstep(Math.hypot(p.x-summit.x,p.z-summit.z),9,26);
+ const behind=T.MathUtils.lerp(lift?17:13.5,4,dock),ahead=T.MathUtils.lerp(lift?38:14,5.5,dock);
  const eyeX=p.x-forwardX*behind,eyeZ=p.z-forwardZ*behind;
  const lookX=p.x+forwardX*ahead,lookZ=p.z+forwardZ*ahead;
- const eyeY=Math.max(p.y+(lift?6:8.5),surfaceHeight(eyeX,eyeZ)+3);
+ const eyeY=Math.max(p.y+T.MathUtils.lerp(lift?6:8.5,3.7,dock),surfaceHeight(eyeX,eyeZ)+3);
  const rearView=T.MathUtils.smoothstep(-forwardZ,.45,1)*(1-T.MathUtils.smoothstep(p.z,juniperZ(50),juniperZ(105)));
- const lookY=lift?p.y+2:Math.max(p.y-6,surfaceHeight(lookX,lookZ)+.6)+rearView*4;
+ const lookY=lift?p.y+T.MathUtils.lerp(2,1,dock):Math.max(p.y-6,surfaceHeight(lookX,lookZ)+.6)+rearView*4;
  desired.set(eyeX,eyeY,eyeZ);
  if(!camReady){camPos.copy(desired);look.y=lookY;camReady=true;}
  camPos.lerp(desired,1-Math.exp(-dt*10));
