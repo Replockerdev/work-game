@@ -1,10 +1,18 @@
 import {createMountain} from './mountain-view.js';
-import {spawn,step,board,boardingLift,canUnload,unload,BASE,TOP,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute,juniperZ,timberlineZ,bowlRoute,bowlX,powderCenterZ,driftRoute,driftX,driftExitX} from './mountain-core.js';
+import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,TOP,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute,juniperZ,timberlineZ,bowlRoute,bowlX,powderCenterZ,driftRoute,driftX,driftExitX} from './mountain-core.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
 const $=id=>document.getElementById(id),canvas=$('game');let view;try{view=createMountain(canvas);}catch(e){$('overlay').querySelector('h1').textContent='3D graphics unavailable';$('overlay').querySelector('p').textContent='This mountain needs WebGL. Try Chrome or Edge with graphics acceleration enabled.';throw e;}
 let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0;try{p.laps=Math.max(0,Number(localStorage.getItem('work-game-three-lines-laps'))||0);}catch{}
 function toast(s,time=3){$('toast').textContent=s;$('toast').hidden=false;toastTime=time;}
-function reset(){const laps=p.laps;p=spawn();p.laps=laps;keys={};jump=false;view.resetCamera();toast('Back at the chair. E to board.');canvas.focus();}
+function reset(){const {laps,turnStyle}=p;p=spawn();p.laps=laps;p.turnStyle=turnStyle;keys={};jump=false;view.resetCamera();toast('Back at the chair. E to board.');canvas.focus();}
+function cycleTurnStyle(){
+ if(!started||paused)return;
+ p.turnStyle=(p.turnStyle+1)%turnStyles.length;
+ const style=turnStyles[p.turnStyle],button=$('turnStyle');
+ button.textContent=style.label+' · Shift';
+ button.dataset.style=style.id;
+ canvas.focus();
+}
 function interact(){
  if(!started||paused)return;
  if(unload(p)){jump=false;toast('Hold W to skate. Steer toward any run.',4);}
@@ -70,7 +78,27 @@ function ui(){
 function frame(t){const dt=Math.min((t-last)/1000,.1)||0;last=t;if(!document.hidden){if(started&&!paused){let remaining=dt;while(remaining>0){const d=Math.min(remaining,1/120),events=step(p,{left:keys.a||keys.ArrowLeft,right:keys.d||keys.ArrowRight,tuck:keys.w||keys.ArrowUp,brake:keys.s||keys.ArrowDown,jump},d,view.trees);jump=false;for(const e of events){if(e==='land')toast('Landed. '+p.jumps+' clean '+(p.jumps===1?'jump':'jumps')+'.',2);if(e==='bump')toast('A soft bump. Brake and pick your way through.',2);if(e==='lap'){try{localStorage.setItem('work-game-three-lines-laps',p.laps);}catch{}toast('Lap complete. E boards in the loading area.',4);}}remaining-=d;}}
 view.render(p,dt,paused||!started);toastTime-=paused?0:dt;if(toastTime<=0)$('toast').hidden=true;uiTimer+=dt;if(uiTimer>.12){ui();uiTimer=0;}}requestAnimationFrame(frame);}
 $('start').onclick=()=>{started=true;$('overlay').hidden=true;canvas.focus();toast('Press E anywhere in the base clearing to ride the chair.',5);};$('interact').onclick=interact;$('pause').onclick=pause;$('resume').onclick=pause;$('mapButton').onclick=map;$('closeMap').onclick=map;$('fullscreen').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else $('mountain').requestFullscreen().catch(()=>{});canvas.focus();};
-document.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;const k=e.key.length===1?e.key.toLowerCase():e.key;if([' ','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(k)&&e.target.tagName!=='BUTTON')e.preventDefault();if(!e.repeat){if(k==='p'||k==='Escape')pause();if(!paused&&started){if(k==='e')interact();if(k==='r')reset();if(k==='m')map();if(k===' '&&e.target.tagName!=='BUTTON')jump=true;}}if(e.target.tagName!=='BUTTON')keys[k]=true;});document.addEventListener('keyup',e=>keys[e.key.length===1?e.key.toLowerCase():e.key]=false);canvas.addEventListener('pointerdown',()=>canvas.focus());window.addEventListener('blur',()=>{keys={};if(started&&!paused)pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden){keys={};if(started&&!paused)pause();}});
+$('turnStyle').onclick=cycleTurnStyle;
+document.addEventListener('keydown',e=>{
+ if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
+ const k=e.key.length===1?e.key.toLowerCase():e.key;
+ if([' ','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(k)&&e.target.tagName!=='BUTTON')e.preventDefault();
+ if(!e.repeat){
+  if(k==='p'||k==='Escape')pause();
+  if(!paused&&started){
+   if(k==='e')interact();
+   if(k==='r')reset();
+   if(k==='m')map();
+   if(k==='Shift')cycleTurnStyle();
+   if(k===' '&&e.target.tagName!=='BUTTON')jump=true;
+  }
+ }
+ if(e.target.tagName!=='BUTTON')keys[k]=true;
+});
+document.addEventListener('keyup',e=>keys[e.key.length===1?e.key.toLowerCase():e.key]=false);
+canvas.addEventListener('pointerdown',()=>canvas.focus());
+window.addEventListener('blur',()=>{keys={};if(started&&!paused)pause();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){keys={};if(started&&!paused)pause();}});
 const touchMap={left:'a',right:'d',tuck:'w',brake:'s'};document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys[touchMap[b.dataset.key]]=true;};b.onpointerup=b.onpointercancel=()=>keys[touchMap[b.dataset.key]]=false;});$('touchJump').onpointerdown=e=>{e.preventDefault();jump=true;};
 if('serviceWorker'in navigator){
  const worker=navigator.serviceWorker;

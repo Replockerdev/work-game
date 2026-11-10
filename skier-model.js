@@ -20,10 +20,11 @@ export function makeSkier(scene){
  const upper=link([s*.43,1.77,0],[s*.65,1.37,.14],.145,.125,cloth),lower=link([s*.65,1.37,.14],[s*.74,1.08,.35],.12,.095,cloth),glove=mesh(new T.SphereGeometry(.11,9,6),rubber),pole=link([s*.74,1.08,.35],[s*.88,.07,-.3],.025,.025,metal);arms.push({upper,lower,glove,pole,s});const basket=mesh(new T.TorusGeometry(.065,.013,4,8),rubber);basket.rotation.x=Math.PI/2;arms.at(-1).basket=basket;
  }
  const forward=new T.Vector3(),up=new T.Vector3(),right=new T.Vector3();
- const basis=new T.Matrix4(),yaw=new T.Quaternion(),vertical=new T.Vector3(0,1,0);
+ const basis=new T.Matrix4(),yaw=new T.Quaternion(),roll=new T.Quaternion();
+ const vertical=new T.Vector3(0,1,0),skiAxis=new T.Vector3(0,0,1);
  const contact=new T.Vector3(),anklePoint=new T.Vector3(),shoulderPoint=new T.Vector3();
  const runningSole=[-1.05,-.45,.15,.75,1.33];
- function fitSki(foot,p,footYaw,lift){
+ function fitSki(foot,p,footYaw,lift,edge){
   const sin=Math.sin(p.angle),cos=Math.cos(p.angle);
   const x=p.x+cos*foot.position.x+sin*foot.position.z;
   const z=p.z-sin*foot.position.x+cos*foot.position.z;
@@ -35,26 +36,41 @@ export function makeSkier(scene){
   right.crossVectors(up,forward).normalize();
   up.crossVectors(forward,right);
   foot.quaternion.setFromRotationMatrix(basis.makeBasis(right,up,forward));
+  foot.quaternion.multiply(roll.setFromAxisAngle(skiAxis,-edge));
   foot.quaternion.premultiply(yaw.setFromAxisAngle(vertical,footYaw));
 
-  // Fit the running surface. The curled tip and tail stay clear of the snow.
+  // Fit both edges of the running surface so the loaded edge stays on the snow.
   let floor=-Infinity;
-  for(const distance of runningSole){
-   contact.set(0,.035,distance).applyQuaternion(foot.quaternion);
-   const surface=height(x+cos*contact.x+sin*contact.z,z-sin*contact.x+cos*contact.z);
-   floor=Math.max(floor,surface-contact.y);
+  for(const across of [-.11,.11]){
+   for(const distance of runningSole){
+    contact.set(across,.035,distance).applyQuaternion(foot.quaternion);
+    const surface=height(x+cos*contact.x+sin*contact.z,z-sin*contact.x+cos*contact.z);
+    floor=Math.max(floor,surface-contact.y);
+   }
   }
   foot.position.y=floor-p.y+.025+lift;
  }
- function animate(p,time){const seated=p.mode==='lift',grounded=!seated&&!p.air,skating=grounded&&p.drive==='skate',tucking=!seated&&p.drive==='tuck',phase=p.skatePhase||0,turn=Math.min(1,Math.abs(p.yaw)),crouch=seated?.44:tucking?.60:skating?.87:.91-Math.min(.15,p.speed*.005)-turn*.06,hipZ=seated?-.05:tucking?-.24:-.12;torso.position.set(skating?Math.sin(phase)*.065:0,crouch,hipZ);torso.rotation.x=seated?-.08:tucking?.48:skating?.16+Math.cos(phase*2)*.035:.06+Math.min(.23,p.speed*.007);const edgeLean=grounded&&!skating?T.MathUtils.clamp(p.yaw*.17+p.slip*.34,-.37,.37)*T.MathUtils.smoothstep(p.speed,2,11):0;torso.rotation.z=-edgeLean;skiGroup.position.set(0,seated?.05:0,seated?.77:0);skiGroup.rotation.x=seated?.2:0;
+ function animate(p,time){
+ const seated=p.mode==='lift',grounded=!seated&&!p.air;
+ const skating=grounded&&p.drive==='skate',tucking=!seated&&p.drive==='tuck';
+ const phase=p.skatePhase||0,turn=Math.min(1,Math.abs(p.yaw));
+ const edge=grounded&&!skating?p.edgeAngle:0;
+ const hipShift=Math.sin(edge)*.45;
+ const crouch=seated?.44:tucking?.60:skating?.87:.91-Math.min(.15,p.speed*.005)-turn*.06-Math.abs(hipShift)*.16;
+ const hipZ=seated?-.05:tucking?-.24:-.12;
+ torso.position.set(skating?Math.sin(phase)*.065:hipShift,crouch,hipZ);
+ torso.rotation.x=seated?-.08:tucking?.48:skating?.16+Math.cos(phase*2)*.035:.06+Math.min(.23,p.speed*.007);
+ torso.rotation.z=-edge*.9;
+ skiGroup.position.set(0,seated?.05:0,seated?.77:0);
+ skiGroup.rotation.x=seated?.2:0;
  for(const {foot,s} of feet){
   const stroke=Math.sin(phase+(s>0?Math.PI:0)),spread=skating?.15*Math.max(0,stroke):0;
   const footYaw=skating?-s*(.14+.19*Math.max(0,stroke)):0;
   foot.position.set(s*(.29+spread),0,skating?stroke*.28:0);
-  if(grounded)fitSki(foot,p,footYaw,skating?Math.max(0,-stroke)*.1:0);
+  if(grounded)fitSki(foot,p,footYaw,skating?Math.max(0,-stroke)*.1:0,edge);
   else foot.rotation.set(0,footYaw,0);
  }
- for(let i=0;i<legs.length;i++){const {thigh,shin,s}=legs[i],foot=feet[i].foot,hip=[s*.22,crouch+.02,hipZ],knee=[skating?foot.position.x:s*.27,seated?.43:.52-turn*.03,seated?.56:skating?.19+foot.position.z*.6:.2];
+ for(let i=0;i<legs.length;i++){const {thigh,shin,s}=legs[i],foot=feet[i].foot,hip=[s*.22+hipShift,crouch+.02,hipZ],knee=[skating?foot.position.x:s*.27+hipShift*.78,seated?.43:.52-turn*.03,seated?.56:skating?.19+foot.position.z*.6:.2];
   anklePoint.set(0,.3,-.07).applyQuaternion(foot.quaternion).add(foot.position);
   const ankle=seated?[foot.position.x,.26,.72]:anklePoint.toArray();
   thigh.update(hip,knee);shin.update(knee,ankle);

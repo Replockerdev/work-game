@@ -311,6 +311,51 @@ export function createMountain(canvas){
   color:'#fff',map:new T.CanvasTexture(puffStamp),size:.22,transparent:true,opacity:.75,depthWrite:false
  }));
  puffs.geometry.setAttribute('position',new T.BufferAttribute(puffPositions,3));puffs.frustumCulled=false;scene.add(puffs);
+ const sprayCount=96;
+ const sprayParticles=Array.from({length:sprayCount},()=>({age:0,life:0,x:0,y:0,z:0,vx:0,vy:0,vz:0}));
+ const sprayPositions=new T.BufferAttribute(new Float32Array(sprayCount*3),3);
+ const sprayColors=new T.BufferAttribute(new Float32Array(sprayCount*4).fill(1),4);
+ sprayPositions.setUsage(T.DynamicDrawUsage);
+ sprayColors.setUsage(T.DynamicDrawUsage);
+ const sprayGeometry=new T.BufferGeometry();
+ sprayGeometry.setAttribute('position',sprayPositions);
+ sprayGeometry.setAttribute('color',sprayColors);
+ const spray=new T.Points(sprayGeometry,new T.PointsMaterial({
+  map:puffs.material.map,size:.52,vertexColors:true,transparent:true,depthWrite:false
+ }));
+ spray.frustumCulled=false;spray.visible=false;scene.add(spray);
+ let sprayCursor=0,sprayCarry=0;
+ function animateSpray(p,dt){
+  if(p.spray>.025&&!p.air&&p.mode==='ski'&&p.speed>3){
+   sprayCarry+=dt*168*p.spray;
+   const travel=p.travelAngle??p.angle,dx=Math.sin(travel),dz=Math.cos(travel);
+   const outside=-Math.sign(p.slip);
+   while(sprayCarry>=1){
+    const bit=sprayParticles[sprayCursor++%sprayCount];
+    const fan=outside*(1.6+Math.random()*3.4);
+    const tail=.55+Math.random()*.85;
+    Object.assign(bit,{
+     age:0,life:.24+Math.random()*.20,
+     x:p.x-dx*tail+dz*outside*.32,y:p.y+.19,z:p.z-dz*tail-dx*outside*.32,
+     vx:dx*p.speed*.21+dz*fan,vy:1.45+Math.random()*2.5+p.groundV*.13,
+     vz:dz*p.speed*.21-dx*fan
+    });
+    sprayCarry--;
+   }
+  }else sprayCarry=0;
+  let visible=false;
+  for(let i=0;i<sprayCount;i++){
+   const bit=sprayParticles[i];
+   bit.age+=dt;
+   if(bit.age>=bit.life){sprayColors.array[i*4+3]=0;continue;}
+   visible=true;
+   const age=bit.age;
+   sprayPositions.setXYZ(i,bit.x+bit.vx*age,bit.y+bit.vy*age-3.5*age**2,bit.z+bit.vz*age);
+   sprayColors.array[i*4+3]=(1-age/bit.life)*.95;
+  }
+  spray.visible=visible;
+  if(visible){sprayPositions.needsUpdate=true;sprayColors.needsUpdate=true;}
+ }
  let w=0,h=0,time=0,camReady=false,camHeading=0;
  const camPos=new T.Vector3(),look=new T.Vector3(),desired=new T.Vector3();
  function render(p,dt,paused=false){time+=paused?0:dt;if(w!==canvas.clientWidth||h!==canvas.clientHeight){w=canvas.clientWidth;h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
@@ -324,7 +369,24 @@ export function createMountain(canvas){
  rig.animate(p,time);
  animateJuniper(p,time);
  animateExpert(p,time);
- if(!lift&&!p.air&&p.speed>1&&!paused){if(previous&&Math.hypot(p.x-previous.x,p.z-previous.z)<3){for(const side of [-1,1]){const ox=Math.cos(p.angle)*.29*side,oz=-Math.sin(p.angle)*.29*side;const k=(trackCount++%max)*6;trackPositions.set([previous.x+ox,previous.y+.04,previous.z+oz,p.x+ox,height(p.x+ox,p.z+oz)+.04,p.z+oz],k);}trackGeo.attributes.position.needsUpdate=true;trackGeo.setDrawRange(0,Math.min(trackCount,max)*2);}previous={x:p.x,y:p.y,z:p.z};}else previous=null;
+ if(!paused)animateSpray(p,dt);
+ if(!lift&&!p.air&&p.speed>1&&!paused){
+  const crossX=Math.cos(p.angle)*.29,crossZ=-Math.sin(p.angle)*.29;
+  const contacts=[-1,1].map(side=>{
+   const x=p.x+crossX*side,z=p.z+crossZ*side;
+   return [x,height(x,z)+.045,z];
+  });
+  if(previous&&Math.hypot(p.x-previous.x,p.z-previous.z)<3){
+   for(let i=0;i<contacts.length;i++){
+    const k=(trackCount++%max)*6;
+    trackPositions.set(previous.contacts[i],k);
+    trackPositions.set(contacts[i],k+3);
+   }
+   trackGeo.attributes.position.needsUpdate=true;
+   trackGeo.setDrawRange(0,Math.min(trackCount,max)*2);
+  }
+  previous={x:p.x,z:p.z,contacts};
+ }else previous=null;
  puffs.visible=!lift&&!p.air&&p.speed>4;
  if(puffs.visible){
   const travel=p.travelAngle??p.angle;
@@ -334,6 +396,7 @@ export function createMountain(canvas){
   const length=2+powder*2.2;
   const rise=height(p.x-sin*length,p.z-cos*length)-p.y;
   puffs.material.size=.22+powder*.72;
+  puffs.material.opacity=.15+powder*.56;
   for(let i=0;i<60;i++){
    const t=(time*2+i*.17)%1,lateral=(Math.cos(i*8.7)*spread+skid*1.35)*t;
    const behind=t*length;
@@ -368,5 +431,8 @@ export function createMountain(canvas){
  sun.target.updateMatrixWorld();
  forest.clearSightline(camera.position,skier.position,dt);
  renderer.render(scene,camera);}
- return {render,trees:[...trees,...bowlRocks,...expertRocks],resetCamera(){camReady=false;previous=null;}};
+ return {render,trees:[...trees,...bowlRocks,...expertRocks],resetCamera(){
+  camReady=false;previous=null;sprayCarry=0;spray.visible=false;
+  for(const bit of sprayParticles)bit.life=0;
+ }};
 }
