@@ -124,6 +124,15 @@ export function driftX(section){
   +9*Math.sin((section-120)*.039)*smooth((section-100)/55);
 }
 function driftMainX(section){return driftX(section)+9*Math.sin(section*.066);}
+function driftEntryX(z){
+ const section=juniperSection(z);
+ return -22+(driftMainX(section)+22)*smooth((section-11)/41);
+}
+function driftEntryMask(x,z){
+ if(x>=-37||x<=-296||z<=-238||z>=-18)return 0;
+ const width=1-smooth((Math.abs(x-driftEntryX(z))-16)/23);
+ return width*smooth((-x-37)/17)*smooth((z+238)/36)*(1-smooth((z+87)/69));
+}
 function driftOuterX(section){
  const split=smooth((section-96)/36)*(1-smooth((section-228)/40));
  const outer=driftX(section)-41+12*Math.sin(section*.078+1.5);
@@ -147,7 +156,8 @@ export function ridgeDropMask(x,z){
  if(x<-300||x>-105||z<=176||z>=494)return 0;
  const shoulder=Math.abs(x-ridgeDropX(z));
  const width=18+8*smooth((z-342)/49);
- const sides=1-smooth((shoulder-12)/width);
+ const core=12+6*smooth((z-230)/88);
+ const sides=1-smooth((shoulder-core)/width);
  const clearGroomer=smooth((pathX(z,groomer)-groomer.width-x)/16);
  return sides*clearGroomer*smooth((z-176)/54)*(1-smooth((z-463)/31));
 }
@@ -311,13 +321,18 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
  }
  const ridge=ridgeDropMask(x,z);
  if(ridge>0){
-  // Carry speed along the shoulder, then open a rock face into a downhill landing.
+  // Increase the grade gradually all the way to the lip.
   const run=z-175,fromLip=z-ridgeDropLip(x);
-  const pitch=118-.24*run+.00005*run**2;
-  const roll=3*smooth((z-325)/40)*(1-smooth((z-375)/39));
-  const lip=1.3*smooth((fromLip+12)/12);
+  const pitch=117-.16*run-.00028*run**2;
   const drop=21*smooth(fromLip/3)+.14*Math.max(0,fromLip-3);
-  y+=(pitch+roll+lip-drop-y)*ridge;
+  y+=(pitch-drop-y)*ridge;
+ }
+ const entry=driftEntryMask(x,z);
+ if(entry>0){
+  // The short glide from the summit carries into the open upper glade.
+  const run=z+229;
+  const pitch=222-.32*run+.00065*run**2;
+  y+=Math.min(0,pitch-y)*entry;
  }
  for(const j of jumps){const d=z-j.z;if(Math.abs(x)<j.width){if(d>=-17&&d<0)y+=j.h*smooth((d+17)/17);else if(d>=0&&d<2)y+=j.h*(1-smooth(d/2));}}return y;}
 export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}for(let i=0;i<900;i++){const z=juniperZ(95+rand()*465),x=-190+rand()*380;const near=routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b),distance=Math.abs(x-pathX(z,near));const inGlade=near.id==='glades'&&distance<34;const gap=inGlade?Math.abs(x-pathX(z,near))<6:false;if((distance>near.width+7||inGlade&&!gap)&&Math.abs(x+28)>7){const s=.75+rand()*.75;if(!inBowl(x,z,7)&&!onExpertFace(x,z)&&driftDepth(x,z)<.14&&Math.hypot(x-expertLoading.x,z-expertLoading.z)>20)a.push({x,z,r:.8,s});}}
@@ -363,6 +378,7 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
  }
  a.push(...planted);
  return a.filter(tree=>ridgeDropMask(tree.x,tree.z)<.18
+  &&(tree.z<=-224||tree.z>=-32||Math.abs(tree.x-driftEntryX(tree.z))>17)
   &&(tree.z<driftExitStart||tree.z>driftExitEnd
    ||Math.abs(tree.x-driftExitX(juniperSection(tree.z)))>17));
 }
@@ -425,6 +441,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const shortSkid=style.id==='skid';
  const gladeSnow=driftDepth(p.x,p.z);
  const ridge=ridgeDropMask(p.x,p.z);
+ const entry=driftEntryMask(p.x,p.z);
  const powder=Math.max(gladeSnow,powderDepth(p.x,p.z));
  const edgeLimit=(11.4-3.4*powder)/Math.max(5,p.speed);
  let turnRate=(input.brake?1.9:1.55)/(1+p.speed*.019);
@@ -470,7 +487,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
 
  // Judge skating and tucking from the main slope, beyond any nearby jump lip.
  const headingX=Math.sin(p.angle),headingZ=Math.cos(p.angle);
- const downhillGrade=expert||powder>.2||ridge>.2
+ const downhillGrade=expert||powder>.2||ridge>.2||entry>.2
   ?(height(p.x-12*headingX,p.z-12*headingZ)-height(p.x+12*headingX,p.z+12*headingZ))/24
   :p.z>=590?0:(baseHeight(p.z-12*headingZ)-baseHeight(p.z+12*headingZ))/24;
  const wasTucking=p.drive==='tuck';
@@ -484,7 +501,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const push=p.drive==='skate'?8.8*Math.max(0,1-p.speed/10)+.9*Math.max(0,Math.sin(p.skatePhase*2)):0;
  const softSnow=powder*(.60+p.speed*.045)-gladeSnow*(.23+p.speed*.01);
  const trailDrag=(onTrail(p.x,p.z)||powder>.2?.30:.72)+softSnow;
- const surfaceDrag=trailDrag+(.18-trailDrag)*ridge;
+ const surfaceDrag=trailDrag+(.18-trailDrag)*Math.max(entry,ridge);
  const aeroDrag=(p.drive==='tuck'?.0038:.0058)*p.speed**2;
  const edgeDrag=Math.abs(sideSlip)*p.speed*(input.brake?Math.max(.42,style.scrub):style.scrub);
  const brake=p.drive==='brake'?5.6+p.speed*.32:0;
