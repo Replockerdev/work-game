@@ -377,10 +377,12 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
   planted.push({x,z,s,r:.55+s*.27});
  }
  a.push(...planted);
- return a.filter(tree=>ridgeDropMask(tree.x,tree.z)<.18
-  &&(tree.z<=-224||tree.z>=-32||Math.abs(tree.x-driftEntryX(tree.z))>17)
-  &&(tree.z<driftExitStart||tree.z>driftExitEnd
-   ||Math.abs(tree.x-driftExitX(juniperSection(tree.z)))>17));
+ return a.filter(tree=>{
+  if(ridgeDropMask(tree.x,tree.z)>=.18)return false;
+  if(tree.z>-224&&tree.z<-32&&Math.abs(tree.x-driftEntryX(tree.z))<31)return false;
+  return tree.z<driftExitStart||tree.z>driftExitEnd
+   ||Math.abs(tree.x-driftExitX(juniperSection(tree.z)))>17;
+ });
 }
 export const turnStyles=[
  {id:'normal',label:'Normal turns',grip:8.8,scrub:.42},
