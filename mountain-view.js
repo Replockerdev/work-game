@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffX,powderCliffSpan,driftDepth,snowDepth,ridgeDropX,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,driftDepth,snowDepth,ridgeDropX,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
@@ -74,8 +74,9 @@ export function createMountain(canvas){
   if(x<-286&&z>205&&z<590){
    const powder=powderDepth(x,z);
    color.lerp(bowlSnow,powder*.72);
-   if(x>-555&&x<-480&&z>285&&z<499){
-    const band=1-T.MathUtils.smoothstep(Math.abs(x-powderCliffX(z)-1.7),1.8,5);
+   const cliffOffset=powderCliffOffset(x,z);
+   if(Math.abs(cliffOffset-1.7)<5){
+    const band=1-T.MathUtils.smoothstep(Math.abs(cliffOffset-1.7),1.8,5);
     color.lerp(ledgeRock,band*powderCliffSpan(z)*.96);
    }
   }

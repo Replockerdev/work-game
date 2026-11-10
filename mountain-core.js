@@ -208,11 +208,15 @@ export function powderDepth(x,z){
  return Math.max(lower?1:0,edge*entry*merge*offLift);
 }
 export function powderCliffX(z){
- return -516+.28*(z-403)+3.4*Math.sin((z-386)*.11);
+ return -455+.24*(z-373)+3.4*Math.sin((z-356)*.11);
 }
 export function powderCliffSpan(z){
  // The lip spans the powder corridor and tapers into the banks on either side.
- return smooth((z-285)/30)*(1-smooth((z-477)/22));
+ return smooth((z-262)/30)*(1-smooth((z-454)/22));
+}
+export function powderCliffOffset(x,z){
+ if(x<=-520||x>=-422||z<=262||z>=476)return Infinity;
+ return x-powderCliffX(z);
 }
 // Staggered outcrops frame the opening, then sit on either side of the chute.
 export const bowlRocks=[
@@ -300,11 +304,6 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const loadingDeck=terminalWidth*(1-smooth((Math.abs(local.z-EXPERT.bottom)-11)/24));
   y+=(354-y)*summitDeck+(3.4-y)*loadingDeck;
  }
- if(x>-581&&x<-480&&z>285&&z<499){
-  const distance=x-powderCliffX(z);
-  const shelf=smooth((distance+29)/22)*(1-smooth(distance/2.4));
-  y+=powderCliffSpan(z)*shelf*(12+2.5*Math.sin(z*.085));
- }
  if(x>-444&&x<-250){
   // Round the former divide where the new bowl rolls into the old trough.
   const across=z-powderCenterZ(x);
@@ -312,6 +311,11 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const ends=smooth((x+444)/56)*(1-smooth((x+281)/31));
   const runout=78+(-x-280)*1.02+.18*across;
   y+=(runout-y)*width*ends;
+ }
+ const cliffOffset=powderCliffOffset(x,z);
+ if(cliffOffset>-29&&cliffOffset<2.4){
+  const shelf=smooth((cliffOffset+29)/22)*(1-smooth(cliffOffset/2.4));
+  y+=powderCliffSpan(z)*shelf*(12+2.5*Math.sin(z*.085));
  }
  if(x>-321&&x<-199&&z>driftExitStart&&z<driftExitEnd){
   const s=juniperSection(z),across=x-driftExitX(s);
@@ -522,8 +526,8 @@ export function step(p,input,dt,colliders=[]){const events=[];
  }
  const ground=height(p.x,p.z);
  const sideHit=powder>.2&&!p.air&&p.speed>9&&dz>0&&driftHits.some(hit=>oldZ<hit.z&&p.z>=hit.z&&Math.abs(p.x-hit.x)<hit.width*.61);
- const powderDrop=oldX>-560&&oldX<-480&&powderCliffSpan(p.z)>.88
-  &&oldX<=powderCliffX(oldZ)&&p.x>powderCliffX(p.z);
+ const powderDrop=powderCliffOffset(oldX,oldZ)<=0&&powderCliffOffset(p.x,p.z)>0
+  &&powderCliffSpan(p.z)>.88;
  const ridgeDrop=ridge>.6&&dz>0&&oldZ<=ridgeDropLip(oldX)&&p.z>ridgeDropLip(p.x);
  const cliffDrop=!p.air&&(powderDrop||ridgeDrop);
  const leavesSnow=!p.air&&p.speed>5&&ground<oldY+(oldGroundV-8)*dt;
