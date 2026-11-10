@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffX,powderCliffSpan,driftDepth,snowDepth,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffX,powderCliffSpan,driftDepth,snowDepth,ridgeDropX,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
@@ -80,6 +80,11 @@ export function createMountain(canvas){
    }
   }
   color.lerp(driftSnow,driftDepth(x,z)*.78);
+  if(x>-205&&x<-113&&z>400&&z<428){
+   const face=1-T.MathUtils.smoothstep(Math.abs(z-ridgeDropLip(x)-1.8),1.5,5.8);
+   const rock=terrainNoise(x*.19,z*.13);
+   color.lerp(ledgeRock,face*ridgeDropMask(x,z)*(.80+rock*.2));
+  }
   const n=Math.sin(x*.31+z*.047)*.024; color.offsetHSL(0,0,n);colors.push(color.r,color.g,color.b);}
  geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
  // Visible trail-edge poles and arrows make all three routes converge at the base.
@@ -96,6 +101,14 @@ export function createMountain(canvas){
  const driftSignX=-61,driftSignZ=juniperZ(52),driftSignY=height(driftSignX,driftSignZ);
  box(.16,2.25,.16,'#68523f',driftSignX,driftSignY+1.12,driftSignZ);
  trailSign('Snowdrift Glade  →',driftSignX,driftSignY+2.05,driftSignZ,'#365c50',5.6);
+ const forkZ=194,forkX=ridgeDropX(forkZ)+10,forkY=height(forkX,forkZ);
+ box(.14,2.2,.14,'#68523f',forkX,forkY+1.1,forkZ);
+ trailSign('←  Ridge Drop',forkX,forkY+1.95,forkZ,'#664735',5.4);
+ for(const side of [-1,1]){
+  const x=ridgeDropX(414)+side*10,z=ridgeDropLip(x)-4,y=height(x,z);
+  box(.12,1.35,.12,'#9e674a',x,y+.675,z);
+  box(.32,.25,.15,'#9e674a',x,y+1.18,z);
+ }
  for(const j of jumps){for(const side of [-1,1]){box(.16,2.2,.16,'#e9a66e',side*(j.width+1),height(side*(j.width+1),j.z)+1.1,j.z);box(1.2,.7,.08,'#e9a66e',side*(j.width+1),height(side*(j.width+1),j.z)+1.8,j.z);}line([[-j.width,height(0,j.z-.05)+.09,j.z-.05],[j.width,height(0,j.z-.05)+.09,j.z-.05]],'#e3a66e');}
  for(const z of [565,594]){
   const x=7,y=height(x,z);

@@ -116,6 +116,7 @@ export const pathX=(z,r)=>r.offset*Math.sin(Math.PI*clamp((juniperSection(z)-60)
 const groomer=routes[0];
 export const bowlRoute={id:'bowl',name:'Juniper Powder Bowl',color:'#638b91'};
 export const driftRoute={id:'drift',name:'Snowdrift Glade',color:'#527d66'};
+export const ridgeDropRoute={id:'ridge-drop',name:'Snowdrift Ridge Drop',color:'#986044'};
 const driftStart=juniperZ(32),driftEnd=juniperZ(300);
 const driftExitStart=juniperZ(263),driftExitEnd=juniperZ(310);
 export function driftX(section){
@@ -135,6 +136,20 @@ export function driftExitX(section){
  const trough=-5+22*smooth((z-257)/34)+20*smooth((z-288)/54)
   -54*smooth((z-405)/77)+29*smooth((z-482)/21)-12*smooth((z-505)/30);
  return main+(bowlX(z)+trough-main)*merge;
+}
+export function ridgeDropX(z){
+ return -259+102*smooth((z-174)/176)+11*smooth((z-413)/63);
+}
+export function ridgeDropLip(x){
+ return 414+.15*(x+157)+1.4*Math.sin((x+158)*.18);
+}
+export function ridgeDropMask(x,z){
+ if(x<-300||x>-105||z<=176||z>=494)return 0;
+ const shoulder=Math.abs(x-ridgeDropX(z));
+ const width=18+8*smooth((z-342)/49);
+ const sides=1-smooth((shoulder-12)/width);
+ const clearGroomer=smooth((pathX(z,groomer)-groomer.width-x)/16);
+ return sides*clearGroomer*smooth((z-176)/54)*(1-smooth((z-463)/31));
 }
 export function driftDepth(x,z){
  if(x>=-54||x<=-398||z<driftStart||z>driftEnd)return 0;
@@ -202,6 +217,7 @@ export const bowlRocks=[
 export function trailAt(x,z){
  const expert=expertLine(x,z);
  if(expert)return expert;
+ if(ridgeDropMask(x,z)>.55)return ridgeDropRoute;
  if(driftDepth(x,z)>.22)return driftRoute;
  if(powderDepth(x,z)>.2)return bowlRoute;
  if(z<juniperZ(85)||z>570)return null;
@@ -293,6 +309,16 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const runout=114-(s-263)*.74+.10*across;
   y+=(runout-y)*blend;
  }
+ const ridge=ridgeDropMask(x,z);
+ if(ridge>0){
+  // Carry speed along the shoulder, then open a rock face into a downhill landing.
+  const run=z-175,fromLip=z-ridgeDropLip(x);
+  const pitch=118-.24*run+.00005*run**2;
+  const roll=3*smooth((z-325)/40)*(1-smooth((z-375)/39));
+  const lip=1.3*smooth((fromLip+12)/12);
+  const drop=21*smooth(fromLip/3)+.14*Math.max(0,fromLip-3);
+  y+=(pitch+roll+lip-drop-y)*ridge;
+ }
  for(const j of jumps){const d=z-j.z;if(Math.abs(x)<j.width){if(d>=-17&&d<0)y+=j.h*smooth((d+17)/17);else if(d>=0&&d<2)y+=j.h*(1-smooth(d/2));}}return y;}
 export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}for(let i=0;i<900;i++){const z=juniperZ(95+rand()*465),x=-190+rand()*380;const near=routes.reduce((a,b)=>Math.abs(x-pathX(z,a))<Math.abs(x-pathX(z,b))?a:b),distance=Math.abs(x-pathX(z,near));const inGlade=near.id==='glades'&&distance<34;const gap=inGlade?Math.abs(x-pathX(z,near))<6:false;if((distance>near.width+7||inGlade&&!gap)&&Math.abs(x+28)>7){const s=.75+rand()*.75;if(!inBowl(x,z,7)&&!onExpertFace(x,z)&&driftDepth(x,z)<.14&&Math.hypot(x-expertLoading.x,z-expertLoading.z)>20)a.push({x,z,r:.8,s});}}
  for(let i=0;i<70;i++){
@@ -336,8 +362,9 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
   planted.push({x,z,s,r:.55+s*.27});
  }
  a.push(...planted);
- return a.filter(tree=>tree.z<driftExitStart||tree.z>driftExitEnd
-  ||Math.abs(tree.x-driftExitX(juniperSection(tree.z)))>17);
+ return a.filter(tree=>ridgeDropMask(tree.x,tree.z)<.18
+  &&(tree.z<driftExitStart||tree.z>driftExitEnd
+   ||Math.abs(tree.x-driftExitX(juniperSection(tree.z)))>17));
 }
 export const turnStyles=[
  {id:'normal',label:'Normal turns',grip:8.8,scrub:.42},
@@ -397,6 +424,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const carve=style.id==='carve'&&!input.brake;
  const shortSkid=style.id==='skid';
  const gladeSnow=driftDepth(p.x,p.z);
+ const ridge=ridgeDropMask(p.x,p.z);
  const powder=Math.max(gladeSnow,powderDepth(p.x,p.z));
  const edgeLimit=(11.4-3.4*powder)/Math.max(5,p.speed);
  let turnRate=(input.brake?1.9:1.55)/(1+p.speed*.019);
@@ -442,7 +470,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
 
  // Judge skating and tucking from the main slope, beyond any nearby jump lip.
  const headingX=Math.sin(p.angle),headingZ=Math.cos(p.angle);
- const downhillGrade=expert||powder>.2
+ const downhillGrade=expert||powder>.2||ridge>.2
   ?(height(p.x-12*headingX,p.z-12*headingZ)-height(p.x+12*headingX,p.z+12*headingZ))/24
   :p.z>=590?0:(baseHeight(p.z-12*headingZ)-baseHeight(p.z+12*headingZ))/24;
  const wasTucking=p.drive==='tuck';
@@ -455,7 +483,8 @@ export function step(p,input,dt,colliders=[]){const events=[];
  if(p.drive==='skate')p.skatePhase=(p.skatePhase||0)+dt*(1.35+Math.min(6,p.speed)*.07)*Math.PI*2;
  const push=p.drive==='skate'?8.8*Math.max(0,1-p.speed/10)+.9*Math.max(0,Math.sin(p.skatePhase*2)):0;
  const softSnow=powder*(.60+p.speed*.045)-gladeSnow*(.23+p.speed*.01);
- const surfaceDrag=(onTrail(p.x,p.z)||powder>.2?.30:.72)+softSnow;
+ const trailDrag=(onTrail(p.x,p.z)||powder>.2?.30:.72)+softSnow;
+ const surfaceDrag=trailDrag+(.18-trailDrag)*ridge;
  const aeroDrag=(p.drive==='tuck'?.0038:.0058)*p.speed**2;
  const edgeDrag=Math.abs(sideSlip)*p.speed*(input.brake?Math.max(.42,style.scrub):style.scrub);
  const brake=p.drive==='brake'?5.6+p.speed*.32:0;
@@ -474,8 +503,10 @@ export function step(p,input,dt,colliders=[]){const events=[];
  }
  const ground=height(p.x,p.z);
  const sideHit=powder>.2&&!p.air&&p.speed>9&&dz>0&&driftHits.some(hit=>oldZ<hit.z&&p.z>=hit.z&&Math.abs(p.x-hit.x)<hit.width*.61);
- const cliffDrop=!p.air&&oldX>-560&&oldX<-480&&powderCliffSpan(p.z)>.88
+ const powderDrop=oldX>-560&&oldX<-480&&powderCliffSpan(p.z)>.88
   &&oldX<=powderCliffX(oldZ)&&p.x>powderCliffX(p.z);
+ const ridgeDrop=ridge>.6&&dz>0&&oldZ<=ridgeDropLip(oldX)&&p.z>ridgeDropLip(p.x);
+ const cliffDrop=!p.air&&(powderDrop||ridgeDrop);
  const leavesSnow=!p.air&&p.speed>5&&ground<oldY+(oldGroundV-8)*dt;
  if(!p.air&&input.jump&&p.speed>1){
   p.air=true;p.vy=oldGroundV+4.4;p.airtime=0;events.push('takeoff');
