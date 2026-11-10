@@ -74,7 +74,7 @@ export function createMountain(canvas){
   if(x<-286&&z>205&&z<590){
    const powder=powderDepth(x,z);
    color.lerp(bowlSnow,powder*.72);
-   if(x>-533&&x<-490&&z>350&&z<456){
+   if(x>-555&&x<-480&&z>285&&z<499){
     const band=1-T.MathUtils.smoothstep(Math.abs(x-powderCliffX(z)-1.7),1.8,5);
     color.lerp(ledgeRock,band*powderCliffSpan(z)*.96);
    }
@@ -227,7 +227,7 @@ export function createMountain(canvas){
    liftSign('◆◆  Splitrock  →',x,y+1.65,z,'#493d58',5.5,-1);
    const bowlSignX=16,bowlSignZ=timberlineZ(32),bowlSignY=groundHeight(bowlSignX,bowlSignZ);
    liftBox(.14,2.25,.14,'#445a62',bowlSignX,bowlSignY+1.12,bowlSignZ);
-   liftSign('←  Powder Bowl',bowlSignX,bowlSignY+2,bowlSignZ,'#417587',5,-1);
+   liftSign('←  Powder Bowl · Cliff drop',bowlSignX,bowlSignY+2,bowlSignZ,'#417587',6.9,-1);
    const chuteZ=103,chuteMarkerX=chuteX(chuteZ)+9;
    const markerY=groundHeight(chuteMarkerX,chuteZ);
    liftBox(.13,1.7,.13,'#445a62',chuteMarkerX,markerY+.85,chuteZ);

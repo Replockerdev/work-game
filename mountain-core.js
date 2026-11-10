@@ -186,7 +186,8 @@ export function powderCliffX(z){
  return -516+.28*(z-403)+3.4*Math.sin((z-386)*.11);
 }
 export function powderCliffSpan(z){
- return 1-smooth((Math.abs(z-403)-37)/16);
+ // The lip spans the powder corridor and tapers into the banks on either side.
+ return smooth((z-285)/30)*(1-smooth((z-477)/22));
 }
 // Staggered outcrops frame the opening, then sit on either side of the chute.
 export const bowlRocks=[
@@ -217,8 +218,10 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
  if(x<-54&&x>-398&&z>driftStart&&z<driftEnd){
   const depth=driftDepth(x,z);
   // A shallow drainage draws the snow toward the lower bowl; waves leave some room for turns.
+  const section=juniperSection(z);
+  const pitch=-12*smooth((section-70)/139)*(1-smooth((section-228)/65));
   const driftRoll=1.9*Math.sin(z*.038+x*.022)+.82*Math.sin(z*.096-x*.054);
-  y+=depth*(-11+driftRoll);
+  y+=depth*(-11+pitch+driftRoll);
   for(const hit of driftHits){
    const d=z-hit.z;
    if(d< -hit.approach||d>hit.landing||Math.abs(x-hit.x)>=hit.width)continue;
@@ -271,7 +274,7 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const loadingDeck=terminalWidth*(1-smooth((Math.abs(local.z-EXPERT.bottom)-11)/24));
   y+=(354-y)*summitDeck+(3.4-y)*loadingDeck;
  }
- if(x>-570&&x<-490&&z>350&&z<456){
+ if(x>-581&&x<-480&&z>285&&z<499){
   const distance=x-powderCliffX(z);
   const shelf=smooth((distance+29)/22)*(1-smooth(distance/2.4));
   y+=powderCliffSpan(z)*shelf*(12+2.5*Math.sin(z*.085));
@@ -287,7 +290,7 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
  if(x>-321&&x<-199&&z>driftExitStart&&z<driftExitEnd){
   const s=juniperSection(z),across=x-driftExitX(s);
   const blend=smooth((s-263)/11)*(1-smooth((s-294)/16))*(1-smooth((Math.abs(across)-13)/22));
-  const runout=119-(s-263)*.89+.10*across;
+  const runout=114-(s-263)*.74+.10*across;
   y+=(runout-y)*blend;
  }
  for(const j of jumps){const d=z-j.z;if(Math.abs(x)<j.width){if(d>=-17&&d<0)y+=j.h*smooth((d+17)/17);else if(d>=0&&d<2)y+=j.h*(1-smooth(d/2));}}return y;}
@@ -393,7 +396,8 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const style=turnStyles[p.turnStyle]??turnStyles[0];
  const carve=style.id==='carve'&&!input.brake;
  const shortSkid=style.id==='skid';
- const powder=snowDepth(p.x,p.z);
+ const gladeSnow=driftDepth(p.x,p.z);
+ const powder=Math.max(gladeSnow,powderDepth(p.x,p.z));
  const edgeLimit=(11.4-3.4*powder)/Math.max(5,p.speed);
  let turnRate=(input.brake?1.9:1.55)/(1+p.speed*.019);
  if(carve)turnRate=Math.min(turnRate,edgeLimit*.88);
@@ -450,7 +454,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  }
  if(p.drive==='skate')p.skatePhase=(p.skatePhase||0)+dt*(1.35+Math.min(6,p.speed)*.07)*Math.PI*2;
  const push=p.drive==='skate'?8.8*Math.max(0,1-p.speed/10)+.9*Math.max(0,Math.sin(p.skatePhase*2)):0;
- const softSnow=powder*(.60+p.speed*.045);
+ const softSnow=powder*(.60+p.speed*.045)-gladeSnow*(.23+p.speed*.01);
  const surfaceDrag=(onTrail(p.x,p.z)||powder>.2?.30:.72)+softSnow;
  const aeroDrag=(p.drive==='tuck'?.0038:.0058)*p.speed**2;
  const edgeDrag=Math.abs(sideSlip)*p.speed*(input.brake?Math.max(.42,style.scrub):style.scrub);
@@ -470,11 +474,14 @@ export function step(p,input,dt,colliders=[]){const events=[];
  }
  const ground=height(p.x,p.z);
  const sideHit=powder>.2&&!p.air&&p.speed>9&&dz>0&&driftHits.some(hit=>oldZ<hit.z&&p.z>=hit.z&&Math.abs(p.x-hit.x)<hit.width*.61);
+ const cliffDrop=!p.air&&oldX>-560&&oldX<-480&&powderCliffSpan(p.z)>.88
+  &&oldX<=powderCliffX(oldZ)&&p.x>powderCliffX(p.z);
  const leavesSnow=!p.air&&p.speed>5&&ground<oldY+(oldGroundV-8)*dt;
  if(!p.air&&input.jump&&p.speed>1){
   p.air=true;p.vy=oldGroundV+4.4;p.airtime=0;events.push('takeoff');
- }else if(sideHit||leavesSnow){
-  p.air=true;p.vy=sideHit?Math.max(oldGroundV,.75):oldGroundV;p.airtime=0;events.push('takeoff');
+ }else if(cliffDrop||sideHit||leavesSnow){
+  const launch=cliffDrop?0:sideHit?-.65:oldGroundV;
+  p.air=true;p.vy=Math.max(oldGroundV,launch);p.airtime=0;events.push('takeoff');
  }
  // Keep the actual snow pitch through touchdown so steep snow doesn't launch the skis again.
  if(p.air){p.vy-=gravity*dt;p.y+=p.vy*dt;p.airtime+=dt;if(p.y<=ground){p.y=ground;p.air=false;p.vy=0;if(p.airtime>.25){p.jumps++;events.push('land');}p.groundV=(ground-height(oldX,oldZ))/dt;}}else{p.y=ground;p.groundV=(ground-oldY)/dt;}
