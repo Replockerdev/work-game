@@ -336,7 +336,11 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
  return a.filter(tree=>tree.z<driftExitStart||tree.z>driftExitEnd
   ||Math.abs(tree.x-driftExitX(juniperSection(tree.z)))>17);
 }
-export function spawn(){return {x:BASE.x,z:BASE.z-10,y:height(BASE.x,BASE.z-10),angle:0,yaw:0,speed:0,vy:0,groundV:0,air:false,jumps:0,airtime:0,bump:0,mode:'ski',ride:0,laps:0,passedTop:false,route:'Lift base',lastRoute:'',distance:0,drive:'glide',skatePhase:0};}
+export function spawn(){
+ return {x:BASE.x,z:BASE.z-10,y:height(BASE.x,BASE.z-10),angle:0,yaw:0,speed:0,measuredSpeed:0,
+  travelAngle:null,slip:0,vy:0,groundV:0,air:false,jumps:0,airtime:0,bump:0,mode:'ski',ride:0,laps:0,
+  passedTop:false,route:'Lift base',lastRoute:'',distance:0,drive:'glide',skatePhase:0};
+}
 const expertLoading=liftWorld(EXPERT,8,EXPERT.bottom);
 export function boardingLift(p){
  if(p.mode!=='ski')return null;
@@ -358,11 +362,14 @@ export function unload(p){
  // Stand just past the ramp in the same lane, facing down the hill with no push to either side.
  Object.assign(p,liftWorld(lift,lift.center+8,lift.top+7));
  p.y=height(p.x,p.z);
- p.mode='ski';p.angle=lift.yaw;p.speed=0;p.yaw=0;p.vy=0;p.groundV=0;p.drive='glide';
+ p.mode='ski';p.angle=lift.yaw;p.speed=0;p.measuredSpeed=0;p.travelAngle=null;p.slip=0;
+ p.yaw=0;p.vy=0;p.groundV=0;p.drive='glide';
  p.passedTop=true;
  p.route=lift===EXPERT?'Timberline Summit':'Summit · pick a line';
  return true;
 }
+const gravity=9.81;
+const angleDelta=(target,current)=>Math.atan2(Math.sin(target-current),Math.cos(target-current));
 export function step(p,input,dt,colliders=[]){const events=[];
  if(p.mode==='lift'){
   if(canUnload(p))return events;
@@ -374,40 +381,96 @@ export function step(p,input,dt,colliders=[]){const events=[];
   p.angle=lift.yaw;
   return events;
  }
- p.bump=Math.max(0,p.bump-dt);const direction=(input.left?1:0)-(input.right?1:0);const steering=(p.air?.7:1)*(input.brake?1.9:1.25);p.yaw+=(direction*steering-p.yaw)*(1-Math.exp(-dt*10));p.angle+=p.yaw*dt;
- const eps=.3,slope=(height(p.x,p.z-eps)-height(p.x,p.z+eps))/(eps*2),sideSlope=(height(p.x-eps,p.z)-height(p.x+eps,p.z))/(eps*2),g=18,grade=slope*Math.cos(p.angle)+sideSlope*Math.sin(p.angle);const gravity=g*grade;
- // Read the main slope over several ski lengths so a bump or ramp lip
- // cannot change the stance. The loading area always behaves as flat.
- const headingZ=Math.cos(p.angle),headingX=Math.sin(p.angle);
+ p.bump=Math.max(0,p.bump-dt);
+ const direction=Number(Boolean(input.left))-Number(Boolean(input.right));
+ const turnRate=p.air?.76:(input.brake?1.9:1.55)/(1+p.speed*.019);
+ p.yaw+=(direction*turnRate-p.yaw)*(1-Math.exp(-dt*9));
+ p.angle+=p.yaw*dt;
+
+ const eps=.55;
+ const fallZ=(height(p.x,p.z-eps)-height(p.x,p.z+eps))/(2*eps);
+ const fallX=(height(p.x-eps,p.z)-height(p.x+eps,p.z))/(2*eps);
  const expert=expertLine(p.x,p.z),powder=snowDepth(p.x,p.z);
+ // The skis turn first. Edges bring the momentum around while gravity pulls toward the fall line.
+ let travel=p.travelAngle??p.angle;
+ if(!p.air){
+  if(p.speed<1.2)travel=p.angle;
+  else{
+   const grip=(input.brake?5.5:8.8)/(1+p.speed*.081)*(1-powder*.16);
+   travel+=angleDelta(p.angle,travel)*(1-Math.exp(-grip*dt));
+   const crossfall=fallX*Math.cos(travel)-fallZ*Math.sin(travel);
+   travel+=gravity*crossfall*dt*.54/(Math.max(4,p.speed)*(1+fallX**2+fallZ**2));
+  }
+ }
+ p.travelAngle=travel;
+ p.slip=angleDelta(p.angle,travel);
+ const forwardX=Math.sin(travel),forwardZ=Math.cos(travel);
+ const grade=fallX*forwardX+fallZ*forwardZ;
+ const downhillPull=gravity*grade/(1+fallX**2+fallZ**2);
+
+ // Judge skating and tucking from the main slope, beyond any nearby jump lip.
+ const headingX=Math.sin(p.angle),headingZ=Math.cos(p.angle);
  const downhillGrade=expert||powder>.2
   ?(height(p.x-12*headingX,p.z-12*headingZ)-height(p.x+12*headingX,p.z+12*headingZ))/24
   :p.z>=590?0:(baseHeight(p.z-12*headingZ)-baseHeight(p.z+12*headingZ))/24;
  const wasTucking=p.drive==='tuck';
  const canTuck=downhillGrade>=(wasTucking?.055:.085)&&p.speed>=(wasTucking?6:7.5);
- p.drive='glide';
+ p.drive=input.brake&&!p.air?'brake':'glide';
  if(input.tuck&&!input.brake&&!p.air){
   if(canTuck)p.drive='tuck';
   else if(p.speed<11)p.drive='skate';
  }
  if(p.drive==='skate')p.skatePhase=(p.skatePhase||0)+dt*(1.35+Math.min(6,p.speed)*.07)*Math.PI*2;
  const push=p.drive==='skate'?8.8*Math.max(0,1-p.speed/10)+.9*Math.max(0,Math.sin(p.skatePhase*2)):0;
- const surfaceDrag=powder>.2?.28+powder*.65:onTrail(p.x,p.z)?.28:1.5;
- const drag=((p.drive==='tuck'?.0065:.009)+powder*.004)*p.speed*p.speed+surfaceDrag+Math.abs(p.yaw)*.55;
- p.speed=clamp(p.speed+(gravity+push-drag-(input.brake?10:0))*dt,0,p.drive==='tuck'?28:23);if(!p.air&&p.speed<.05)p.speed=0;
- const oldX=p.x,oldZ=p.z,oldY=p.y,oldGroundV=p.groundV,dx=Math.sin(p.angle)*p.speed*dt,dz=Math.cos(p.angle)*p.speed*dt;p.x=clamp(p.x+dx,SNOW_WEST+10,SNOW_EAST-10);p.z=clamp(p.z+dz,SNOW_NORTH+12,657);p.distance+=Math.hypot(dx,dz);const ground=height(p.x,p.z);
+ const softSnow=powder*(.60+p.speed*.045);
+ const surfaceDrag=(onTrail(p.x,p.z)||powder>.2?.30:.72)+softSnow;
+ const aeroDrag=(p.drive==='tuck'?.0038:.0058)*p.speed**2;
+ const edgeDrag=Math.abs(Math.sin(p.slip))*p.speed*.42;
+ const brake=p.drive==='brake'?5.6+p.speed*.32:0;
+ const acceleration=p.air?-.0024*p.speed**2:downhillPull+push-surfaceDrag-aeroDrag-edgeDrag-brake;
+ p.speed=clamp(p.speed+acceleration*dt,0,39);
+ if(!p.air&&p.speed<.05)p.speed=0;
+
+ const oldX=p.x,oldZ=p.z,oldY=p.y,oldGroundV=p.groundV;
+ const dx=forwardX*p.speed*dt,dz=forwardZ*p.speed*dt;
+ p.x=clamp(p.x+dx,SNOW_WEST+10,SNOW_EAST-10);
+ p.z=clamp(p.z+dz,SNOW_NORTH+12,657);
+ const actualX=p.x-oldX,actualZ=p.z-oldZ,horizontal=Math.hypot(actualX,actualZ);
+ if(horizontal+1e-7<Math.hypot(dx,dz)){
+  p.speed=horizontal/dt;
+  if(p.speed>.05)p.travelAngle=Math.atan2(actualX,actualZ);
+ }
+ const ground=height(p.x,p.z);
  const sideHit=powder>.2&&!p.air&&p.speed>9&&dz>0&&driftHits.some(hit=>oldZ<hit.z&&p.z>=hit.z&&Math.abs(p.x-hit.x)<hit.width*.61);
- if(!p.air&&input.jump&&p.speed>1){p.air=true;p.vy=clamp(oldGroundV,-20,20)+7;p.airtime=0;events.push('takeoff');}
- else if(sideHit||!p.air&&ground<oldY+oldGroundV*dt-.075&&p.speed>5){p.air=true;p.vy=sideHit?Math.max(oldGroundV,1.65):oldGroundV;p.airtime=0;events.push('takeoff');}
+ const leavesSnow=!p.air&&p.speed>5&&ground<oldY+(oldGroundV-8)*dt;
+ if(!p.air&&input.jump&&p.speed>1){
+  p.air=true;p.vy=oldGroundV+4.4;p.airtime=0;events.push('takeoff');
+ }else if(sideHit||leavesSnow){
+  p.air=true;p.vy=sideHit?Math.max(oldGroundV,.75):oldGroundV;p.airtime=0;events.push('takeoff');
+ }
  // Keep the actual snow pitch through touchdown so steep snow doesn't launch the skis again.
- if(p.air){p.vy-=g*dt;p.y+=p.vy*dt;p.airtime+=dt;if(p.y<=ground){p.y=ground;p.air=false;p.vy=0;if(p.airtime>.25){p.jumps++;events.push('land');}p.groundV=(ground-height(oldX,oldZ))/dt;}}else{p.y=ground;p.groundV=(ground-oldY)/dt;}
- for(const o of colliders){const d=Math.hypot(p.x-o.x,p.z-o.z),radius=(o.r??.8)+.4;if(d<radius&&p.y-ground<5&&p.bump<=0){const nx=(p.x-o.x)/(d||1),nz=(p.z-o.z)/(d||1);p.x=o.x+nx*(radius+.4);p.z=o.z+nz*(radius+.4);p.speed*=.25;p.bump=.8;events.push('bump');}}
+ if(p.air){p.vy-=gravity*dt;p.y+=p.vy*dt;p.airtime+=dt;if(p.y<=ground){p.y=ground;p.air=false;p.vy=0;if(p.airtime>.25){p.jumps++;events.push('land');}p.groundV=(ground-height(oldX,oldZ))/dt;}}else{p.y=ground;p.groundV=(ground-oldY)/dt;}
+ // Measure the actual distance in 3D before any collision push-out can move the skier.
+ const distance=Math.hypot(horizontal,p.y-oldY);
+ p.distance+=distance;
+ p.measuredSpeed+=(distance/dt-p.measuredSpeed)*(1-Math.exp(-dt*9));
+ for(const o of colliders){
+  const d=Math.hypot(p.x-o.x,p.z-o.z),radius=(o.r??.8)+.4;
+  if(d>=radius||p.y-ground>=5||p.bump>0)continue;
+  const nx=d?(p.x-o.x)/d:-forwardX,nz=d?(p.z-o.z)/d:-forwardZ;
+  p.x=clamp(o.x+nx*(radius+.4),SNOW_WEST+10,SNOW_EAST-10);
+  p.z=clamp(o.z+nz*(radius+.4),SNOW_NORTH+12,657);
+  p.speed*=.25;p.measuredSpeed*=.25;
+  if(!p.air){p.y=height(p.x,p.z);p.groundV=-grade*p.speed;}
+  p.bump=.8;events.push('bump');
+ }
  const stillAtTimberline=p.route==='Timberline Summit'&&!expert&&powder<=.2&&expertLocal(p.x,p.z).z<20;
  const route=stillAtTimberline?null:trailAt(p.x,p.z);
  if(route&&(expert||route===driftRoute||p.z>juniperZ(105)&&p.z<570)){if(route.name!==p.route){p.route=route.name;events.push('route');}p.lastRoute=route.name;}
  const returnedToBase=p.z>585&&p.x>-86;
  const returnedToExpert=p.activeLift===EXPERT&&boardingLift(p)===EXPERT;
  if(p.passedTop&&(returnedToBase||returnedToExpert)){p.laps++;p.passedTop=false;events.push('lap');}
- if(p.z>590&&returnedToBase){if(!input.tuck)p.speed=Math.max(0,p.speed-4*dt);p.route='Lift base';}
+ if(p.z>590&&returnedToBase)p.route='Lift base';
+ if(!p.air&&p.speed<.05){p.speed=0;p.measuredSpeed=0;}
  return events;}
 

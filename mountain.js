@@ -55,9 +55,9 @@ function drawMap(){
 function ui(){
  const lift=p.mode==='lift',near=boardingLift(p),atTop=canUnload(p);
  const expertDescent=p.route==='Timberline Summit'||expertRoutes.some(route=>route.name===p.route);
- $('speed').textContent=lift?'—':Math.round(p.speed*3.6);
+ $('speed').textContent=lift?'—':Math.round(p.measuredSpeed*3.6);
  $('laps').textContent=p.laps;
- $('movement').textContent=atTop?'Press E when you’re ready':lift?'Chairlift · '+Math.round(p.ride*100)+'%':p.air?'In the air':p.drive==='skate'?'Skating · hold W to push':p.drive==='tuck'?'Tucking · release W to stand':p.speed<1?'Hold W to skate · A / D turns your skis':'Carve with A / D · S slows you down';
+ $('movement').textContent=atTop?'Press E when you’re ready':lift?'Chairlift · '+Math.round(p.ride*100)+'%':p.air?'In the air':p.drive==='skate'?'Skating · hold W to push':p.drive==='tuck'?'Tucking · release W to stand':p.speed<1?'Hold W to skate · A / D turns your skis':p.drive==='brake'?'Braking · steer across the slope':'Carve with A / D · S slows you down';
  $('route').textContent=lift?p.activeLift.name+(atTop?' · At the summit':' · Going up'):p.route;
  $('routeDot').style.background=lift?'#d6a166':[...routes,...expertRoutes,driftRoute].find(r=>r.name===p.route)?.color||'#72bfb4';
  const atJuniperSummit=p.z<juniperZ(75);

@@ -327,13 +327,15 @@ export function createMountain(canvas){
  if(!lift&&!p.air&&p.speed>1&&!paused){if(previous&&Math.hypot(p.x-previous.x,p.z-previous.z)<3){for(const side of [-1,1]){const ox=Math.cos(p.angle)*.29*side,oz=-Math.sin(p.angle)*.29*side;const k=(trackCount++%max)*6;trackPositions.set([previous.x+ox,previous.y+.04,previous.z+oz,p.x+ox,height(p.x+ox,p.z+oz)+.04,p.z+oz],k);}trackGeo.attributes.position.needsUpdate=true;trackGeo.setDrawRange(0,Math.min(trackCount,max)*2);}previous={x:p.x,y:p.y,z:p.z};}else previous=null;
  puffs.visible=!lift&&!p.air&&p.speed>4;
  if(puffs.visible){
-  const powder=snowDepth(p.x,p.z),sin=Math.sin(p.angle),cos=Math.cos(p.angle);
-  const spread=.24+Math.abs(p.yaw)*.72+powder*.8;
+  const travel=p.travelAngle??p.angle;
+  const powder=snowDepth(p.x,p.z),sin=Math.sin(travel),cos=Math.cos(travel);
+  const skid=Math.sin(p.slip);
+  const spread=.24+Math.abs(skid)*1.6+powder*.8+(p.drive==='brake'?.45:0);
   const length=2+powder*2.2;
   const rise=height(p.x-sin*length,p.z-cos*length)-p.y;
   puffs.material.size=.22+powder*.72;
   for(let i=0;i<60;i++){
-   const t=(time*2+i*.17)%1,lateral=Math.cos(i*8.7)*t*spread;
+   const t=(time*2+i*.17)%1,lateral=(Math.cos(i*8.7)*spread+skid*1.35)*t;
    const behind=t*length;
    puffPositions[i*3]=p.x+cos*lateral-sin*behind;
    puffPositions[i*3+1]=p.y+rise*t+t*(.62+powder*.9)*(.55+.45*Math.sin(i*3.4)**2);
@@ -341,7 +343,7 @@ export function createMountain(canvas){
   }
   puffs.geometry.attributes.position.needsUpdate=true;
  }
- const heading=p.mode==='ski'?p.angle:config.yaw;
+ const heading=lift?config.yaw:p.angle-p.slip*.55*T.MathUtils.smoothstep(p.speed,2,8);
  const turn=heading-camHeading;
  camHeading=camReady?camHeading+Math.atan2(Math.sin(turn),Math.cos(turn))*(1-Math.exp(-dt*7)):heading;
  const forwardX=Math.sin(camHeading),forwardZ=Math.cos(camHeading);
