@@ -158,11 +158,13 @@ export function ridgeDropLip(x){
  return 414+.15*(x+157)+1.4*Math.sin((x+158)*.18);
 }
 export function ridgeDropMask(x,z){
- if(x<-318||x>-90||z<=151||z>=494)return 0;
- const shoulder=Math.abs(x-ridgeDropX(z));
- const width=18+8*smooth((z-342)/49);
- const sides=1-smooth((shoulder-22)/width);
- const clearGroomer=smooth((pathX(z,groomer)-groomer.width-x)/16);
+ if(x<-330||x>-90||z<=151||z>=494)return 0;
+ const across=x-ridgeDropX(z);
+ const width=smooth((z-190)/64);
+ // Open the run-up toward the bowl where skiers naturally swing wide.
+ const core=across<0?23+25*width:23+16*width;
+ const sides=1-smooth((Math.abs(across)-core)/18);
+ const clearGroomer=smooth((pathX(z,groomer)-groomer.width-x)/9);
  return sides*clearGroomer*smooth((z-151)/40)*(1-smooth((z-463)/31));
 }
 export function driftDepth(x,z){
@@ -226,8 +228,7 @@ export function powderCliffOffset(x,z){
 export const bowlRocks=[
  {z:180,offset:-20,size:4.4},{z:187,offset:-23,size:3.1},
  {z:208,offset:21,size:3.2},{z:216,offset:24,size:2.6},
- {z:266,offset:-33,size:3.1},{z:285,offset:-39,size:2.7},
- {z:330,offset:51,size:5.9},{z:355,offset:56,size:4.4}
+ {z:266,offset:-33,size:3.1},{z:285,offset:-39,size:2.7}
 ].map(({z:section,offset,size})=>{
  const z=juniperZ(section);
  return {x:bowlX(z)+offset,z,size,r:size*.83};

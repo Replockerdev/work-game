@@ -81,7 +81,7 @@ export function createMountain(canvas){
    }
   }
   color.lerp(driftSnow,driftDepth(x,z)*.78);
-  if(x>-205&&x<-113&&z>400&&z<428){
+ if(x>-230&&x<-105&&z>397&&z<432){
    const face=1-T.MathUtils.smoothstep(Math.abs(z-ridgeDropLip(x)-1.8),1.5,5.8);
    const rock=terrainNoise(x*.19,z*.13);
    color.lerp(ledgeRock,face*ridgeDropMask(x,z)*(.80+rock*.2));
@@ -105,10 +105,13 @@ export function createMountain(canvas){
  const forkZ=194,forkX=ridgeDropX(forkZ)+10,forkY=height(forkX,forkZ);
  box(.14,2.2,.14,'#68523f',forkX,forkY+1.1,forkZ);
  trailSign('←  Ridge Drop',forkX,forkY+1.95,forkZ,'#664735',5.4);
- for(const side of [-1,1]){
-  const x=ridgeDropX(414)+side*10,z=ridgeDropLip(x)-4,y=height(x,z);
-  box(.12,1.35,.12,'#9e674a',x,y+.675,z);
-  box(.32,.25,.15,'#9e674a',x,y+1.18,z);
+ for(const distance of [237,314,414]){
+  for(const side of [-1,1]){
+   const x=ridgeDropX(distance)+side*15,z=distance===414?ridgeDropLip(x)-4:distance;
+   const y=height(x,z);
+   box(.12,1.35,.12,'#9e674a',x,y+.675,z);
+   box(.32,.25,.15,'#9e674a',x,y+1.18,z);
+  }
  }
  for(const j of jumps){for(const side of [-1,1]){box(.16,2.2,.16,'#e9a66e',side*(j.width+1),height(side*(j.width+1),j.z)+1.1,j.z);box(1.2,.7,.08,'#e9a66e',side*(j.width+1),height(side*(j.width+1),j.z)+1.8,j.z);}line([[-j.width,height(0,j.z-.05)+.09,j.z-.05],[j.width,height(0,j.z-.05)+.09,j.z-.05]],'#e3a66e');}
  for(const z of [565,594]){
