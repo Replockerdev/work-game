@@ -146,20 +146,24 @@ export function driftExitX(section){
   -54*smooth((z-405)/77)+29*smooth((z-482)/21)-12*smooth((z-505)/30);
  return main+(bowlX(z)+trough-main)*merge;
 }
+const ridgeStartX=-259,ridgeStartZ=176;
+const ridgeDirectionX=102/238;
+const ridgePlanLength=Math.hypot(ridgeDirectionX,1);
+const ridgeGrade=.21;
 export function ridgeDropX(z){
- return -259+102*smooth((z-174)/176)+11*smooth((z-413)/63);
+ const after=Math.max(0,z-418);
+ return ridgeStartX+(z-ridgeStartZ)*ridgeDirectionX-.30*after*smooth(after/40);
 }
 export function ridgeDropLip(x){
  return 414+.15*(x+157)+1.4*Math.sin((x+158)*.18);
 }
 export function ridgeDropMask(x,z){
- if(x<-300||x>-105||z<=176||z>=494)return 0;
+ if(x<-318||x>-90||z<=151||z>=494)return 0;
  const shoulder=Math.abs(x-ridgeDropX(z));
  const width=18+8*smooth((z-342)/49);
- const core=12+6*smooth((z-230)/88);
- const sides=1-smooth((shoulder-core)/width);
+ const sides=1-smooth((shoulder-22)/width);
  const clearGroomer=smooth((pathX(z,groomer)-groomer.width-x)/16);
- return sides*clearGroomer*smooth((z-176)/54)*(1-smooth((z-463)/31));
+ return sides*clearGroomer*smooth((z-151)/40)*(1-smooth((z-463)/31));
 }
 export function driftDepth(x,z){
  if(x>=-54||x<=-398||z<driftStart||z>driftEnd)return 0;
@@ -325,9 +329,10 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
  }
  const ridge=ridgeDropMask(x,z);
  if(ridge>0){
-  // Increase the grade gradually all the way to the lip.
-  const run=z-175,fromLip=z-ridgeDropLip(x);
-  const pitch=117-.16*run-.00028*run**2;
+  // Use one plane from the fork to the lip so the grade is steady across the lane.
+  const run=(z-ridgeStartZ+(x-ridgeStartX)*ridgeDirectionX)/ridgePlanLength;
+  const pitch=114-ridgeGrade*run;
+  const fromLip=z-ridgeDropLip(x);
   const drop=21*smooth(fromLip/3)+.14*Math.max(0,fromLip-3);
   y+=(pitch-drop-y)*ridge;
  }
