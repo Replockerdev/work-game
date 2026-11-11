@@ -73,10 +73,14 @@ function ui(){
  $('route').textContent=lift?p.activeLift.name+(atTop?' · At the summit':' · Going up'):p.route;
  $('routeDot').style.background=lift?'#d6a166':[...routes,...expertRoutes,driftRoute,ridgeDropRoute].find(r=>r.name===p.route)?.color||'#72bfb4';
  const atJuniperSummit=p.z<juniperZ(75);
- $('prompt').hidden=!near&&!lift&&(expertDescent||p.route===driftRoute.name||p.z<565&&!atJuniperSummit);
+ const atRidgeFork=!near&&!lift&&p.z>145&&p.z<220&&p.x<-190&&Math.abs(p.x-ridgeDropX(p.z))<62;
+ const prompt=$('prompt');
+ prompt.classList.toggle('ridge-hint',atRidgeFork);
+ prompt.hidden=!near&&!lift&&!atRidgeFork&&(expertDescent||p.route===driftRoute.name||p.z<565&&!atJuniperSummit);
  $('interact').hidden=!near&&!atTop;
  $('interact').textContent=atTop?'E · Unload':'E · Board chair';
- $('promptText').textContent=atTop?'Your chair will wait here.':lift?'Press E to unload when you reach the summit.':near?'Press E to board '+near.name+'.':atJuniperSummit?'Glades ←    Park straight ahead    Groomer & Snowdrift →':'Juniper base '+Math.round(Math.hypot(p.x-BASE.x,p.z-BASE.z))+' m · head into the base clearing';
+ const ridgeHint=p.route===ridgeDropRoute.name?'Ridge Drop ahead · Stay between the orange stakes':'← Ridge Drop · Follow the orange stakes';
+ $('promptText').textContent=atTop?'Your chair will wait here.':lift?'Press E to unload when you reach the summit.':near?'Press E to board '+near.name+'.':atRidgeFork?ridgeHint:atJuniperSummit?'Glades ←    Park straight ahead    Groomer & Snowdrift →':'Juniper base '+Math.round(Math.hypot(p.x-BASE.x,p.z-BASE.z))+' m · head into the base clearing';
  if(!$('trailMap').hidden)drawMap();
 }
 function frame(t){const dt=Math.min((t-last)/1000,.1)||0;last=t;if(!document.hidden){if(started&&!paused){let remaining=dt;while(remaining>0){const d=Math.min(remaining,1/120),events=step(p,{left:keys.a||keys.ArrowLeft,right:keys.d||keys.ArrowRight,tuck:keys.w||keys.ArrowUp,brake:keys.s||keys.ArrowDown,jump},d,view.trees);jump=false;for(const e of events){if(e==='land')toast('Landed. '+p.jumps+' clean '+(p.jumps===1?'jump':'jumps')+'.',2);if(e==='bump')toast('A soft bump. Brake and pick your way through.',2);if(e==='lap'){try{localStorage.setItem('work-game-three-lines-laps',p.laps);}catch{}toast('Lap complete. E boards in the loading area.',4);}}remaining-=d;}}

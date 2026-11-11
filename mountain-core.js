@@ -149,7 +149,7 @@ export function driftExitX(section){
 const ridgeStartX=-259,ridgeStartZ=176;
 const ridgeDirectionX=102/238;
 const ridgePlanLength=Math.hypot(ridgeDirectionX,1);
-const ridgeGrade=.21;
+const ridgeGrade=.30;
 export function ridgeDropX(z){
  const after=Math.max(0,z-418);
  return ridgeStartX+(z-ridgeStartZ)*ridgeDirectionX-.30*after*smooth(after/40);
@@ -165,7 +165,12 @@ export function ridgeDropMask(x,z){
  const core=across<0?23+25*width:23+16*width;
  const sides=1-smooth((Math.abs(across)-core)/18);
  const clearGroomer=smooth((pathX(z,groomer)-groomer.width-x)/9);
- return sides*clearGroomer*smooth((z-151)/40)*(1-smooth((z-463)/31));
+ const runup=sides*clearGroomer*smooth((z-151)/40);
+ // Hold a fixed cross section across the final approach. A moving trail-edge
+ // blend here can flatten the snow immediately before the cliff.
+ const finalSides=smooth((x+246)/24)*(1-smooth((x+109)/15));
+ const finalApproach=finalSides*smooth((z-ridgeDropLip(x)+61)/25);
+ return Math.max(runup,finalApproach)*(1-smooth((z-463)/31));
 }
 export function driftDepth(x,z){
  if(x>=-54||x<=-398||z<driftStart||z>driftEnd)return 0;
@@ -334,8 +339,9 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const run=(z-ridgeStartZ+(x-ridgeStartX)*ridgeDirectionX)/ridgePlanLength;
   const pitch=114-ridgeGrade*run;
   const fromLip=z-ridgeDropLip(x);
-  const drop=21*smooth(fromLip/3)+.14*Math.max(0,fromLip-3);
-  y+=(pitch-drop-y)*ridge;
+  const drop=21*smooth(fromLip/3);
+  const landing=(ridgeGrade/ridgePlanLength-.10)*Math.max(0,fromLip-3);
+  y+=(pitch-drop+landing-y)*ridge;
  }
  const entry=driftEntryMask(x,z);
  if(entry>0){

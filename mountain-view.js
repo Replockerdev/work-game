@@ -12,7 +12,7 @@ export function createMountain(canvas){
  function mesh(geo,c,parent=scene){const m=new T.Mesh(geo,mat(c));m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
  function box(w,h,d,c,x,y,z,parent=scene){const m=mesh(new T.BoxGeometry(w,h,d),c,parent);m.position.set(x,y,z);return m;}
  function line(points,c,parent=scene){const l=new T.Line(new T.BufferGeometry().setFromPoints(points.map(p=>new T.Vector3(...p))),new T.LineBasicMaterial({color:c}));parent.add(l);return l;}
- function trailSign(label,x,y,z,color,width=3.5,facing=-1,parent=scene){
+ function trailSign(label,x,y,z,color,width=3.5,facing=-1,parent=scene,panelHeight=.69){
   const canvas=document.createElement('canvas');
   canvas.width=768;
   canvas.height=150;
@@ -29,11 +29,11 @@ export function createMountain(canvas){
   ctx.fillText(label,384,78,695);
   const map=new T.CanvasTexture(canvas);
   map.colorSpace=T.SRGBColorSpace;
-  const panel=new T.Mesh(new T.PlaneGeometry(width,.69),new T.MeshBasicMaterial({map}));
+  const panel=new T.Mesh(new T.PlaneGeometry(width,panelHeight),new T.MeshBasicMaterial({map}));
   panel.position.set(x,y,z+facing*.073);
   panel.rotation.y=facing<0?Math.PI:0;
   parent.add(panel);
-  box(width,.69,.14,'#343e3e',x,y,z,parent);
+  box(width,panelHeight,.14,'#343e3e',x,y,z,parent);
   return panel;
  }
  const snowWidth=SNOW_EAST-SNOW_WEST,snowLength=SNOW_SOUTH-SNOW_NORTH;
@@ -102,10 +102,10 @@ export function createMountain(canvas){
  const driftSignX=-61,driftSignZ=juniperZ(52),driftSignY=height(driftSignX,driftSignZ);
  box(.16,2.25,.16,'#68523f',driftSignX,driftSignY+1.12,driftSignZ);
  trailSign('Snowdrift Glade  →',driftSignX,driftSignY+2.05,driftSignZ,'#365c50',5.6);
- const forkZ=194,forkX=ridgeDropX(forkZ)+10,forkY=height(forkX,forkZ);
- box(.14,2.2,.14,'#68523f',forkX,forkY+1.1,forkZ);
- trailSign('←  Ridge Drop',forkX,forkY+1.95,forkZ,'#664735',5.4);
- for(const distance of [237,314,414]){
+ const forkZ=187,forkX=ridgeDropX(forkZ)+2,forkY=height(forkX,forkZ);
+ box(.17,2.8,.17,'#68523f',forkX,forkY+1.4,forkZ);
+ trailSign('←  RIDGE DROP',forkX,forkY+2.3,forkZ,'#824624',7.2,-1,scene,1.1);
+ for(const distance of [204,237,314,414]){
   for(const side of [-1,1]){
    const x=ridgeDropX(distance)+side*15,z=distance===414?ridgeDropLip(x)-4:distance;
    const y=height(x,z);

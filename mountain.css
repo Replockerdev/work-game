@@ -4,3 +4,5 @@
 #turnStyle{display:block;margin-top:8px;padding:5px 8px;border:1px solid #ffffff99;border-radius:5px;background:#f7fcf2dd;font-size:10px;font-weight:700;pointer-events:auto;text-shadow:none;white-space:nowrap}
 #turnStyle[data-style=carve]{background:#deeff3;color:#245a74}
 #turnStyle[data-style=skid]{background:#f4e9d8;color:#704e30}
+
+#prompt.ridge-hint>span{padding:7px 12px;border-radius:6px;background:#633f2aeb;color:#fff8ed;text-shadow:none}
