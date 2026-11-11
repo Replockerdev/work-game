@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,driftDepth,snowDepth,ridgeDropX,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
@@ -80,7 +80,9 @@ export function createMountain(canvas){
     color.lerp(ledgeRock,band*powderCliffSpan(z)*.96);
    }
   }
-  color.lerp(driftSnow,driftDepth(x,z)*.78);
+  const glade=Math.max(driftDepth(x,z),ridgeDropMask(x,z)*(1-T.MathUtils.smoothstep(z,478,532)));
+  color.lerp(driftSnow,glade*.78);
+  color.multiplyScalar(1+glade*(terrainNoise(x*.17,z*.13)-.5)*.065);
  if(x>-230&&x<-105&&z>397&&z<432){
    const face=1-T.MathUtils.smoothstep(Math.abs(z-ridgeDropLip(x)-1.8),1.5,5.8);
    const rock=terrainNoise(x*.19,z*.13);
@@ -102,17 +104,6 @@ export function createMountain(canvas){
  const driftSignX=-61,driftSignZ=juniperZ(52),driftSignY=height(driftSignX,driftSignZ);
  box(.16,2.25,.16,'#68523f',driftSignX,driftSignY+1.12,driftSignZ);
  trailSign('Snowdrift Glade  →',driftSignX,driftSignY+2.05,driftSignZ,'#365c50',5.6);
- const forkZ=187,forkX=ridgeDropX(forkZ)+2,forkY=height(forkX,forkZ);
- box(.17,2.8,.17,'#68523f',forkX,forkY+1.4,forkZ);
- trailSign('←  RIDGE DROP',forkX,forkY+2.3,forkZ,'#824624',7.2,-1,scene,1.1);
- for(const distance of [204,237,314,414]){
-  for(const side of [-1,1]){
-   const x=ridgeDropX(distance)+side*15,z=distance===414?ridgeDropLip(x)-4:distance;
-   const y=height(x,z);
-   box(.12,1.35,.12,'#9e674a',x,y+.675,z);
-   box(.32,.25,.15,'#9e674a',x,y+1.18,z);
-  }
- }
  for(const j of jumps){for(const side of [-1,1]){box(.16,2.2,.16,'#e9a66e',side*(j.width+1),height(side*(j.width+1),j.z)+1.1,j.z);box(1.2,.7,.08,'#e9a66e',side*(j.width+1),height(side*(j.width+1),j.z)+1.8,j.z);}line([[-j.width,height(0,j.z-.05)+.09,j.z-.05],[j.width,height(0,j.z-.05)+.09,j.z-.05]],'#e3a66e');}
  for(const z of [565,594]){
   const x=7,y=height(x,z);

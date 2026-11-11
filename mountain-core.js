@@ -159,7 +159,7 @@ export function ridgeDropX(z){
  return ridgeStartX+(z-ridgeStartZ)*ridgeDirectionX-.30*after*smooth(after/40);
 }
 export function ridgeDropLip(x){
- return 414+.15*(x+157)+1.4*Math.sin((x+158)*.18);
+ return 414+.15*(x+157)+3.7*Math.sin((x+158)*.105)+1.1*Math.sin((x+158)*.27);
 }
 export function ridgeDropMask(x,z){
  if(x<-330||x>10||z<=151||z>=586)return 0;
@@ -198,7 +198,8 @@ export const driftHits=[
  {section:208,offset:33,h:2.65,width:10,approach:17,landing:9},
  {section:240,offset:-21,h:1.8,width:8,approach:14,landing:8}
 ].map(hit=>({...hit,x:driftX(hit.section)+hit.offset,z:2*Math.round(juniperZ(hit.section)/2)}));
-export const snowDepth=(x,z)=>Math.max(driftDepth(x,z),powderDepth(x,z));
+export const ridgeGladeDepth=(x,z)=>ridgeDropMask(x,z)*(1-smooth((z-478)/54));
+export const snowDepth=(x,z)=>Math.max(driftDepth(x,z),powderDepth(x,z),ridgeGladeDepth(x,z));
 export const bowlStart=juniperZ(148),bowlEnd=juniperZ(584);
 export function bowlX(z){
  const section=juniperSection(z);
@@ -251,7 +252,7 @@ export const bowlRocks=[
 export function trailAt(x,z){
  const expert=expertLine(x,z);
  if(expert)return expert;
- if(ridgeDropMask(x,z)>.55)return ridgeDropRoute;
+ if(ridgeDropMask(x,z)>.55)return driftRoute;
  if(driftDepth(x,z)>.22)return driftRoute;
  if(powderDepth(x,z)>.2)return bowlRoute;
  if(z<juniperZ(85)||z>570)return null;
@@ -363,6 +364,11 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
    floor=3.4+(joinHeight-3.4)*(1-clamp((z-440)/110,0,1))**1.35;
    if(z>=550)floor=Math.min(y,floor);
   }
+  // Small wind pillows break up the planar approach without taking away its
+  // continuous downhill grade or rounding away the actual cliff edge.
+  const pillows=(.28*Math.sin(x*.058+z*.046)+.12*Math.sin(z*.16-x*.09))
+   *smooth((z-184)/30)*(1-smooth((z-398)/15));
+  floor+=pillows;
   y+=(floor-y)*ridge;
  }
  const entry=driftEntryMask(x,z);
@@ -415,12 +421,37 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
   planted.push({x,z,s,r:.55+s*.27});
  }
  a.push(...planted);
- return a.filter(tree=>{
+ const existing=a.filter(tree=>{
   if(ridgeDropMask(tree.x,tree.z)>=.18)return false;
   if(tree.z>-224&&tree.z<-32&&Math.abs(tree.x-driftEntryX(tree.z))<31)return false;
   return tree.z<driftExitStart||tree.z>driftExitEnd
    ||Math.abs(tree.x-driftExitX(juniperSection(tree.z)))>17;
  });
+ // Continue the forest through the former cleared jump lane. Irregular tree
+ // islands leave several skiable gaps, with an open flight and landing zone.
+ const lowerGlade=[];
+ for(let i=0;i<1800&&lowerGlade.length<135;i++){
+  const z=181+rand()*321,across=(rand()-.5)*114,x=ridgeDropX(z)+across;
+  if(ridgeDropMask(x,z)<.65)continue;
+  if(Math.abs(across)<7||Math.abs(Math.abs(across)-24)<4.8)continue;
+  if(z>ridgeDropLip(x)-6&&z<474&&Math.abs(across)<34)continue;
+  if(Math.abs(x-driftExitX(juniperSection(z)))<17)continue;
+  if(z>474&&Math.abs(across)<15)continue;
+  const islands=.54+.25*Math.sin(x*.073+z*.049)+.18*Math.cos(z*.087-x*.052);
+  if(rand()>islands||lowerGlade.some(t=>(t.x-x)**2+(t.z-z)**2<53)
+   ||existing.some(t=>(t.x-x)**2+(t.z-z)**2<37))continue;
+  const slope=Math.hypot(height(x+1,z)-height(x-1,z),height(x,z+1)-height(x,z-1))/2;
+  if(slope>.68)continue;
+  const s=.56+rand()*.66;
+  lowerGlade.push({x,z,s,r:.55+s*.27});
+ }
+ // A few mature trees reach almost to the edge; the cliff emerges from the
+ // forest rather than sitting at the end of a fenced-off, bare runway.
+ for(const [z,across,s] of [[396,-13,.96],[405,12,1.08],[409,37,.79]]){
+  const x=ridgeDropX(z)+across;
+  if(!lowerGlade.some(t=>(t.x-x)**2+(t.z-z)**2<36))lowerGlade.push({x,z,s,r:.55+s*.27});
+ }
+ return [...existing,...lowerGlade];
 }
 export const turnStyles=[
  {id:'normal',label:'Normal turns',grip:8.8,scrub:.42},
@@ -479,7 +510,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const style=turnStyles[p.turnStyle]??turnStyles[0];
  const carve=style.id==='carve'&&!input.brake;
  const shortSkid=style.id==='skid';
- const gladeSnow=driftDepth(p.x,p.z);
+ const gladeSnow=Math.max(driftDepth(p.x,p.z),ridgeGladeDepth(p.x,p.z));
  const ridge=ridgeDropMask(p.x,p.z);
  const entry=driftEntryMask(p.x,p.z);
  const powder=Math.max(gladeSnow,powderDepth(p.x,p.z));
