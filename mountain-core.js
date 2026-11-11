@@ -265,7 +265,27 @@ export function baseHeight(z){
  const section=juniperSection(z);
  return 148*(1-smooth((section-5)/610))+76*(1-smooth(section/465));
 }
-export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-130)/80);y+=edge*(6+Math.sin(z*.021)*3);
+// A broad wooded shoulder connects Snowdrift to the Groomer. Keep both ski
+// lanes at their existing elevations and remove the narrow divider between.
+export function gladeBoundary(z){
+ const upper=driftMainX(juniperSection(z))+28;
+ const lower=ridgeDropX(z)+30;
+ const west=upper+(lower-upper)*smooth((z-145)/60);
+ return {west,east:pathX(z,groomer)-groomer.width};
+}
+export function height(x,z){
+ const y=mountainHeight(x,z);
+ if(z<=-170||z>=391)return y;
+ const {west,east}=gladeBoundary(z);
+ if(x<=west||x>=east||east-west<20)return y;
+ const t=(x-west)/(east-west);
+ const left=mountainHeight(west,z),right=mountainHeight(east,z);
+ const shoulder=left+(right-left)*smooth(t)
+  +.38*Math.sin(z*.047+x*.039)*Math.sin(Math.PI*t)**2;
+ const blend=smooth((z+170)/45)*(1-smooth((z-363)/28));
+ return y+(shoulder-y)*blend;
+}
+function mountainHeight(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-130)/80);y+=edge*(6+Math.sin(z*.021)*3);
  if(x<-54&&x>-398&&z>driftStart&&z<driftEnd){
   const depth=driftDepth(x,z);
   // A shallow drainage draws the snow toward the lower bowl; waves leave some room for turns.
@@ -451,7 +471,20 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
   const x=ridgeDropX(z)+across;
   if(!lowerGlade.some(t=>(t.x-x)**2+(t.z-z)**2<36))lowerGlade.push({x,z,s,r:.55+s*.27});
  }
- return [...existing,...lowerGlade];
+ const shoulderTrees=[];
+ for(let i=0;i<2400&&shoulderTrees.length<175;i++){
+  const z=-122+rand()*490,{west,east}=gladeBoundary(z);
+  if(east-west<29)continue;
+  const x=west+8+rand()*(east-west-15);
+  if(Math.abs(x-driftExitX(juniperSection(z)))<17)continue;
+  if(driftHits.some(hit=>Math.abs(x-hit.x)<hit.width+5&&z>hit.z-hit.approach-9&&z<hit.z+hit.landing+14))continue;
+  if(existing.some(t=>(t.x-x)**2+(t.z-z)**2<24)
+   ||lowerGlade.some(t=>(t.x-x)**2+(t.z-z)**2<24)
+   ||shoulderTrees.some(t=>(t.x-x)**2+(t.z-z)**2<24))continue;
+  const s=.65+rand()*.68;
+  shoulderTrees.push({x,z,s,r:.55+s*.27});
+ }
+ return [...existing,...lowerGlade,...shoulderTrees];
 }
 export const turnStyles=[
  {id:'normal',label:'Normal turns',grip:8.8,scrub:.42},
