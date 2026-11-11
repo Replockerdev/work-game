@@ -151,6 +151,10 @@ const ridgeDirectionX=102/238;
 const ridgePlanLength=Math.hypot(ridgeDirectionX,1);
 const ridgeGrade=.30;
 export function ridgeDropX(z){
+ if(z>440){
+  const join=ridgeStartX+(440-ridgeStartZ)*ridgeDirectionX-.30*22*smooth(22/40);
+  return join+.13*(z-440)+52*smooth((z-455)/106);
+ }
  const after=Math.max(0,z-418);
  return ridgeStartX+(z-ridgeStartZ)*ridgeDirectionX-.30*after*smooth(after/40);
 }
@@ -158,8 +162,13 @@ export function ridgeDropLip(x){
  return 414+.15*(x+157)+1.4*Math.sin((x+158)*.18);
 }
 export function ridgeDropMask(x,z){
- if(x<-330||x>-90||z<=151||z>=494)return 0;
+ if(x<-330||x>10||z<=151||z>=586)return 0;
  const across=x-ridgeDropX(z);
+ // Carry the landing around the flank and into the lift clearing, instead of
+ // blending back up onto the higher snow immediately below the cliff.
+ const runout=(1-smooth((Math.abs(across)-40)/20))*(1-smooth((z-560)/26));
+ if(z>=460)return runout;
+ if(x>-90&&z<=440)return 0;
  const width=smooth((z-190)/64);
  // Open the run-up toward the bowl where skiers naturally swing wide.
  const core=across<0?23+25*width:23+16*width;
@@ -170,7 +179,8 @@ export function ridgeDropMask(x,z){
  // blend here can flatten the snow immediately before the cliff.
  const finalSides=smooth((x+246)/24)*(1-smooth((x+109)/15));
  const finalApproach=finalSides*smooth((z-ridgeDropLip(x)+61)/25);
- return Math.max(runup,finalApproach)*(1-smooth((z-463)/31));
+ const approach=Math.max(runup,finalApproach);
+ return approach+(runout-approach)*smooth((z-440)/20);
 }
 export function driftDepth(x,z){
  if(x>=-54||x<=-398||z<driftStart||z>driftEnd)return 0;
@@ -341,7 +351,19 @@ export function height(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-1
   const fromLip=z-ridgeDropLip(x);
   const drop=21*smooth(fromLip/3);
   const landing=(ridgeGrade/ridgePlanLength-.10)*Math.max(0,fromLip-3);
-  y+=(pitch-drop+landing-y)*ridge;
+  let floor=pitch-drop+landing;
+  if(z>440){
+   // Every part of the wide landing descends to the station elevation. Let
+   // its crossfall relax with the descent so the low side never climbs out.
+   const joinX=ridgeDropX(440)+x-ridgeDropX(z);
+   const joinRun=(440-ridgeStartZ+(joinX-ridgeStartX)*ridgeDirectionX)/ridgePlanLength;
+   const joinLip=440-ridgeDropLip(joinX);
+   const joinHeight=114-ridgeGrade*joinRun-21
+    +(ridgeGrade/ridgePlanLength-.10)*(joinLip-3);
+   floor=3.4+(joinHeight-3.4)*(1-clamp((z-440)/110,0,1))**1.35;
+   if(z>=550)floor=Math.min(y,floor);
+  }
+  y+=(floor-y)*ridge;
  }
  const entry=driftEntryMask(x,z);
  if(entry>0){
