@@ -53,14 +53,16 @@ export function makeSkier(scene){
  function animate(p,time){
  const crashed=p.mode==='crash',crashTime=p.crash?.time??0;
  if(crashed){
-  const {heading,side}=p.crash;
-  const tumble=T.MathUtils.smoothstep(crashTime,0,.95);
-  const pitch=.42*Math.sin(crashTime*5)*Math.exp(-crashTime*1.4);
-  root.rotation.set(pitch,heading+.35*side*tumble,side*Math.PI*1.5*tumble,'YXZ');
+  const {heading,side,tumble,severity}=p.crash;
+  const fallTime=tumble?.95:.42+.1*severity;
+  const roll=T.MathUtils.smoothstep(crashTime,0,fallTime);
+  const pitch=(tumble?.42:.15)*Math.sin(crashTime*5)*Math.exp(-crashTime*1.4);
+  const rollAngle=tumble?Math.PI*1.5:Math.PI*.5;
+  root.rotation.set(pitch,heading+(tumble?.35:.12)*side*roll,side*rollAngle*roll,'YXZ');
   // Roll around the hips, then settle onto the snow.
   crashPivot.set(0,.9,0).applyEuler(root.rotation);
-  const bounce=.45*Math.sin(Math.PI*T.MathUtils.clamp(crashTime/.95,0,1));
-  const settle=.55*T.MathUtils.smoothstep(crashTime,.9,1.45);
+  const bounce=(tumble?.45:.05)*Math.sin(Math.PI*T.MathUtils.clamp(crashTime/fallTime,0,1));
+  const settle=.55*T.MathUtils.smoothstep(crashTime,tumble?.9:.12,tumble?1.45:fallTime+.16);
   root.position.set(p.x-crashPivot.x,p.y+.95+bounce-settle-crashPivot.y,p.z-crashPivot.z);
  }
  const seated=p.mode==='lift',grounded=!seated&&!crashed&&!p.air;

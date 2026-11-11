@@ -528,9 +528,17 @@ export function unload(p){
 }
 const gravity=9.81;
 const angleDelta=(target,current)=>Math.atan2(Math.sin(target-current),Math.cos(target-current));
+function obstacleDistance(x,z,obstacle){
+ const dx=x-obstacle.x,dz=z-obstacle.z;
+ if(!obstacle.box)return Math.hypot(dx,dz)-(obstacle.r??.8);
+ const {cos,sin,halfWidth,halfDepth}=obstacle.box;
+ const across=Math.abs(dx*cos-dz*sin)-halfWidth;
+ const along=Math.abs(dx*sin+dz*cos)-halfDepth;
+ return Math.hypot(Math.max(0,across),Math.max(0,along))+Math.min(0,Math.max(across,along));
+}
 function safeRecovery(x,z,colliders){
  if(x<SNOW_WEST+12||x>SNOW_EAST-12||z<SNOW_NORTH+14||z>655)return false;
- if(colliders.some(o=>Math.hypot(x-o.x,z-o.z)<(o.r??.8)+2.3))return false;
+ if(colliders.some(o=>obstacleDistance(x,z,o)<2.3))return false;
  const grade=Math.hypot(height(x+1,z)-height(x-1,z),height(x,z+1)-height(x,z-1))/2;
  return grade<1.8;
 }
@@ -560,20 +568,23 @@ function crashRecovery(p,colliders){
  }
  return {x:p.x,z:p.z,angle:heading};
 }
-function startCrash(p,colliders,nx,nz){
+function startCrash(p,colliders,nx,nz,impactSpeed){
  const recovery=crashRecovery(p,colliders);
  const heading=p.travelAngle??p.angle,dx=Math.sin(heading),dz=Math.cos(heading);
  const side=nx*dz-nz*dx>=0?1:-1;
  const deflection=.25-Math.min(0,dx*nx+dz*nz);
  const slideHeading=Math.atan2(dx+nx*deflection,dz+nz*deflection);
- p.crash={time:0,duration:1.85,heading,side,slideHeading,slideSpeed:Math.min(p.speed*.24,5),recovery};
+ const severity=smooth((impactSpeed-4)/13);
+ const tumble=impactSpeed>=14;
+ p.crash={time:0,duration:1.25+.6*severity,heading,side,severity,tumble,slideHeading,
+  slideSpeed:Math.min(impactSpeed*.24,5),slideTime:tumble?1.1:.45+.35*severity,recovery};
  p.mode='crash';p.air=false;p.vy=0;p.y=height(p.x,p.z);p.speed=0;p.measuredSpeed=0;
  p.yaw=0;p.edgeAngle=0;p.spray=0;p.drive='crash';
 }
 export function step(p,input,dt,colliders=[]){const events=[];
  if(p.mode==='crash'){
   const crash=p.crash;crash.time+=dt;
-  const slide=crash.slideSpeed*Math.max(0,1-crash.time/1.1)*dt;
+  const slide=crash.slideSpeed*Math.max(0,1-crash.time/crash.slideTime)*dt;
   p.x=clamp(p.x+Math.sin(crash.slideHeading)*slide,SNOW_WEST+12,SNOW_EAST-12);
   p.z=clamp(p.z+Math.cos(crash.slideHeading)*slide,SNOW_NORTH+14,655);
   p.y=height(p.x,p.z);
@@ -701,14 +712,24 @@ export function step(p,input,dt,colliders=[]){const events=[];
  p.distance+=distance;
  p.measuredSpeed+=(distance/dt-p.measuredSpeed)*(1-Math.exp(-dt*9));
  for(const o of colliders){
-  const d=Math.hypot(p.x-o.x,p.z-o.z),radius=(o.r??.8)+.4;
-  if(d>=radius||p.y-ground>=5||p.bump>0)continue;
-  const nx=d?(p.x-o.x)/d:-forwardX,nz=d?(p.z-o.z)/d:-forwardZ;
-  if(p.speed>=4){
-   startCrash(p,colliders,nx,nz);events.push('crash');return events;
+  const clearance=obstacleDistance(p.x,p.z,o);
+  if(clearance>=.4||p.bump>0)continue;
+  const top=o.top??height(o.x,o.z)+(o.size??5);
+  if(p.y>=top)continue;
+  let normalX=p.x-o.x,normalZ=p.z-o.z;
+  if(o.box){
+   const e=.04;
+   normalX=obstacleDistance(p.x+e,p.z,o)-obstacleDistance(p.x-e,p.z,o);
+   normalZ=obstacleDistance(p.x,p.z+e,o)-obstacleDistance(p.x,p.z-e,o);
   }
-  p.x=clamp(o.x+nx*(radius+.4),SNOW_WEST+10,SNOW_EAST-10);
-  p.z=clamp(o.z+nz*(radius+.4),SNOW_NORTH+12,657);
+  const length=Math.hypot(normalX,normalZ);
+  const nx=length?normalX/length:-forwardX,nz=length?normalZ/length:-forwardZ;
+  const impactSpeed=p.speed*Math.max(0,-forwardX*nx-forwardZ*nz);
+  if(impactSpeed>=3.3){
+   startCrash(p,colliders,nx,nz,impactSpeed);events.push('crash');return events;
+  }
+  p.x=clamp(p.x+nx*(.8-clearance),SNOW_WEST+10,SNOW_EAST-10);
+  p.z=clamp(p.z+nz*(.8-clearance),SNOW_NORTH+12,657);
   p.speed*=.25;p.measuredSpeed*=.25;
   if(!p.air){p.y=height(p.x,p.z);p.groundV=-grade*p.speed;}
   p.bump=.8;events.push('bump');

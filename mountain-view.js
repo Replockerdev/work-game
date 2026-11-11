@@ -114,7 +114,9 @@ export function createMountain(canvas){
  const expertSignY=height(expertSignX,expertSignZ);
  box(.16,2,.16,'#445a62',expertSignX,expertSignY+1,expertSignZ);
  trailSign('◆  Timberline Chair  →',expertSignX,expertSignY+1.85,expertSignZ,'#354356',5.4);
- const trees=obstacles();const forest=detailedTrees(scene,[...trees,...surroundingForest()]);addRange(scene);
+ const trees=obstacles();
+ const forest=detailedTrees(scene,[...trees,...surroundingForest()]);
+ const colliders=[...trees,...bowlRocks,...expertRocks,...addRange(scene)];
  const rockShape=new T.DodecahedronGeometry(1,0);
  for(const [i,{x,z,size}] of bowlRocks.entries()){
   const rock=mesh(rockShape,i%2?'#69767b':'#535e64');
@@ -143,6 +145,12 @@ export function createMountain(canvas){
   const groundHeight=(x,z)=>liftGround(config,x,z);
   const cableHeight=z=>liftCableHeight(z,config);
   const liftBox=(w,h,d,color,x,y,z,parent=group)=>box(w,h,d,color,x,y,z,parent);
+  function solidBox(w,h,d,color,x,y,z){
+   liftBox(w,h,d,color,x,y,z);
+   colliders.push({...liftWorld(config,x,z),top:y+h/2,box:{
+    cos:Math.cos(config.yaw),sin:Math.sin(config.yaw),halfWidth:w/2,halfDepth:d/2
+   }});
+  }
   const liftSign=(label,x,y,z,color,width,facing)=>{
    trailSign(label,x,y,z,color,width,facing,group).scale.x=config.hand;
   };
@@ -150,7 +158,20 @@ export function createMountain(canvas){
   // One continuous chairlift, with a visible cable, towers, terminals and moving chairs.
   const cable=[];for(let z=config.top;z<config.bottom;z+=2)cable.push([upX,cableHeight(z),z]);
   cable.push([upX,cableHeight(config.bottom),config.bottom]);
-  for(const z of config.towers.slice(1,-1)){const h=groundHeight(config.center,z),c=cableHeight(z),beam=c+LIFT.crossbeamClearance;liftBox(LIFT.towerWidth,beam-h,.9,'#607580',config.center,(beam+h)/2,z);liftBox(21,.5,1.1,'#526874',config.center,beam,z);liftBox(2,.5,2,'#777b73',config.center,h+.1,z);for(const x of [upX,downX]){for(const dz of [-1.1,-.4,.4,1.1]){const wheel=mesh(new T.CylinderGeometry(.34,.34,.18,12),'#354a57',group);wheel.rotation.z=Math.PI/2;wheel.position.set(x,c+.34,z+dz);}liftBox(1.1,.18,3.4,'#647983',x,c+.85,z);}for(let y=h+1;y<beam-1;y+=.9)liftBox(.7,.06,.16,'#9aa7a6',config.center+.55,y,z);}
+  for(const z of config.towers.slice(1,-1)){
+   const h=groundHeight(config.center,z),c=cableHeight(z),beam=c+LIFT.crossbeamClearance;
+   solidBox(LIFT.towerWidth,beam-h,.9,'#607580',config.center,(beam+h)/2,z);
+   liftBox(21,.5,1.1,'#526874',config.center,beam,z);
+   solidBox(2,.5,2,'#777b73',config.center,h+.1,z);
+   for(const x of [upX,downX]){
+    for(const dz of [-1.1,-.4,.4,1.1]){
+     const wheel=mesh(new T.CylinderGeometry(.34,.34,.18,12),'#354a57',group);
+     wheel.rotation.z=Math.PI/2;wheel.position.set(x,c+.34,z+dz);
+    }
+    liftBox(1.1,.18,3.4,'#647983',x,c+.85,z);
+   }
+   for(let y=h+1;y<beam-1;y+=.9)liftBox(.7,.06,.16,'#9aa7a6',config.center+.55,y,z);
+  }
   function terminal(z,name,isBase){
    const center=config.center;
    const cableY=cableHeight(z);
@@ -164,7 +185,7 @@ export function createMountain(canvas){
     for(const postZ of [shedZ-6.5,shedZ+6.5]){
      const groundY=groundHeight(x,postZ);
      liftBox(.85,.48,.85,'#a4aba8',x,groundY+.2,postZ);
-     liftBox(.42,eaveY-groundY,.42,steel,x,(groundY+eaveY)/2,postZ);
+     solidBox(.42,eaveY-groundY,.42,steel,x,(groundY+eaveY)/2,postZ);
     }
     liftBox(.38,.54,15.5,steel,x,eaveY,shedZ);
    }
@@ -184,7 +205,7 @@ export function createMountain(canvas){
    // The operator booth is beside the loading lane, clear of the cable and skis.
    const boothX=center-14.7;
    const boothY=groundHeight(boothX,shedZ);
-   liftBox(4.3,3.2,5.2,wood,boothX,boothY+1.6,shedZ);
+   solidBox(4.3,3.2,5.2,wood,boothX,boothY+1.6,shedZ);
    liftBox(4.65,.23,5.65,roof,boothX,boothY+3.26,shedZ);
    liftBox(4.5,.10,5.5,'#e3ebee',boothX,boothY+3.41,shedZ);
    liftBox(.06,1.2,2.25,'#334b56',boothX+2.16,boothY+2.05,shedZ);
@@ -439,7 +460,7 @@ export function createMountain(canvas){
  sun.target.updateMatrixWorld();
  forest.clearSightline(camera.position,skier.position,dt);
  renderer.render(scene,camera);}
- return {render,trees:[...trees,...bowlRocks,...expertRocks],resetCamera(){
+ return {render,colliders,resetCamera(){
   camReady=false;previous=null;sprayCarry=0;spray.visible=false;
   for(const bit of sprayParticles)bit.life=0;
  }};
