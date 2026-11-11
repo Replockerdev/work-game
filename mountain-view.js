@@ -367,7 +367,7 @@ export function createMountain(canvas){
  let w=0,h=0,time=0,camReady=false,camHeading=0;
  const camPos=new T.Vector3(),look=new T.Vector3(),desired=new T.Vector3();
  function render(p,dt,paused=false){time+=paused?0:dt;if(w!==canvas.clientWidth||h!==canvas.clientHeight){w=canvas.clientWidth;h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
- const lift=p.mode==='lift',config=p.activeLift??JUNIPER;
+ const lift=p.mode==='lift',crashed=p.mode==='crash',config=p.activeLift??JUNIPER;
  const offset=liftWorld(config,-.44,0);
  skier.position.set(lift?p.x+offset.x-config.x:p.x,p.y+(lift||p.air?.12:0),lift?p.z+offset.z-config.z:p.z);
  const skiX=Math.sin(p.angle)*.4,skiZ=Math.cos(p.angle)*.4;
@@ -378,7 +378,7 @@ export function createMountain(canvas){
  animateJuniper(p,time);
  animateExpert(p,time);
  if(!paused)animateSpray(p,dt);
- if(!lift&&!p.air&&p.speed>1&&!paused){
+ if(!lift&&!crashed&&!p.air&&p.speed>1&&!paused){
   const crossX=Math.cos(p.angle)*.29,crossZ=-Math.sin(p.angle)*.29;
   const contacts=[-1,1].map(side=>{
    const x=p.x+crossX*side,z=p.z+crossZ*side;
@@ -395,7 +395,7 @@ export function createMountain(canvas){
   }
   previous={x:p.x,z:p.z,contacts};
  }else previous=null;
- puffs.visible=!lift&&!p.air&&p.speed>4;
+ puffs.visible=!lift&&!crashed&&!p.air&&p.speed>4;
  if(puffs.visible){
   const travel=p.travelAngle??p.angle;
   const powder=snowDepth(p.x,p.z),sin=Math.sin(travel),cos=Math.cos(travel);

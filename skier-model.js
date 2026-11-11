@@ -22,7 +22,7 @@ export function makeSkier(scene){
  const forward=new T.Vector3(),up=new T.Vector3(),right=new T.Vector3();
  const basis=new T.Matrix4(),yaw=new T.Quaternion(),roll=new T.Quaternion();
  const vertical=new T.Vector3(0,1,0),skiAxis=new T.Vector3(0,0,1);
- const contact=new T.Vector3(),anklePoint=new T.Vector3(),shoulderPoint=new T.Vector3();
+ const contact=new T.Vector3(),anklePoint=new T.Vector3(),shoulderPoint=new T.Vector3(),crashPivot=new T.Vector3();
  const runningSole=[-1.05,-.45,.15,.75,1.33];
  function fitSki(foot,p,footYaw,lift,edge){
   const sin=Math.sin(p.angle),cos=Math.cos(p.angle);
@@ -51,16 +51,28 @@ export function makeSkier(scene){
   foot.position.y=floor-p.y+.025+lift;
  }
  function animate(p,time){
- const seated=p.mode==='lift',grounded=!seated&&!p.air;
+ const crashed=p.mode==='crash',crashTime=p.crash?.time??0;
+ if(crashed){
+  const {heading,side}=p.crash;
+  const tumble=T.MathUtils.smoothstep(crashTime,0,.95);
+  const pitch=.42*Math.sin(crashTime*5)*Math.exp(-crashTime*1.4);
+  root.rotation.set(pitch,heading+.35*side*tumble,side*Math.PI*1.5*tumble,'YXZ');
+  // Roll around the hips, then settle onto the snow.
+  crashPivot.set(0,.9,0).applyEuler(root.rotation);
+  const bounce=.45*Math.sin(Math.PI*T.MathUtils.clamp(crashTime/.95,0,1));
+  const settle=.55*T.MathUtils.smoothstep(crashTime,.9,1.45);
+  root.position.set(p.x-crashPivot.x,p.y+.95+bounce-settle-crashPivot.y,p.z-crashPivot.z);
+ }
+ const seated=p.mode==='lift',grounded=!seated&&!crashed&&!p.air;
  const skating=grounded&&p.drive==='skate',tucking=!seated&&p.drive==='tuck';
  const phase=p.skatePhase||0,turn=Math.min(1,Math.abs(p.yaw));
  const edge=grounded&&!skating?p.edgeAngle:0;
  const hipShift=Math.sin(edge)*.45;
- const crouch=seated?.44:tucking?.60:skating?.87:.91-Math.min(.15,p.speed*.005)-turn*.06-Math.abs(hipShift)*.16;
+ const crouch=crashed?.63:seated?.44:tucking?.60:skating?.87:.91-Math.min(.15,p.speed*.005)-turn*.06-Math.abs(hipShift)*.16;
  const hipZ=seated?-.05:tucking?-.24:-.12;
  torso.position.set(skating?Math.sin(phase)*.065:hipShift,crouch,hipZ);
- torso.rotation.x=seated?-.08:tucking?.48:skating?.16+Math.cos(phase*2)*.035:.06+Math.min(.23,p.speed*.007);
- torso.rotation.z=-edge*.9;
+ torso.rotation.x=crashed?.35+Math.sin(crashTime*10)*.1*Math.exp(-crashTime*3):seated?-.08:tucking?.48:skating?.16+Math.cos(phase*2)*.035:.06+Math.min(.23,p.speed*.007);
+ torso.rotation.z=crashed?p.crash.side*.18:-edge*.9;
  skiGroup.position.set(0,seated?.05:0,seated?.77:0);
  skiGroup.rotation.x=seated?.2:0;
  for(const {foot,s} of feet){
@@ -68,7 +80,8 @@ export function makeSkier(scene){
   const footYaw=skating?-s*(.14+.19*Math.max(0,stroke)):0;
   foot.position.set(s*(.29+spread),0,skating?stroke*.28:0);
   if(grounded)fitSki(foot,p,footYaw,skating?Math.max(0,-stroke)*.1:0,edge);
-  else foot.rotation.set(0,footYaw,0);
+  else foot.rotation.set(crashed?s*.25:0,crashed?s*.38:footYaw,crashed?s*.18:0);
+  if(crashed)foot.position.set(s*.48,.1,s*.22);
  }
  for(let i=0;i<legs.length;i++){const {thigh,shin,s}=legs[i],foot=feet[i].foot,hip=[s*.22+hipShift,crouch+.02,hipZ],knee=[skating?foot.position.x:s*.27+hipShift*.78,seated?.43:.52-turn*.03,seated?.56:skating?.19+foot.position.z*.6:.2];
   anklePoint.set(0,.3,-.07).applyQuaternion(foot.quaternion).add(foot.position);
@@ -79,10 +92,11 @@ export function makeSkier(scene){
   const {s}=a,push=skating?Math.sin(phase+(s>0?Math.PI:0)):0;
   const shoulder=shoulderPoint.set(s*.43,.77,.04).applyQuaternion(torso.quaternion).add(torso.position);
   const lean=shoulder.x-s*.43;
-  const elbow=[s*.65+lean*.65,crouch+.4,hipZ+(seated?.35:tucking?.45:.12)+push*.12];
-  const hand=[s*.7+lean*.32,crouch+.15,hipZ+(seated?.88:tucking?.65:.43)+push*.35];
+  const flail=crashed?Math.sin(crashTime*13+s)*.16*Math.exp(-crashTime*2):0;
+  const elbow=[s*(crashed?.84:.65)+lean*.65,crouch+.4+flail,hipZ+(seated?.35:tucking?.45:.12)+push*.12];
+  const hand=[s*(crashed?1.04:.7)+lean*.32,crouch+(crashed?.45:.15)+flail,hipZ+(seated?.88:tucking?.65:.43)+push*.35];
   a.upper.update(shoulder.toArray(),elbow);a.lower.update(elbow,hand);a.glove.position.set(...hand);
-  const tip=[s*(skating?1.02:.88),seated?.05:.07,seated?1.48:skating?push*.7-.3:-.3];
+  const tip=[s*(crashed?1.25:skating?1.02:.88),crashed?.4+flail:seated?.05:.07,seated?1.48:skating?push*.7-.3:-.3];
   a.pole.update(hand,tip);a.basket.position.set(tip[0],tip[1]+.1,tip[2]);
  }
  }

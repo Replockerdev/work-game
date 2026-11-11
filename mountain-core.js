@@ -495,7 +495,7 @@ export function spawn(){
  return {x:BASE.x,z:BASE.z-10,y:height(BASE.x,BASE.z-10),angle:0,yaw:0,speed:0,measuredSpeed:0,
   travelAngle:null,slip:0,vy:0,groundV:0,air:false,jumps:0,airtime:0,bump:0,mode:'ski',ride:0,laps:0,
   passedTop:false,route:'Lift base',lastRoute:'',distance:0,drive:'glide',skatePhase:0,
-  turnStyle:0,edgeAngle:0,spray:0};
+  turnStyle:0,edgeAngle:0,spray:0,safeTrail:[],crash:null};
 }
 const expertLoading=liftWorld(EXPERT,8,EXPERT.bottom);
 export function boardingLift(p){
@@ -510,6 +510,7 @@ export function board(p){
  if(!lift)return false;
  p.activeLift=lift;p.mode='lift';p.ride=0;p.speed=0;p.air=false;p.angle=lift.yaw;p.yaw=0;
  p.edgeAngle=0;p.spray=0;
+ p.safeTrail=[];
  return true;
 }
 export const canUnload=p=>p.mode==='lift'&&p.ride>=1;
@@ -527,7 +528,65 @@ export function unload(p){
 }
 const gravity=9.81;
 const angleDelta=(target,current)=>Math.atan2(Math.sin(target-current),Math.cos(target-current));
+function safeRecovery(x,z,colliders){
+ if(x<SNOW_WEST+12||x>SNOW_EAST-12||z<SNOW_NORTH+14||z>655)return false;
+ if(colliders.some(o=>Math.hypot(x-o.x,z-o.z)<(o.r??.8)+2.3))return false;
+ const grade=Math.hypot(height(x+1,z)-height(x-1,z),height(x,z+1)-height(x,z-1))/2;
+ return grade<1.8;
+}
+function crashRecovery(p,colliders){
+ const impactHeight=height(p.x,p.z);
+ const trail=(p.safeTrail??[]).filter(s=>{
+  const back=p.distance-s.distance,d=Math.hypot(p.x-s.x,p.z-s.z);
+  return back>=7&&back<=15&&d>=6&&d<=16&&s.y>=impactHeight-1&&safeRecovery(s.x,s.z,colliders);
+ }).sort((a,b)=>Math.abs(p.distance-a.distance-10)-Math.abs(p.distance-b.distance-10));
+ if(trail.length)return trail[0];
+ // A collision just after a jump may have no nearby grounded breadcrumb.
+ // Search uphill on the snow instead of placing the skier back in the air.
+ const heading=p.travelAngle??p.angle;
+ const uphillX=height(p.x+1,p.z)-height(p.x-1,p.z);
+ const uphillZ=height(p.x,p.z+1)-height(p.x,p.z-1);
+ const ascent=Math.atan2(uphillX,uphillZ);
+ const directions=[heading+Math.PI,ascent,ascent-.4,ascent+.4];
+ for(const angle of directions)for(const distance of [10,12,8,14]){
+  const x=p.x+Math.sin(angle)*distance,z=p.z+Math.cos(angle)*distance;
+  if(height(x,z)>=impactHeight-1&&safeRecovery(x,z,colliders))return {x,z,angle:angle+Math.PI};
+ }
+ // Dense tree islands can require a small sideways adjustment.
+ for(let radius=8;radius<=18;radius+=2)for(let i=0;i<16;i++){
+  const angle=ascent+(i%2?1:-1)*Math.ceil(i/2)*Math.PI/8;
+  const x=p.x+Math.sin(angle)*radius,z=p.z+Math.cos(angle)*radius;
+  if(safeRecovery(x,z,colliders))return {x,z,angle:angle+Math.PI};
+ }
+ return {x:p.x,z:p.z,angle:heading};
+}
+function startCrash(p,colliders,nx,nz){
+ const recovery=crashRecovery(p,colliders);
+ const heading=p.travelAngle??p.angle,dx=Math.sin(heading),dz=Math.cos(heading);
+ const side=nx*dz-nz*dx>=0?1:-1;
+ const deflection=.25-Math.min(0,dx*nx+dz*nz);
+ const slideHeading=Math.atan2(dx+nx*deflection,dz+nz*deflection);
+ p.crash={time:0,duration:1.85,heading,side,slideHeading,slideSpeed:Math.min(p.speed*.24,5),recovery};
+ p.mode='crash';p.air=false;p.vy=0;p.y=height(p.x,p.z);p.speed=0;p.measuredSpeed=0;
+ p.yaw=0;p.edgeAngle=0;p.spray=0;p.drive='crash';
+}
 export function step(p,input,dt,colliders=[]){const events=[];
+ if(p.mode==='crash'){
+  const crash=p.crash;crash.time+=dt;
+  const slide=crash.slideSpeed*Math.max(0,1-crash.time/1.1)*dt;
+  p.x=clamp(p.x+Math.sin(crash.slideHeading)*slide,SNOW_WEST+12,SNOW_EAST-12);
+  p.z=clamp(p.z+Math.cos(crash.slideHeading)*slide,SNOW_NORTH+14,655);
+  p.y=height(p.x,p.z);
+  if(crash.time>=crash.duration){
+   const spot=crash.recovery;
+   p.x=spot.x;p.z=spot.z;p.y=height(p.x,p.z);p.angle=spot.angle;
+   p.mode='ski';p.crash=null;p.safeTrail=[];
+   p.travelAngle=null;p.slip=0;p.speed=0;p.measuredSpeed=0;p.groundV=0;p.vy=0;p.airtime=0;
+   p.drive='glide';p.bump=0;p.skatePhase=0;
+   events.push('respawn');
+  }
+  return events;
+ }
  if(p.mode==='lift'){
   if(canUnload(p))return events;
   const lift=p.activeLift??JUNIPER;
@@ -645,6 +704,9 @@ export function step(p,input,dt,colliders=[]){const events=[];
   const d=Math.hypot(p.x-o.x,p.z-o.z),radius=(o.r??.8)+.4;
   if(d>=radius||p.y-ground>=5||p.bump>0)continue;
   const nx=d?(p.x-o.x)/d:-forwardX,nz=d?(p.z-o.z)/d:-forwardZ;
+  if(p.speed>=4){
+   startCrash(p,colliders,nx,nz);events.push('crash');return events;
+  }
   p.x=clamp(o.x+nx*(radius+.4),SNOW_WEST+10,SNOW_EAST-10);
   p.z=clamp(o.z+nz*(radius+.4),SNOW_NORTH+12,657);
   p.speed*=.25;p.measuredSpeed*=.25;
@@ -659,5 +721,12 @@ export function step(p,input,dt,colliders=[]){const events=[];
  if(p.passedTop&&(returnedToBase||returnedToExpert)){p.laps++;p.passedTop=false;events.push('lap');}
  if(p.z>590&&returnedToBase)p.route='Lift base';
  if(!p.air&&p.speed<.05){p.speed=0;p.measuredSpeed=0;}
+ if(!p.air){
+  const trail=p.safeTrail??[],last=trail.at(-1);
+  if((!last||p.distance-last.distance>=.7)&&safeRecovery(p.x,p.z,colliders)){
+   const point={x:p.x,z:p.z,y:p.y,angle:p.travelAngle??p.angle,distance:p.distance};
+   p.safeTrail=[...trail.filter(s=>p.distance-s.distance<45),point];
+  }
+ }
  return events;}
 
