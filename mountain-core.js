@@ -536,6 +536,17 @@ function obstacleDistance(x,z,obstacle){
  const along=Math.abs(dx*sin+dz*cos)-halfDepth;
  return Math.hypot(Math.max(0,across),Math.max(0,along))+Math.min(0,Math.max(across,along));
 }
+function obstacleNormal(x,z,obstacle,forwardX,forwardZ){
+ let nx=x-obstacle.x,nz=z-obstacle.z;
+ if(obstacle.box){
+  const e=.04;
+  nx=obstacleDistance(x+e,z,obstacle)-obstacleDistance(x-e,z,obstacle);
+  nz=obstacleDistance(x,z+e,obstacle)-obstacleDistance(x,z-e,obstacle);
+ }
+ const length=Math.hypot(nx,nz);
+ return length?[nx/length,nz/length]:[-forwardX,-forwardZ];
+}
+const obstacleTop=o=>o.top??height(o.x,o.z)+(o.size??5);
 function safeRecovery(x,z,colliders){
  if(x<SNOW_WEST+12||x>SNOW_EAST-12||z<SNOW_NORTH+14||z>655)return false;
  if(colliders.some(o=>obstacleDistance(x,z,o)<2.3))return false;
@@ -573,11 +584,13 @@ function startCrash(p,colliders,nx,nz,impactSpeed){
  const heading=p.travelAngle??p.angle,dx=Math.sin(heading),dz=Math.cos(heading);
  const side=nx*dz-nz*dx>=0?1:-1;
  const deflection=.25-Math.min(0,dx*nx+dz*nz);
- const slideHeading=Math.atan2(dx+nx*deflection,dz+nz*deflection);
  const severity=smooth((impactSpeed-4)/13);
  const tumble=impactSpeed>=14;
+ const slideHeading=tumble?heading+side*.4:Math.atan2(dx+nx*deflection,dz+nz*deflection);
  p.crash={time:0,duration:1.25+.6*severity,heading,side,severity,tumble,slideHeading,
-  slideSpeed:Math.min(impactSpeed*.24,5),slideTime:tumble?1.1:.45+.35*severity,recovery};
+  slideSpeed:tumble?Math.min(p.speed*.68,18):impactSpeed*.24,
+  slideTime:tumble?1.45:.45+.35*severity,
+  flying:tumble,verticalSpeed:tumble?4.8+severity*1.9:0,recovery};
  p.mode='crash';p.air=false;p.vy=0;p.y=height(p.x,p.z);p.speed=0;p.measuredSpeed=0;
  p.yaw=0;p.edgeAngle=0;p.spray=0;p.drive='crash';
 }
@@ -585,9 +598,26 @@ export function step(p,input,dt,colliders=[]){const events=[];
  if(p.mode==='crash'){
   const crash=p.crash;crash.time+=dt;
   const slide=crash.slideSpeed*Math.max(0,1-crash.time/crash.slideTime)*dt;
-  p.x=clamp(p.x+Math.sin(crash.slideHeading)*slide,SNOW_WEST+12,SNOW_EAST-12);
-  p.z=clamp(p.z+Math.cos(crash.slideHeading)*slide,SNOW_NORTH+14,655);
-  p.y=height(p.x,p.z);
+  const dx=Math.sin(crash.slideHeading),dz=Math.cos(crash.slideHeading);
+  let x=p.x+dx*slide,z=p.z+dz*slide,y=p.y;
+  if(crash.flying){
+   crash.verticalSpeed-=gravity*dt;
+   y+=crash.verticalSpeed*dt;
+  }
+  if(crash.tumble&&slide>0){
+   // Keep forward momentum while sliding around obstacles too tall to clear.
+   for(const o of colliders){
+    const clearance=obstacleDistance(x,z,o);
+    if(clearance>=.4||y>=obstacleTop(o))continue;
+    const [nx,nz]=obstacleNormal(x,z,o,dx,dz);
+    x+=nx*(.4-clearance);z+=nz*(.4-clearance);
+   }
+  }
+  p.x=clamp(x,SNOW_WEST+12,SNOW_EAST-12);
+  p.z=clamp(z,SNOW_NORTH+14,655);
+  const snow=height(p.x,p.z);
+  if(y<=snow)crash.flying=false;
+  p.y=crash.flying?y:snow;
   if(crash.time>=crash.duration){
    const spot=crash.recovery;
    p.x=spot.x;p.z=spot.z;p.y=height(p.x,p.z);p.angle=spot.angle;
@@ -714,25 +744,30 @@ export function step(p,input,dt,colliders=[]){const events=[];
  for(const o of colliders){
   const clearance=obstacleDistance(p.x,p.z,o);
   if(clearance>=.4||p.bump>0)continue;
-  const top=o.top??height(o.x,o.z)+(o.size??5);
-  if(p.y>=top)continue;
-  let normalX=p.x-o.x,normalZ=p.z-o.z;
-  if(o.box){
-   const e=.04;
-   normalX=obstacleDistance(p.x+e,p.z,o)-obstacleDistance(p.x-e,p.z,o);
-   normalZ=obstacleDistance(p.x,p.z+e,o)-obstacleDistance(p.x,p.z-e,o);
-  }
-  const length=Math.hypot(normalX,normalZ);
-  const nx=length?normalX/length:-forwardX,nz=length?normalZ/length:-forwardZ;
-  const impactSpeed=p.speed*Math.max(0,-forwardX*nx-forwardZ*nz);
-  if(impactSpeed>=3.3){
+  if(p.y>=obstacleTop(o))continue;
+  const [nx,nz]=obstacleNormal(p.x,p.z,o,forwardX,forwardZ);
+  const inward=Math.max(0,-forwardX*nx-forwardZ*nz);
+  const impactSpeed=p.speed*inward;
+  const skating=p.drive==='skate'&&!p.air;
+  if(!skating&&impactSpeed>=3.3){
    startCrash(p,colliders,nx,nz,impactSpeed);events.push('crash');return events;
   }
   p.x=clamp(p.x+nx*(.8-clearance),SNOW_WEST+10,SNOW_EAST-10);
   p.z=clamp(p.z+nz*(.8-clearance),SNOW_NORTH+12,657);
-  p.speed*=.25;p.measuredSpeed*=.25;
+  if(skating){
+   // Preserve the tangent to the obstacle. A square hit turns to one side.
+   let vx=forwardX+nx*inward,vz=forwardZ+nz*inward;
+   if(Math.hypot(vx,vz)<.15){
+    const side=direction||1;
+    vx=-nz*side;vz=nx*side;
+   }
+   p.angle=p.travelAngle=Math.atan2(vx+nx*.18,vz+nz*.18);
+   p.yaw=0;p.slip=0;
+  }
+  const retainedSpeed=skating?.48:.25;
+  p.speed*=retainedSpeed;p.measuredSpeed*=retainedSpeed;
   if(!p.air){p.y=height(p.x,p.z);p.groundV=-grade*p.speed;}
-  p.bump=.8;events.push('bump');
+  p.bump=skating?.22:.8;events.push('bump');
  }
  const stillAtTimberline=p.route==='Timberline Summit'&&!expert&&powder<=.2&&expertLocal(p.x,p.z).z<20;
  const route=stillAtTimberline?null:trailAt(p.x,p.z);
