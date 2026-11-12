@@ -405,12 +405,23 @@ function mountainHeight(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-
   y+=(floor-y)*ridge;
  }
  const bowlMerge=powderToGladeMask(x,z);
- if(bowlMerge>0){
-  // Taper the bowl's steeper floor into the same plane as the glade approach.
-  const along=(z-ridgeStartZ+(x-ridgeStartX)*ridgeDirectionX)/ridgePlanLength;
+ let apron=0;
+ if(x>-366&&x<-197&&z>160&&z<428){
+  // Carry the bowl floor across the pockets on either side of the main line.
+  const width=smooth((x+366)/42)*(1-smooth((x+217)/20));
+  const extent=smooth((z-160)/76)*(1-smooth((z-397)/31));
+  const cliff=smooth((ridge-.25)/.40)*smooth((z-ridgeDropLip(x))/4);
+  apron=width*extent*(1-cliff);
+ }
+ if(bowlMerge>0||apron>0){
+  // Ease the upper shoulder into the approach from Snowdrift.
+  const center=powderToGladeZ(x),north=Math.max(0,center-z-22);
+  const shoulderZ=z+.72*north-5.76*Math.tanh(north/8);
+  const along=(shoulderZ-ridgeStartZ+(x-ridgeStartX)*ridgeDirectionX)/ridgePlanLength;
   const remaining=1-clamp((x-bowlMergeStart)/(bowlMergeEnd-bowlMergeStart),0,1);
   const floor=114-ridgeGrade*along+125*remaining**2.25;
-  y+=(floor-y)*bowlMerge;
+  // Outside the main line, fill low snow without cutting new depressions.
+  y+=(floor-y)*(floor>y?Math.max(bowlMerge,apron):bowlMerge);
  }
  const entry=driftEntryMask(x,z);
  if(entry>0){

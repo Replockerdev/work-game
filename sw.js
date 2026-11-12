@@ -1,4 +1,4 @@
-const RELEASE=47;
+const RELEASE=48;
 const CACHE='work-game-v'+RELEASE;
 const ASSETS=['/','/mountain.css','/mountain.js?v='+RELEASE,'/mountain-core.js','/mountain-view.js','/mountain-environment.js','/skier-model.js','/basin-terrain.js','/vendor/three.module.js','/manifest.webmanifest','/icon.svg','/icon-192.png','/icon-512.png'];
 
