@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,powderToGladeMask,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,chuteHalfWidth,chuteRockMask,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,powderToGladeMask,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
@@ -37,15 +37,25 @@ export function createMountain(canvas){
   return panel;
  }
  const snowWidth=SNOW_EAST-SNOW_WEST,snowLength=SNOW_SOUTH-SNOW_NORTH;
- const geo=new T.PlaneGeometry(snowWidth,snowLength,snowWidth/2.5,snowLength/2);
+ const columns=Math.round(snowWidth/2.5),rows=[];
+ // Finer cross-slope samples through Splitrock keep its steep walls readable.
+ for(let z=SNOW_NORTH;z<SNOW_SOUTH;z+=z>=536&&z<664?1:2)rows.push(z);
+ rows.push(SNOW_SOUTH);
+ const geo=new T.PlaneGeometry(snowWidth,snowLength,columns,rows.length-1);
  geo.rotateX(-Math.PI/2);
  geo.translate((SNOW_WEST+SNOW_EAST)/2,0,(SNOW_NORTH+SNOW_SOUTH)/2);
- const pos=geo.attributes.position,colors=[];
+ const pos=geo.attributes.position,uv=geo.attributes.uv,colors=[];
+ const rockExposure=new Float32Array(pos.count);
+ for(let i=0;i<pos.count;i++){
+  const z=rows[Math.floor(i/(columns+1))];
+  pos.setZ(i,z);uv.setY(i,1-(z-SNOW_NORTH)/snowLength);
+ }
  const flatSummit=juniperZ(90),bankStart=juniperZ(100);
  const bowlSnow=new T.Color('#eef5fa');
  const driftSnow=new T.Color('#edf5ff');
  const expertSnow=new T.Color('#e8eff8');
  const chuteSnow=new T.Color('#cfdfe9'),ledgeRock=new T.Color('#65717e');
+ const rockShade=new T.Color('#37444e'),wallColor=new T.Color();
  for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<flatSummit||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>bankStart&&z<560)color.multiplyScalar(.88);
   if(inBowl(x,z)){
    const edgeFade=T.MathUtils.smoothstep(bowlWidth(z)-Math.abs(x-bowlX(z)),0,10);
@@ -56,6 +66,14 @@ export function createMountain(canvas){
    const route=expertLine(x,z);
    if(route)color.lerp(route===chuteRoute?chuteSnow:expertSnow,.45);
    const local=expertLocal(x,z);
+   const wall=chuteRockMask(local.x,local.z);
+   rockExposure[i]=wall;
+   if(wall>0){
+    const strata=terrainNoise(local.z*.044+y*.09,local.x*.26-y*.07);
+    const grain=terrainNoise(x*.24,z*.21);
+    wallColor.copy(ledgeRock).lerp(rockShade,.12+.73*strata).multiplyScalar(.81+.33*grain);
+    color.lerp(wallColor,wall*.98);
+   }
    for(const cliff of cliffDrops){
     const cross=1-T.MathUtils.smoothstep(Math.abs(local.x-cliff.x),cliff.width*.55,cliff.width);
     const face=1-T.MathUtils.smoothstep(Math.abs(local.z-cliff.z-1),.8,3.4);
@@ -89,7 +107,9 @@ export function createMountain(canvas){
    color.lerp(ledgeRock,face*ridgeDropMask(x,z)*(.80+rock*.2));
   }
   const n=Math.sin(x*.31+z*.047)*.024; color.offsetHSL(0,0,n);colors.push(color.r,color.g,color.b);}
- geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
+ geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));
+ geo.setAttribute('rockExposure',new T.BufferAttribute(rockExposure,1));
+ geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
  // Visible trail-edge poles and arrows make all three routes converge at the base.
  for(const r of routes){for(let section=100;section<=560;section+=30){const z=juniperZ(section);for(const side of [-1,1]){const x=pathX(z,r)+r.width*side;if(r.id==='groomer'&&side===-1&&inBowl(x,z,3))continue;box(.14,1.6,.14,r.color,x,height(x,z)+.8,z);box(.55,.25,.12,r.color,x,height(x,z)+1.55,z);}}
  const z=juniperZ(110),x=pathX(z,r)+r.width*.65,y=height(x,z);
@@ -116,24 +136,13 @@ export function createMountain(canvas){
  trailSign('◆  Timberline Chair  →',expertSignX,expertSignY+1.85,expertSignZ,'#354356',5.4);
  const trees=obstacles();
  const forest=detailedTrees(scene,[...trees,...surroundingForest()]);
- const colliders=[...trees,...bowlRocks,...expertRocks,...addRange(scene)];
+ const colliders=[...trees,...bowlRocks,...addRange(scene)];
  const rockShape=new T.DodecahedronGeometry(1,0);
  for(const [i,{x,z,size}] of bowlRocks.entries()){
   const rock=mesh(rockShape,i%2?'#69767b':'#535e64');
   rock.scale.set(size,size*.72,size*.85);
   rock.rotation.set(.18*i,.63*i,-.27);
   rock.position.set(x,height(x,z)+size*.18,z);
- }
- for(const [i,{x,z,size}] of expertRocks.entries()){
-  const rock=mesh(rockShape,i%2?'#65727e':'#515e6a');
-  rock.scale.set(size*.86,size*.9,size*1.18);
-  rock.rotation.set(.21*i,.8*i,-.24+i*.06);
-  rock.position.set(x,height(x,z)+size*.33,z);
-  const cap=mesh(rockShape,'#dbe5ed');
-  cap.scale.copy(rock.scale).multiplyScalar(.68);
-  cap.rotation.copy(rock.rotation);
-  cap.position.copy(rock.position);
-  cap.position.y+=size*.37;
  }
  function makeLift(config){
   const group=new T.Group();
@@ -257,7 +266,7 @@ export function createMountain(canvas){
    const bowlSignX=16,bowlSignZ=timberlineZ(32),bowlSignY=groundHeight(bowlSignX,bowlSignZ);
    liftBox(.14,2.25,.14,'#445a62',bowlSignX,bowlSignY+1.12,bowlSignZ);
    liftSign('←  Powder Bowl · Cliff drop',bowlSignX,bowlSignY+2,bowlSignZ,'#417587',6.9,-1);
-   const chuteZ=103,chuteMarkerX=chuteX(chuteZ)+9;
+   const chuteZ=70,chuteMarkerX=chuteX(chuteZ)+chuteHalfWidth(chuteZ)+2;
    const markerY=groundHeight(chuteMarkerX,chuteZ);
    liftBox(.13,1.7,.13,'#445a62',chuteMarkerX,markerY+.85,chuteZ);
    liftSign('◆◆',chuteMarkerX,markerY+1.55,chuteZ,'#493d58',1.45,-1);

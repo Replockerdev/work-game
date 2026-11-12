@@ -48,13 +48,30 @@ export const expertRoute={id:'expert',name:'Timberline Face',color:'#414e61'};
 export const chuteRoute={id:'chute',name:'Splitrock Chute',color:'#493d58'};
 export const timberRoute={id:'timber',name:'Pine Thread',color:'#466956'};
 export function chuteX(z){
- return 62+42*smooth((z-58)/72)+4*Math.sin((z-130)*.045)*smooth((z-124)/24)
+ const bend=5*Math.sin((z-143)*.064)*smooth((z-122)/22)*(1-smooth((z-228)/20));
+ return 62+42*smooth((z-58)/72)+bend
   -52*smooth((z-220)/104);
+}
+export function chuteHalfWidth(z){
+ return 12-4.5*smooth((z-78)/49)-2.5*smooth((z-150)/34)+14*smooth((z-213)/91);
+}
+function chuteWallStrength(z){
+ return smooth((z-65)/39)*(1-smooth((z-226)/67));
+}
+function chuteWallEdge(across,z){
+ const side=across<0?-1:1;
+ const rockOutline=.74*Math.sin(z*.21+side*1.8)+.38*Math.sin(z*.46+side*2.4);
+ return Math.abs(across)-chuteHalfWidth(z)-rockOutline;
+}
+export function chuteRockMask(x,z){
+ if(z<=65||z>=293)return 0;
+ const edge=chuteWallEdge(x-chuteX(z),z);
+ return chuteWallStrength(z)*smooth((edge+.5)/2.2)*(1-smooth((edge-6)/13));
 }
 export function timberX(z){return Math.max(23,expertFaceX(z)-24);}
 export function expertLine(x,z){
  const local=expertLocal(x,z);
- if(local.z>=68&&local.z<315&&Math.abs(local.x-chuteX(local.z))<12)return chuteRoute;
+ if(local.z>=68&&local.z<329&&Math.abs(local.x-chuteX(local.z))<chuteHalfWidth(local.z)+2)return chuteRoute;
  if(local.z>178&&local.z<321&&Math.abs(local.x-timberX(local.z))<10)return timberRoute;
  if(local.z>=20&&local.z<=382&&Math.abs(local.x-expertFaceX(local.z))<36)return expertRoute;
  return null;
@@ -68,10 +85,19 @@ export const cliffDrops=[
  {x:69,z:258,width:9,drop:3.5}
 ];
 function expertRelief(x,z){
- const distance=Math.abs(x-chuteX(z));
- const channel=smooth((z-85)/36)*(1-smooth((z-241)/63));
- const wall=smooth((distance-6)/8)*(1-smooth((distance-14)/9));
- let relief=channel*(wall*7-(1-smooth(distance/10))*3.5);
+ let relief=0;
+ if(z>52&&z<304){
+  const across=x-chuteX(z);
+  const edge=chuteWallEdge(across,z);
+  const cut=21*smooth((z-52)/80)*(1-smooth((z-172)/132));
+  relief-=cut*(1-smooth((edge-7)/18));
+  const face=smooth(edge/5.3);
+  const shoulder=1-smooth((edge-5.3)/18);
+  const side=across<0?-1:1;
+  const rockHeight=15+3.5*smooth((z-114)/62)+2.2*Math.sin(z*.093+side)+1.3*Math.sin(z*.24+side*2);
+  const ledges=.9*Math.sin(edge*2.1+Math.sin(z*.17+side))*Math.sin(Math.PI*face);
+  relief+=chuteWallStrength(z)*shoulder*(face*rockHeight+ledges);
+ }
  for(const cliff of cliffDrops){
   const cross=1-smooth(Math.abs(x-cliff.x)/cliff.width);
   const shelf=smooth((z-cliff.z+24)/18)*(1-smooth((z-cliff.z)/2));
@@ -106,11 +132,6 @@ export function liftGround(lift,x,z){
 export const chairProgress=t=>t-.86*Math.sin(t*2*Math.PI)/(2*Math.PI);
 export const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
-export const expertRocks=[
- [112,-13,3.9],[120,-14.5,4.6],[138,12.5,4.1],[147,15.5,4.9],
- [167,-12,4.3],[173,-15,3.7],[191,12,4.1],[207,13,4.8],
- [223,-13,4.5],[241,13.5,3.7],[262,13,3.4],[273,-14,2.9]
-].map(([z,offset,size])=>({...liftWorld(EXPERT,chuteX(z)+offset,timberlineZ(z)),size,r:size*.78}));
 export const routes=[{id:'groomer',name:'The Groomer',offset:-103,width:23,color:'#72bfb4'},{id:'park',name:'The Park',offset:0,width:24,color:'#e3a36b'},{id:'glades',name:'The Glades',offset:103,width:36,color:'#8da776'}];
 export const pathX=(z,r)=>r.offset*Math.sin(Math.PI*clamp((juniperSection(z)-60)/530,0,1));
 const groomer=routes[0];

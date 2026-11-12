@@ -36,7 +36,7 @@ function drawMap(){
   for(let z=TOP.z;z<=600;z+=5)c.lineTo(sx(pathX(z,r)),sz(z));
   c.stroke();
  }
- for(const [route,center,start,end] of [[expertRoute,expertFaceX,26,382],[chuteRoute,chuteX,68,315],[timberRoute,timberX,182,322]]){
+ for(const [route,center,start,end] of [[expertRoute,expertFaceX,26,382],[chuteRoute,chuteX,68,329],[timberRoute,timberX,182,322]]){
   c.strokeStyle=route.color;
   c.lineWidth=route===expertRoute?5:2.5;
   c.beginPath();
