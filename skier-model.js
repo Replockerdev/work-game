@@ -12,17 +12,83 @@ export function makeSkier(scene){
  const strap=mesh(new T.CylinderGeometry(.281,.281,.08,16,1,true),rubber,torso);strap.position.y=1.32;
  const lens=mesh(new T.SphereGeometry(.31,16,8,0,Math.PI),new T.MeshStandardMaterial({color:'#a2c3d3',roughness:.12,metalness:.7}),torso);lens.scale.set(1.05,.37,.45);lens.position.set(0,1.34,.23);box(.075,.06,.08,rubber,0,1.3,.36,torso);
  const hood=mesh(new T.SphereGeometry(.25,10,7),cloth,torso);hood.scale.set(1,.8,.55);hood.position.set(0,.94,-.27);
- const skiGroup=new T.Group();root.add(skiGroup);const boots=[],legs=[],arms=[],feet=[];
+ const skiGroup=new T.Group();root.add(skiGroup);const legs=[],arms=[],feet=[],equipment=[];
+ function trackGear(mounted,kind,side){
+  const loose=mounted.clone(true);
+  loose.name='Loose '+kind;loose.visible=false;scene.add(loose);
+  equipment.push({mounted,loose,kind,side,velocity:new T.Vector3(),spinAxis:new T.Vector3()});
+ }
  function skiGeometry(){const points=[];for(let i=0;i<=22;i++){const z=-1.3+i/22*3.15,t=i/22,w=.105+.035*Math.sin(t*Math.PI),y=.035+Math.pow(Math.max(0,(t-.84)/.16),2)*.28+Math.pow(Math.max(0,(.1-t)/.1),2)*.05;points.push({z,w,y});}const p=[],ind=[];for(const v of points)p.push(-v.w,v.y,v.z,v.w,v.y,v.z,-v.w,v.y+.055,v.z,v.w,v.y+.055,v.z);for(let i=0;i<points.length-1;i++){const k=i*4,n=k+4;ind.push(k+2,n+2,k+3,k+3,n+2,n+3,k,n,k+2,k+2,n,n+2,k+1,k+3,n+1,k+3,n+3,n+1,k,n+1,n,k,k+1,n+1);}const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setIndex(ind);g.computeVertexNormals();return g;}
  const skiMat=new T.MeshStandardMaterial({color:'#d49b54',metalness:.24,roughness:.37});
- for(const s of[-1,1]){const foot=new T.Group();foot.position.x=s*.29;skiGroup.add(foot);feet.push({foot,s});const ski=mesh(skiGeometry(),skiMat,foot);box(.055,.018,2.55,darkCloth,0,.1,.12,foot);box(.2,.07,.28,rubber,0,.13,.14,foot);box(.2,.07,.25,rubber,0,.13,-.26,foot);const boot=new T.Group();foot.add(boot);const shell=mesh(new T.CapsuleGeometry(.12,.28,3,8),rubber,boot);shell.rotation.x=Math.PI/2;shell.position.set(0,.22,.02);box(.23,.3,.23,darkCloth,0,.32,-.1,boot);for(const y of[.25,.4])box(.25,.035,.04,trim,0,y,.025,boot);boots.push(boot);
+ for(const s of[-1,1]){const foot=new T.Group();foot.position.x=s*.29;skiGroup.add(foot);feet.push({foot,s});
+ const ski=new T.Group();ski.name='Mounted ski';foot.add(ski);
+ mesh(skiGeometry(),skiMat,ski);box(.055,.018,2.55,darkCloth,0,.1,.12,ski);
+ box(.2,.07,.28,rubber,0,.13,.14,ski);box(.2,.07,.25,rubber,0,.13,-.26,ski);
+ trackGear(ski,'ski',s);
+ const boot=new T.Group();foot.add(boot);const shell=mesh(new T.CapsuleGeometry(.12,.28,3,8),rubber,boot);shell.rotation.x=Math.PI/2;shell.position.set(0,.22,.02);box(.23,.3,.23,darkCloth,0,.32,-.1,boot);for(const y of[.25,.4])box(.25,.035,.04,trim,0,y,.025,boot);
  const thigh=link([s*.22,.98,0],[s*.25,.57,.2],.17,.15,darkCloth),shin=link([s*.25,.57,.2],[s*.29,.3,-.07],.145,.12,darkCloth);legs.push({thigh,shin,s});
- const upper=link([s*.43,1.77,0],[s*.65,1.37,.14],.145,.125,cloth),lower=link([s*.65,1.37,.14],[s*.74,1.08,.35],.12,.095,cloth),glove=mesh(new T.SphereGeometry(.11,9,6),rubber),pole=link([s*.74,1.08,.35],[s*.88,.07,-.3],.025,.025,metal);arms.push({upper,lower,glove,pole,s});const basket=mesh(new T.TorusGeometry(.065,.013,4,8),rubber);basket.rotation.x=Math.PI/2;arms.at(-1).basket=basket;
+ const upper=link([s*.43,1.77,0],[s*.65,1.37,.14],.145,.125,cloth),lower=link([s*.65,1.37,.14],[s*.74,1.08,.35],.12,.095,cloth),glove=mesh(new T.SphereGeometry(.11,9,6),rubber);
+ const pole=new T.Group();pole.name='Mounted pole';root.add(pole);
+ mesh(new T.CylinderGeometry(.025,.025,1,9),metal,pole);
+ const basket=mesh(new T.TorusGeometry(.065,.013,4,8),rubber,pole);
+ basket.rotation.x=Math.PI/2;basket.position.y=-.42;
+ trackGear(pole,'pole',s);arms.push({upper,lower,glove,pole,s});
  }
  const forward=new T.Vector3(),up=new T.Vector3(),right=new T.Vector3();
  const basis=new T.Matrix4(),yaw=new T.Quaternion(),roll=new T.Quaternion();
  const vertical=new T.Vector3(0,1,0),skiAxis=new T.Vector3(0,0,1);
  const contact=new T.Vector3(),anklePoint=new T.Vector3(),shoulderPoint=new T.Vector3(),crashPivot=new T.Vector3();
+ const poleDirection=new T.Vector3(),gearRotation=new T.Quaternion(),restPose=new T.Euler(0,0,0,'YXZ');
+ let gearCrash=null,gearTime=0;
+ function animateGear(p){
+  const crash=p.crash?.yardSale?p.crash:null;
+  if(crash!==gearCrash){
+   gearCrash=crash;
+   if(crash)root.updateMatrixWorld(true);
+   for(const item of equipment){
+    const {mounted,loose,kind,side,velocity,spinAxis}=item;
+    mounted.visible=!crash;loose.visible=Boolean(crash);
+    if(!crash)continue;
+    mounted.getWorldPosition(loose.position);
+    mounted.getWorldQuaternion(loose.quaternion);
+    mounted.getWorldScale(loose.scale);
+    const ski=kind==='ski';
+    const forwardSpeed=crash.slideSpeed*(ski?.83+side*.07:.5-side*.06);
+    const sideways=side*(ski?3.8:5.6);
+    const sin=Math.sin(crash.heading),cos=Math.cos(crash.heading);
+    velocity.set(sin*forwardSpeed+cos*sideways,ski?2.6+side*.45:3.65-side*.6,cos*forwardSpeed-sin*sideways);
+    item.heading=Math.atan2(velocity.x,velocity.z);
+    spinAxis.set(.65,side*.85,ski?.4:1).normalize();
+    item.spinSpeed=ski?5.5+side:9.1-side;
+    item.landed=false;
+   }
+   gearTime=crash?.time??0;
+  }
+  if(!crash)return;
+  let remaining=Math.min(.12,crash.time-gearTime);
+  gearTime=crash.time;
+  while(remaining>1e-6){
+   const dt=Math.min(remaining,1/120);remaining-=dt;
+   for(const item of equipment){
+    const {loose,velocity,kind,heading}=item;
+    if(!item.landed)velocity.y-=9.81*dt;
+    loose.position.addScaledVector(velocity,dt);
+    const {x,z}=loose.position;
+    const floor=height(x,z)+.09;
+    if(loose.position.y<=floor)item.landed=true;
+    if(item.landed){
+     loose.position.y=floor;
+     velocity.y=0;velocity.multiplyScalar(Math.exp(-4.8*dt));
+     const dx=Math.sin(heading),dz=Math.cos(heading);
+     const pitch=-Math.atan2(height(x+dx,z+dz)-height(x-dx,z-dz),2);
+     restPose.set(pitch+(kind==='pole'?Math.PI/2:0),heading,0);
+     loose.quaternion.slerp(gearRotation.setFromEuler(restPose),1-Math.exp(-18*dt));
+    }else{
+     loose.quaternion.multiply(gearRotation.setFromAxisAngle(item.spinAxis,item.spinSpeed*dt));
+    }
+   }
+  }
+ }
  const runningSole=[-1.05,-.45,.15,.75,1.33];
  function fitSki(foot,p,footYaw,lift,edge){
   const sin=Math.sin(p.angle),cos=Math.cos(p.angle);
@@ -99,8 +165,12 @@ export function makeSkier(scene){
   const hand=[s*(crashed?1.04:.7)+lean*.32,crouch+(crashed?.45:.15)+flail,hipZ+(seated?.88:tucking?.65:.43)+push*.35];
   a.upper.update(shoulder.toArray(),elbow);a.lower.update(elbow,hand);a.glove.position.set(...hand);
   const tip=[s*(crashed?1.25:skating?1.02:.88),crashed?.4+flail:seated?.05:.07,seated?1.48:skating?push*.7-.3:-.3];
-  a.pole.update(hand,tip);a.basket.position.set(tip[0],tip[1]+.1,tip[2]);
+  poleDirection.set(hand[0]-tip[0],hand[1]-tip[1],hand[2]-tip[2]);
+  a.pole.position.set((hand[0]+tip[0])/2,(hand[1]+tip[1])/2,(hand[2]+tip[2])/2);
+  a.pole.scale.y=poleDirection.length();
+  a.pole.quaternion.setFromUnitVectors(vertical,poleDirection.normalize());
  }
+ animateGear(p);
  }
  return {root,animate};
 }

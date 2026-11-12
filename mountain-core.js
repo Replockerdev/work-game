@@ -586,11 +586,12 @@ function startCrash(p,colliders,nx,nz,impactSpeed){
  const deflection=.25-Math.min(0,dx*nx+dz*nz);
  const severity=smooth((impactSpeed-4)/13);
  const tumble=impactSpeed>=14;
- const slideHeading=tumble?heading+side*.4:Math.atan2(dx+nx*deflection,dz+nz*deflection);
+ const yardSale=impactSpeed>=23;
+ const slideHeading=tumble?heading+side*.32:Math.atan2(dx+nx*deflection,dz+nz*deflection);
  p.crash={time:0,duration:1.25+.6*severity,heading,side,severity,tumble,slideHeading,
-  slideSpeed:tumble?Math.min(p.speed*.68,18):impactSpeed*.24,
-  slideTime:tumble?1.45:.45+.35*severity,
-  flying:tumble,verticalSpeed:tumble?4.8+severity*1.9:0,recovery};
+  slideSpeed:tumble?Math.min(p.speed*.88,28):impactSpeed*.24,
+  slideTime:tumble?1.7:.45+.35*severity,
+  flying:tumble,verticalSpeed:tumble?2.25+severity*.5:0,yardSale,recovery};
  p.mode='crash';p.air=false;p.vy=0;p.y=height(p.x,p.z);p.speed=0;p.measuredSpeed=0;
  p.yaw=0;p.edgeAngle=0;p.spray=0;p.drive='crash';
 }
