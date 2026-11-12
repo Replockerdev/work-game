@@ -22,8 +22,13 @@ if(vRockExposure>.01){
  float beds=p.y*.94+p.x*.17+sin(p.z*.44)*.66;
  float seam=pow(.5+.5*sin(beds*1.65),11.0);
  float fractures=pow(.5+.5*sin(p.x*.53-p.z*.62+p.y*.21+sin(p.y*.44)),18.0);
- float grain=sin(p.x*5.3+p.z*4.2)*sin(p.y*7.8+p.z*3.1);
- float textureShade=1.21+.22*sin(beds)-.42*seam-.25*fractures+.11*grain;
+ vec2 grainPosition=vec2(p.x*.91+p.z*.67,p.y*1.37);
+ vec2 grainCell=floor(grainPosition),f=fract(grainPosition);
+ f=f*f*(3.0-2.0*f);
+ float seed=dot(grainCell,vec2(127.1,311.7));
+ vec4 grains=fract(sin(seed+vec4(0.0,127.1,311.7,438.8))*43758.5453);
+ float grain=mix(mix(grains.x,grains.y,f.x),mix(grains.z,grains.w,f.x),f.y)-.5;
+ float textureShade=1.21+.22*sin(beds)-.42*seam-.25*fractures+.18*grain;
  diffuseColor.rgb*=mix(1.0,textureShade,vRockExposure);
 }
 `);};return material;

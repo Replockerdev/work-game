@@ -55,7 +55,7 @@ export function createMountain(canvas){
  const driftSnow=new T.Color('#edf5ff');
  const expertSnow=new T.Color('#e8eff8');
  const chuteSnow=new T.Color('#cfdfe9'),ledgeRock=new T.Color('#65717e');
- const rockShade=new T.Color('#37444e'),wallColor=new T.Color();
+ const rockShade=new T.Color('#37444e'),weatheredRock=new T.Color('#847468'),wallColor=new T.Color();
  for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<flatSummit||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>bankStart&&z<560)color.multiplyScalar(.88);
   if(inBowl(x,z)){
    const edgeFade=T.MathUtils.smoothstep(bowlWidth(z)-Math.abs(x-bowlX(z)),0,10);
@@ -67,12 +67,16 @@ export function createMountain(canvas){
    if(route)color.lerp(route===chuteRoute?chuteSnow:expertSnow,.45);
    const local=expertLocal(x,z);
    const wall=chuteRockMask(local.x,local.z);
-   rockExposure[i]=wall;
    if(wall>0){
-    const strata=terrainNoise(local.z*.044+y*.09,local.x*.26-y*.07);
+    const strata=terrainNoise(local.z*.051+y*.083,local.x*.23-y*.057);
     const grain=terrainNoise(x*.24,z*.21);
-    wallColor.copy(ledgeRock).lerp(rockShade,.12+.73*strata).multiplyScalar(.81+.33*grain);
-    color.lerp(wallColor,wall*.98);
+    const weathering=terrainNoise(x*.047+y*.035,z*.091);
+    const dust=terrainNoise(local.z*.11,local.x*.12+y*.054);
+    const exposed=wall*(1-.68*T.MathUtils.smoothstep(dust,.55,.79));
+    wallColor.copy(ledgeRock).lerp(weatheredRock,.58*weathering)
+     .lerp(rockShade,.12+.63*strata).multiplyScalar(.84+.27*grain);
+    rockExposure[i]=exposed;
+    color.lerp(wallColor,exposed*.98);
    }
    for(const cliff of cliffDrops){
     const cross=1-T.MathUtils.smoothstep(Math.abs(local.x-cliff.x),cliff.width*.55,cliff.width);
