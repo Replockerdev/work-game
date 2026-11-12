@@ -574,7 +574,7 @@ export const turnStyles=[
 ];
 export function spawn(){
  return {x:BASE.x,z:BASE.z-10,y:height(BASE.x,BASE.z-10),angle:0,yaw:0,speed:0,measuredSpeed:0,
-  travelAngle:null,slip:0,vy:0,groundV:0,air:false,jumps:0,airtime:0,bump:0,mode:'ski',ride:0,laps:0,
+  travelAngle:null,slip:0,vy:0,groundV:0,suspension:0,air:false,jumps:0,airtime:0,bump:0,mode:'ski',ride:0,laps:0,
   passedTop:false,route:'Lift base',lastRoute:'',distance:0,drive:'glide',skatePhase:0,
   turnStyle:0,edgeAngle:0,spray:0,safeTrail:[],crash:null};
 }
@@ -594,7 +594,7 @@ export function board(p){
  const lift=boardingLift(p);
  if(!lift)return false;
  p.activeLift=lift;p.mode='lift';p.ride=0;p.speed=0;p.air=false;p.angle=lift.yaw;p.yaw=0;
- p.edgeAngle=0;p.spray=0;
+ p.edgeAngle=0;p.spray=0;p.suspension=0;
  p.safeTrail=[];
  p.race=null;
  return true;
@@ -608,13 +608,29 @@ export function unload(p){
  Object.assign(p,liftWorld(lift,lift.center+8,exitZ));
  p.y=height(p.x,p.z);
  p.mode='ski';p.angle=lift.yaw+(lift.autoUnload?Math.PI:0);p.speed=0;p.measuredSpeed=0;p.travelAngle=null;p.slip=0;
- p.yaw=0;p.vy=0;p.groundV=0;p.drive='glide';
+ p.yaw=0;p.vy=0;p.groundV=0;p.suspension=0;p.drive='glide';
  p.passedTop=true;
  p.route=lift.landing??(lift===EXPERT?'Timberline Summit':'Summit · pick a line');
  return true;
 }
 const gravity=9.81;
 const angleDelta=(target,current)=>Math.atan2(Math.sin(target-current),Math.cos(target-current));
+function skiGrade(x,z,dx,dz){
+ const reach=2.5;
+ return (height(x+dx*reach,z+dz*reach)-height(x-dx*reach,z-dz*reach))/(2*reach);
+}
+function unmarkedDrop(x,z,y,dx,dz,speed){
+ const approach=(y-height(x-dx*3,z-dz*3))/3;
+ // Both the close and the far snow have to fall away. A bump can
+ // break contact at one point and still be within reach of the skis.
+ const clearance=distance=>y+Math.min(approach,.12)*distance-.5*gravity*(distance/speed)**2
+  -height(x+dx*distance,z+dz*distance);
+ return clearance(1.6)>.40&&clearance(5.5)>1.35;
+}
+function timberlineDrop(x,z,nextX,nextZ){
+ const a=expertLocal(x,z),b=expertLocal(nextX,nextZ);
+ return cliffDrops.some(cliff=>a.z<=cliff.z&&b.z>cliff.z&&Math.abs(b.x-cliff.x)<cliff.width*.62);
+}
 function obstacleDistance(x,z,obstacle){
  const dx=x-obstacle.x,dz=z-obstacle.z;
  if(!obstacle.box)return Math.hypot(dx,dz)-(obstacle.r??.8);
@@ -681,7 +697,7 @@ function startCrash(p,colliders,nx,nz,impactSpeed){
   flying:tumble,verticalSpeed:tumble?2.25+severity*.5:0,yardSale,recovery};
  p.mode='crash';p.air=false;p.vy=0;p.y=height(p.x,p.z);p.speed=0;p.measuredSpeed=0;
  p.race=null;
- p.yaw=0;p.edgeAngle=0;p.spray=0;p.drive='crash';
+ p.yaw=0;p.edgeAngle=0;p.spray=0;p.suspension=0;p.drive='crash';
 }
 export function step(p,input,dt,colliders=[]){const events=[];
  if(p.mode==='crash'){
@@ -816,20 +832,40 @@ export function step(p,input,dt,colliders=[]){const events=[];
   if(p.speed>.05)p.travelAngle=Math.atan2(actualX,actualZ);
  }
  const ground=height(p.x,p.z);
- const sideHit=powder>.2&&!p.air&&p.speed>9&&dz>0&&driftHits.some(hit=>oldZ<hit.z&&p.z>=hit.z&&Math.abs(p.x-hit.x)<hit.width*.61);
- const powderDrop=powderCliffOffset(oldX,oldZ)<=0&&powderCliffOffset(p.x,p.z)>0
-  &&powderCliffSpan(p.z)>.88;
- const ridgeDrop=ridge>.6&&dz>0&&oldZ<=ridgeDropLip(oldX)&&p.z>ridgeDropLip(p.x);
- const cliffDrop=!p.air&&(powderDrop||ridgeDrop);
- const leavesSnow=!p.air&&p.speed>5&&ground<oldY+(oldGroundV-8)*dt;
- if(!p.air&&input.jump&&p.speed>1){
-  p.air=true;p.vy=oldGroundV+4.4;p.airtime=0;events.push('takeoff');
- }else if(cliffDrop||sideHit||leavesSnow){
-  const launch=cliffDrop?0:sideHit?-.65:oldGroundV;
-  p.air=true;p.vy=Math.max(oldGroundV,launch);p.airtime=0;events.push('takeoff');
+ const groundV=(ground-(p.air?height(oldX,oldZ):oldY))/dt;
+ if(!p.air){
+  const powderDrop=powderCliffOffset(oldX,oldZ)<=0&&powderCliffOffset(p.x,p.z)>0&&powderCliffSpan(p.z)>.88;
+  const ridgeDrop=ridge>.6&&oldZ<=ridgeDropLip(oldX)&&p.z>ridgeDropLip(p.x)&&dz>0;
+  const expertDrop=expert&&timberlineDrop(oldX,oldZ,p.x,p.z);
+  const parkLip=p.speed>7&&jumps.some(j=>oldZ<j.z&&p.z>=j.z&&Math.abs(p.x)<j.width*.92);
+  const sideHit=powder>.2&&p.speed>9&&driftHits.some(hit=>oldZ<hit.z&&p.z>=hit.z&&Math.abs(p.x-hit.x)<hit.width*.61);
+  // Highline's marked descents are continuous snow. Keep their rolls and
+  // the shoulders between nearby lines skiable even where the grade changes fast.
+  const bigDrop=p.speed>8&&oldGroundV-groundV>5&&!alpine&&!highlineTrailAt(p.x,p.z)
+   &&unmarkedDrop(oldX,oldZ,oldY,forwardX,forwardZ,p.speed);
+  const jumping=input.jump&&p.speed>1;
+  if(jumping||powderDrop||ridgeDrop||expertDrop||parkLip||sideHit||bigDrop){
+  const minLaunch=powderDrop||ridgeDrop||expertDrop?0:sideHit?-.65:parkLip?.7:oldGroundV;
+   p.vy=jumping?Math.max(-1.6,p.speed*skiGrade(oldX,oldZ,forwardX,forwardZ))+4.4:Math.max(oldGroundV,minLaunch);
+   p.air=true;p.airtime=0;events.push('takeoff');
+  }
  }
- // Keep the actual snow pitch through touchdown so steep snow doesn't launch the skis again.
- if(p.air){p.vy-=gravity*dt;p.y+=p.vy*dt;p.airtime+=dt;if(p.y<=ground){p.y=ground;p.air=false;p.vy=0;if(p.airtime>.25){p.jumps++;events.push('land');}p.groundV=(ground-height(oldX,oldZ))/dt;}}else{p.y=ground;p.groundV=(ground-oldY)/dt;}
+ if(p.air){
+  p.vy-=gravity*dt;p.y+=p.vy*dt;p.airtime+=dt;
+  p.suspension*=Math.exp(-12*dt);
+  if(p.y<=ground){
+   const impact=groundV-p.vy;
+   p.suspension=Math.min(p.suspension,-clamp(impact*.036,0,.42));
+   p.y=ground;p.air=false;p.vy=0;
+   if(p.airtime>.25){p.jumps++;events.push('land');}
+  }
+ }else{
+  const bodyV=p.speed>1.5?p.speed*skiGrade(p.x,p.z,forwardX,forwardZ):groundV;
+  // Follow the average pitch with the hips while the skis track the bumps.
+  p.suspension=clamp((p.suspension+(bodyV-groundV)*dt)*Math.exp(-8*dt),-.44,.24);
+  p.y=ground;
+ }
+ p.groundV=groundV;
  // Measure the actual distance in 3D before any collision push-out can move the skier.
  const distance=Math.hypot(horizontal,p.y-oldY);
  p.distance+=distance;

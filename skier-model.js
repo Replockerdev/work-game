@@ -136,8 +136,11 @@ export function makeSkier(scene){
  const phase=p.skatePhase||0,turn=Math.min(1,Math.abs(p.yaw));
  const edge=grounded&&!skating?p.edgeAngle:0;
  const hipShift=Math.sin(edge)*.45;
- const crouch=crashed?.63:seated?.44:tucking?.60:skating?.87:.91-Math.min(.15,p.speed*.005)-turn*.06-Math.abs(hipShift)*.16;
- const hipZ=seated?-.05:tucking?-.24:-.12;
+ const suspension=grounded?p.suspension:0;
+ const compression=Math.max(0,-suspension);
+ const stance=crashed?.63:seated?.44:tucking?.60:skating?.87:.91-Math.min(.15,p.speed*.005)-turn*.06-Math.abs(hipShift)*.16;
+ const crouch=stance+suspension*(tucking?.53:.84);
+ const hipZ=(seated?-.05:tucking?-.24:-.12)-compression*.24;
  torso.position.set(skating?Math.sin(phase)*.065:hipShift,crouch,hipZ);
  torso.rotation.x=crashed?.35+Math.sin(crashTime*10)*.1*Math.exp(-crashTime*3):seated?-.08:tucking?.48:skating?.16+Math.cos(phase*2)*.035:.06+Math.min(.23,p.speed*.007);
  torso.rotation.z=crashed?p.crash.side*.18:-edge*.9;
@@ -151,7 +154,12 @@ export function makeSkier(scene){
   else foot.rotation.set(crashed?s*.25:0,crashed?s*.38:footYaw,crashed?s*.18:0);
   if(crashed)foot.position.set(s*.48,.1,s*.22);
  }
- for(let i=0;i<legs.length;i++){const {thigh,shin,s}=legs[i],foot=feet[i].foot,hip=[s*.22+hipShift,crouch+.02,hipZ],knee=[skating?foot.position.x:s*.27+hipShift*.78,seated?.43:.52-turn*.03,seated?.56:skating?.19+foot.position.z*.6:.2];
+ for(let i=0;i<legs.length;i++){
+  const {thigh,shin,s}=legs[i],foot=feet[i].foot;
+  const hip=[s*.22+hipShift,crouch+.02,hipZ];
+  const knee=[skating?foot.position.x:s*.27+hipShift*.78,
+   seated?.43:.52-turn*.03+(grounded?foot.position.y*.45+(crouch-stance)*.52:0),
+   seated?.56:(skating?.19+foot.position.z*.6:.2)+compression*.58];
   anklePoint.set(0,.3,-.07).applyQuaternion(foot.quaternion).add(foot.position);
   const ankle=seated?[foot.position.x,.26,.72]:anklePoint.toArray();
   thigh.update(hip,knee);shin.update(knee,ankle);
