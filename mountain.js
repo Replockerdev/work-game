@@ -1,5 +1,5 @@
 import {createMountain} from './mountain-view.js';
-import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,TOP,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute,juniperZ,timberlineZ,bowlRoute,bowlX,powderCenterZ,driftRoute,driftX,driftExitX,ridgeDropX} from './mountain-core.js';
+import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,TOP,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute,juniperZ,timberlineZ,bowlRoute,powderToGladeZ,driftRoute,driftX,driftExitX,ridgeDropX} from './mountain-core.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
 const $=id=>document.getElementById(id),canvas=$('game');let view;try{view=createMountain(canvas);}catch(e){$('overlay').querySelector('h1').textContent='3D graphics unavailable';$('overlay').querySelector('p').textContent='This mountain needs WebGL. Try Chrome or Edge with graphics acceleration enabled.';throw e;}
 let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0;try{p.laps=Math.max(0,Number(localStorage.getItem('work-game-three-lines-laps'))||0);}catch{}
@@ -47,8 +47,7 @@ function drawMap(){
   c.stroke();
  }
  c.strokeStyle=bowlRoute.color;c.lineWidth=4;c.beginPath();
- for(let x=-692;x<=-288;x+=4)c.lineTo(sx(x),sz(powderCenterZ(x)));
- for(let z=307;z<=580;z+=4)c.lineTo(sx(bowlX(z)),sz(z));
+ for(let x=-692;x<=-184;x+=4)c.lineTo(sx(x),sz(powderToGladeZ(x)));
  c.stroke();
  c.strokeStyle=driftRoute.color;c.lineWidth=4;c.beginPath();
  for(let s=52;s<266;s+=3)c.lineTo(sx(driftX(s)),sz(juniperZ(s)));

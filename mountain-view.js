@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,expertRocks,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,powderToGladeMask,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
@@ -80,7 +80,7 @@ export function createMountain(canvas){
     color.lerp(ledgeRock,band*powderCliffSpan(z)*.96);
    }
   }
-  const glade=Math.max(driftDepth(x,z),ridgeDropMask(x,z)*(1-T.MathUtils.smoothstep(z,478,532)));
+  const glade=Math.max(driftDepth(x,z),ridgeDropMask(x,z)*(1-T.MathUtils.smoothstep(z,478,532)),powderToGladeMask(x,z)*.78);
   color.lerp(driftSnow,glade*.78);
   color.multiplyScalar(1+glade*(terrainNoise(x*.17,z*.13)-.5)*.065);
  if(x>-230&&x<-105&&z>397&&z<432){

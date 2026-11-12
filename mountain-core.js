@@ -199,7 +199,7 @@ export const driftHits=[
  {section:240,offset:-21,h:1.8,width:8,approach:14,landing:8}
 ].map(hit=>({...hit,x:driftX(hit.section)+hit.offset,z:2*Math.round(juniperZ(hit.section)/2)}));
 export const ridgeGladeDepth=(x,z)=>ridgeDropMask(x,z)*(1-smooth((z-478)/54));
-export const snowDepth=(x,z)=>Math.max(driftDepth(x,z),powderDepth(x,z),ridgeGladeDepth(x,z));
+export const snowDepth=(x,z)=>Math.max(driftDepth(x,z),powderDepth(x,z),ridgeGladeDepth(x,z),powderToGladeMask(x,z));
 export const bowlStart=juniperZ(148),bowlEnd=juniperZ(584);
 export function bowlX(z){
  const section=juniperSection(z);
@@ -218,6 +218,18 @@ export function inBowl(x,z,margin=0){
 export function powderCenterZ(x){
  const west=-x-290;
  return 305+145*smooth(west/410)+.08*west;
+}
+const bowlMergeStart=-408,bowlMergeEnd=-184;
+export function powderToGladeZ(x){
+ const bend=clamp((x+358)/(bowlMergeEnd+358),0,1);
+ return powderCenterZ(x)+54.5*bend**4.2;
+}
+export function powderToGladeMask(x,z){
+ if(x<=bowlMergeStart||x>=bowlMergeEnd+20||z<244||z>416)return 0;
+ const cross=1-smooth((Math.abs(z-powderToGladeZ(x))-24)/31);
+ const ends=smooth((x-bowlMergeStart)/54)*(1-smooth((x-bowlMergeEnd)/20));
+ // Leave the actual cliff edge and landing to the glade terrain.
+ return cross*ends*(1-smooth((z-ridgeDropLip(x)+23)/16));
 }
 export function powderDepth(x,z){
  const lower=inBowl(x,z)&&Math.abs(x-pathX(z,groomer))>groomer.width;
@@ -253,6 +265,7 @@ export function trailAt(x,z){
  const expert=expertLine(x,z);
  if(expert)return expert;
  if(ridgeDropMask(x,z)>.55)return driftRoute;
+ if(powderToGladeMask(x,z)>.4)return x<-260?bowlRoute:driftRoute;
  if(driftDepth(x,z)>.22)return driftRoute;
  if(powderDepth(x,z)>.2)return bowlRoute;
  if(z<juniperZ(85)||z>570)return null;
@@ -390,6 +403,14 @@ function mountainHeight(x,z){let y=baseHeight(z);const edge=smooth((Math.abs(x)-
    *smooth((z-184)/30)*(1-smooth((z-398)/15));
   floor+=pillows;
   y+=(floor-y)*ridge;
+ }
+ const bowlMerge=powderToGladeMask(x,z);
+ if(bowlMerge>0){
+  // Taper the bowl's steeper floor into the same plane as the glade approach.
+  const along=(z-ridgeStartZ+(x-ridgeStartX)*ridgeDirectionX)/ridgePlanLength;
+  const remaining=1-clamp((x-bowlMergeStart)/(bowlMergeEnd-bowlMergeStart),0,1);
+  const floor=114-ridgeGrade*along+125*remaining**2.25;
+  y+=(floor-y)*bowlMerge;
  }
  const entry=driftEntryMask(x,z);
  if(entry>0){
@@ -706,7 +727,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const push=p.drive==='skate'?8.8*Math.max(0,1-p.speed/10)+.9*Math.max(0,Math.sin(p.skatePhase*2)):0;
  const softSnow=powder*(.60+p.speed*.045)-gladeSnow*(.23+p.speed*.01);
  const trailDrag=(onTrail(p.x,p.z)||powder>.2?.30:.72)+softSnow;
- const surfaceDrag=trailDrag+(.18-trailDrag)*Math.max(entry,ridge);
+ const surfaceDrag=trailDrag+(.18-trailDrag)*Math.max(entry,ridge,powderToGladeMask(p.x,p.z));
  const aeroDrag=(p.drive==='tuck'?.0038:.0058)*p.speed**2;
  const edgeDrag=Math.abs(sideSlip)*p.speed*(input.brake?Math.max(.42,style.scrub):style.scrub);
  const brake=p.drive==='brake'?5.6+p.speed*.32:0;
