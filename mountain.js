@@ -1,10 +1,24 @@
 import {createMountain} from './mountain-view.js';
-import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,TOP,routes,pathX,JUNIPER,EXPERT,liftWorld,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute,juniperZ,timberlineZ,bowlRoute,powderToGladeZ,driftRoute,driftX,driftExitX,ridgeDropX} from './mountain-core.js';
+import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,TOP,routes,pathX,JUNIPER,EXPERT,liftWorld,height,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute,juniperZ,timberlineZ,bowlRoute,powderToGladeZ,driftRoute,driftX,driftExitX,ridgeDropX} from './mountain-core.js';
+import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_LIFTS,HIGHLINE_TRAILS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,RACE,RACE_GATES} from './highline.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
 const $=id=>document.getElementById(id),canvas=$('game');let view;try{view=createMountain(canvas);}catch(e){$('overlay').querySelector('h1').textContent='3D graphics unavailable';$('overlay').querySelector('p').textContent='This mountain needs WebGL. Try Chrome or Edge with graphics acceleration enabled.';throw e;}
-let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0;try{p.laps=Math.max(0,Number(localStorage.getItem('work-game-three-lines-laps'))||0);}catch{}
+let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0,mapArea='juniper',raceBest=0;
+try{
+ p.laps=Math.max(0,Number(localStorage.getItem('work-game-three-lines-laps'))||0);
+ raceBest=Number(localStorage.getItem('work-game-ridgeline-best'))||0;
+}catch{}
 function toast(s,time=3){$('toast').textContent=s;$('toast').hidden=false;toastTime=time;}
-function reset(){const {laps,turnStyle}=p;p=spawn();p.laps=laps;p.turnStyle=turnStyle;keys={};jump=false;view.resetCamera();toast('Back at the chair. E to board.');canvas.focus();}
+function reset(){
+ const {laps,turnStyle}=p;
+ const home=p.x>OLD_EAST?(p.y>=310?HIGHLINE_CHAIR:HOLLOW_CHAIR):null;
+ p=spawn();p.laps=laps;p.turnStyle=turnStyle;
+ if(home){
+  Object.assign(p,liftWorld(home,home.center+8,home.bottom+7));
+  p.y=height(p.x,p.z);p.angle=home.yaw;p.route=home.name+' · Base';
+ }
+ keys={};jump=false;view.resetCamera();toast('Back at the chair. E to board.');canvas.focus();
+}
 function cycleTurnStyle(){
  if(!started||paused)return;
  p.turnStyle=(p.turnStyle+1)%turnStyles.length;
@@ -21,10 +35,45 @@ function interact(){
  canvas.focus();ui();
 }
 function pause(){if(!started)return;paused=!paused;keys={};jump=false;$('pauseOverlay').hidden=!paused;$('pause').textContent=paused?'Resume · P':'Pause · P';if(!paused)canvas.focus();}
-function map(){$('trailMap').hidden=!$('trailMap').hidden;canvas.focus();}
+function map(){
+ $('trailMap').hidden=!$('trailMap').hidden;
+ if(!$('trailMap').hidden)setMapArea(p.x>OLD_EAST?'highline':'juniper');
+ canvas.focus();
+}
+function setMapArea(area){
+ mapArea=area;
+ $('mapJuniper').setAttribute('aria-pressed',String(area==='juniper'));
+ $('mapHighline').setAttribute('aria-pressed',String(area==='highline'));
+ $('legendJuniper').hidden=area!=='juniper';
+ $('legendHighline').hidden=area!=='highline';
+ drawMap();
+}
+function drawHighlineMap(c){
+ const sx=x=>247-(x-80)*.222,sz=z=>24+(z+230)*.339;
+ c.strokeStyle='#91a2a9';c.lineWidth=2;c.setLineDash([4,4]);
+ for(const lift of HIGHLINE_LIFTS){
+  const top=liftWorld(lift,0,lift.top),bottom=liftWorld(lift,0,lift.bottom);
+  c.beginPath();c.moveTo(sx(top.x),sz(top.z));c.lineTo(sx(bottom.x),sz(bottom.z));c.stroke();
+ }
+ c.setLineDash([]);
+ for(const route of HIGHLINE_TRAILS){
+  c.strokeStyle=route.color;c.lineWidth=route.kind==='chute'?2.6:3.7;c.lineCap='round';
+  if(route.kind==='link')c.setLineDash([3,4]);
+  c.beginPath();for(const point of route.points)c.lineTo(sx(point.x),sz(point.z));c.stroke();
+  c.setLineDash([]);
+ }
+ c.font='9px Arial';c.fillStyle='#395769';c.textAlign='center';
+ c.fillText('HIGHLINE SUMMIT',sx(HIGHLINE_PEAK.x),sz(HIGHLINE_PEAK.z)-7);
+ c.fillText('TREELINE SADDLE',sx(TREELINE.x)-19,sz(TREELINE.z)-7);
+ c.fillText('HOLLOW CHAIR',sx(HOLLOW_BASE.x),sz(HOLLOW_BASE.z)+15);
+ c.fillText('OG GLADES',sx(103)-19,sz(233)-7);
+ c.fillText('JUNIPER RETURN',sx(241)-15,sz(606)+16);
+ if(p.x>72){c.fillStyle='#254e60';c.beginPath();c.arc(sx(p.x),sz(p.z),5,0,7);c.fill();c.strokeStyle='#fff';c.lineWidth=2;c.stroke();}
+}
 function drawMap(){
  const c=$('map').getContext('2d'),sx=x=>64-x*.20,sz=z=>20+(z-JUNIPER.top)/(BASE.z-JUNIPER.top)*285;
  c.clearRect(0,0,250,330);
+ if(mapArea==='highline'){drawHighlineMap(c);return;}
  c.strokeStyle='#7d919b';c.lineWidth=2;c.setLineDash([4,4]);
  for(const lift of [JUNIPER,EXPERT]){
   const top=liftWorld(lift,lift.center,lift.top),base=liftWorld(lift,lift.center,lift.bottom);
@@ -64,24 +113,72 @@ function drawMap(){
 }
 function ui(){
  const lift=p.mode==='lift',near=boardingLift(p),atTop=canUnload(p);
+ const alpine=p.x>OLD_EAST;
  const expertDescent=p.route==='Timberline Summit'||expertRoutes.some(route=>route.name===p.route);
  $('speed').textContent=lift?'—':Math.round(p.measuredSpeed*3.6);
  $('laps').textContent=p.laps;
  $('movement').textContent=p.mode==='crash'?'Wipeout · Getting back up…':atTop?'Press E when you’re ready':lift?'Chairlift · '+Math.round(p.ride*100)+'%':p.air?'In the air':p.drive==='skate'?'Skating · hold W to push':p.drive==='tuck'?'Tucking · release W to stand':p.speed<1?'Hold W to skate · A / D turns your skis':p.drive==='brake'?'Braking · steer across the slope':'Carve with A / D · S slows you down';
  $('route').textContent=lift?p.activeLift.name+(atTop?' · At the summit':' · Going up'):p.route;
- $('routeDot').style.background=lift?'#d6a166':[...routes,...expertRoutes,driftRoute].find(r=>r.name===p.route)?.color||'#72bfb4';
+ $('routeDot').style.background=lift?'#d6a166':[...routes,...expertRoutes,driftRoute,...HIGHLINE_TRAILS].find(r=>r.name===p.route)?.color||'#72bfb4';
+ const raceStatus=$('raceStatus');
+ raceStatus.hidden=!p.race&&(p.route!==RACE.name||!raceBest);
+ raceStatus.textContent=p.race?`${p.race.time.toFixed(1)} s · Gate ${p.race.next}/${RACE_GATES.length-1}`:`Race best · ${raceBest.toFixed(2)} s`;
  const atJuniperSummit=p.z<juniperZ(75);
  const prompt=$('prompt');
- prompt.hidden=!near&&!lift&&(expertDescent||p.route===driftRoute.name||p.z<565&&!atJuniperSummit);
+ const atSaddle=alpine&&Math.hypot(p.x-TREELINE.x,p.z-TREELINE.z)<53;
+ const atHighlineSummit=alpine&&Math.hypot(p.x-HIGHLINE_PEAK.x,p.z-HIGHLINE_PEAK.z)<35;
+ prompt.hidden=!near&&!lift&&(alpine?!atSaddle&&!atHighlineSummit:expertDescent||p.route===driftRoute.name||p.z<565&&!atJuniperSummit);
  $('interact').hidden=!near&&!atTop;
  $('interact').textContent=atTop?'E · Unload':'E · Board chair';
- $('promptText').textContent=atTop?'Your chair will wait here.':lift?'Press E to unload when you reach the summit.':near?'Press E to board '+near.name+'.':atJuniperSummit?'Glades ←    Park straight ahead    Groomer & Snowdrift →':'Juniper base '+Math.round(Math.hypot(p.x-BASE.x,p.z-BASE.z))+' m · head into the base clearing';
+ $('promptText').textContent=atTop?'Your chair will wait here.':lift?(p.activeLift.autoUnload?'Unloading at '+p.activeLift.landing+'.':'Press E to unload when you reach the summit.'):near?'Press E to board '+near.name+'.':atHighlineSummit?'Turn downhill to pick a bowl or chute.':atSaddle?'Highline Chair ←    Fir Hollow ahead    Meadow Way →':atJuniperSummit?'Glades ←    Park straight ahead    Groomer & Snowdrift →':'Juniper base '+Math.round(Math.hypot(p.x-BASE.x,p.z-BASE.z))+' m · head into the base clearing';
  if(!$('trailMap').hidden)drawMap();
 }
-function frame(t){const dt=Math.min((t-last)/1000,.1)||0;last=t;if(!document.hidden){if(started&&!paused){let remaining=dt;while(remaining>0){const d=Math.min(remaining,1/120),events=step(p,{left:keys.a||keys.ArrowLeft,right:keys.d||keys.ArrowRight,tuck:keys.w||keys.ArrowUp,brake:keys.s||keys.ArrowDown,jump},d,view.colliders);jump=false;for(const e of events){if(e==='land')toast('Landed. '+p.jumps+' clean '+(p.jumps===1?'jump':'jumps')+'.',2);if(e==='bump')toast('A soft bump. Brake and pick your way through.',2);if(e==='crash')toast('Wipeout · Getting back up…',2);if(e==='respawn'){keys={};jump=false;view.resetCamera();toastTime=0;}if(e==='lap'){try{localStorage.setItem('work-game-three-lines-laps',p.laps);}catch{}toast('Lap complete. E boards in the loading area.',4);}}remaining-=d;}}
-view.render(p,dt,paused||!started);toastTime-=paused?0:dt;if(toastTime<=0)$('toast').hidden=true;uiTimer+=dt;if(uiTimer>.12){ui();uiTimer=0;}}requestAnimationFrame(frame);}
+function onSkiEvent(event){
+ if(event==='land'&&!p.race)toast('Landed. '+p.jumps+' clean '+(p.jumps===1?'jump':'jumps')+'.',2);
+ if(event==='bump'&&!p.race)toast('A soft bump. Brake and pick your way through.',2);
+ if(event==='crash')toast('Wipeout · Getting back up…',2);
+ if(event==='respawn'){keys={};jump=false;view.resetCamera();toastTime=0;}
+ if(event==='unload'){keys={};jump=false;view.resetCamera();toast(p.route,3);}
+ if(event==='race-start')toast('Ridgeline Race · Go!',2);
+ if(event==='race-missed')toast('Missed a gate. Cross the start again for another run.',3);
+ if(event==='race-finish'){
+  const best=!raceBest||p.raceResult<raceBest;
+  if(best){
+   raceBest=p.raceResult;
+   try{localStorage.setItem('work-game-ridgeline-best',String(raceBest));}catch{}
+  }
+  toast(`Finish · ${p.raceResult.toFixed(2)} s${best?' · Personal best':''}`,5);
+ }
+ if(event==='lap'){
+  try{localStorage.setItem('work-game-three-lines-laps',p.laps);}catch{}
+  if(!p.raceResult||toastTime<=0)toast('Lap complete. E boards in the loading area.',4);
+ }
+}
+function frame(t){
+ const dt=Math.min((t-last)/1000,.1)||0;last=t;
+ if(!document.hidden){
+  if(started&&!paused){
+   let remaining=dt;
+   while(remaining>0){
+    const d=Math.min(remaining,1/120);
+    const events=step(p,{left:keys.a||keys.ArrowLeft,right:keys.d||keys.ArrowRight,tuck:keys.w||keys.ArrowUp,brake:keys.s||keys.ArrowDown,jump},d,view.colliders);
+    jump=false;
+    for(const event of events)onSkiEvent(event);
+    remaining-=d;
+   }
+  }
+  view.render(p,dt,paused||!started);
+  toastTime-=paused?0:dt;
+  if(toastTime<=0)$('toast').hidden=true;
+  uiTimer+=dt;
+  if(uiTimer>.12){ui();uiTimer=0;}
+ }
+ requestAnimationFrame(frame);
+}
 $('start').onclick=()=>{started=true;$('overlay').hidden=true;canvas.focus();toast('Press E anywhere in the base clearing to ride the chair.',5);};$('interact').onclick=interact;$('pause').onclick=pause;$('resume').onclick=pause;$('mapButton').onclick=map;$('closeMap').onclick=map;$('fullscreen').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else $('mountain').requestFullscreen().catch(()=>{});canvas.focus();};
 $('turnStyle').onclick=cycleTurnStyle;
+$('mapJuniper').onclick=()=>setMapArea('juniper');
+$('mapHighline').onclick=()=>setMapArea('highline');
 document.addEventListener('keydown',e=>{
  if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
  const k=e.key.length===1?e.key.toLowerCase():e.key;

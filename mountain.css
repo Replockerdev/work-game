@@ -4,4 +4,13 @@
 #turnStyle{display:block;margin-top:8px;padding:5px 8px;border:1px solid #ffffff99;border-radius:5px;background:#f7fcf2dd;font-size:10px;font-weight:700;pointer-events:auto;text-shadow:none;white-space:nowrap}
 #turnStyle[data-style=carve]{background:#deeff3;color:#245a74}
 #turnStyle[data-style=skid]{background:#f4e9d8;color:#704e30}
+.map-areas{display:flex;gap:5px;margin:3px 0 6px}
+.map-areas button{flex:1;background:#e2ebe6;border-radius:4px;padding:5px 8px;font-size:10px;font-weight:700}
+.map-areas button[aria-pressed=true]{background:#315e6a;color:#fff}
+.map-legend[hidden]{display:none}
+#legendHighline span:nth-child(2){color:#945a2b}
+#legendHighline span:nth-child(3){color:#67516f}
+#legendHighline span:nth-child(4){color:#416d84}
+.race-status{position:absolute;top:113px;left:30px;border-radius:5px;background:#f7fcf2e6;padding:7px 10px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+@media(max-width:900px){.race-status{top:100px;left:20px}}
 

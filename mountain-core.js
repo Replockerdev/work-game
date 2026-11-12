@@ -1,3 +1,5 @@
+import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,highlineHeight,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
+
 // Stretch Juniper toward the north ridge while keeping the shared lower hill in place.
 export function juniperZ(section){
  if(section<=0)return section-300;
@@ -11,7 +13,7 @@ export function juniperSection(z){
  return 2*distance/(2.2+Math.sqrt(4.84-.0048*distance));
 }
 export const LENGTH=640, BASE={x:-28,z:622},TOP={x:-20,z:juniperZ(35)};
-export const SNOW_WEST=-875,SNOW_EAST=215,SNOW_NORTH=-340,SNOW_SOUTH=690;
+export const SNOW_WEST=-875,SNOW_EAST=HIGHLINE_EAST,SNOW_NORTH=-340,SNOW_SOUTH=690;
 export const BOARD_CENTER={x:0,z:610},BOARD_RADIUS=58;
 export const LIFT={upX:-22,downX:-38,towerX:-30,towerWidth:.9,crossbeamClearance:1.5,chairWidth:3.6};
 export const SUMMIT_TERMINAL=juniperZ(12);
@@ -126,7 +128,7 @@ export function liftCableHeight(z,lift=JUNIPER){
  const a=towers[i],b=towers[i+1],t=(z-a)/(b-a);
  const terminalDistance=Math.min(z-lift.top,lift.bottom-z);
  const blend=smooth(terminalDistance/45);
- if(lift===EXPERT){
+ if(lift!==JUNIPER){
   const ground=liftGround(lift,8,z);
   const chord=liftGround(lift,8,a)*(1-t)+liftGround(lift,8,b)*t;
   const highLane=Math.max(ground,liftGround(lift,-8,z));
@@ -233,7 +235,11 @@ export const driftHits=[
  {section:240,offset:-21,h:1.8,width:8,approach:14,landing:8}
 ].map(hit=>({...hit,x:driftX(hit.section)+hit.offset,z:2*Math.round(juniperZ(hit.section)/2)}));
 export const ridgeGladeDepth=(x,z)=>ridgeDropMask(x,z)*(1-smooth((z-478)/54));
-export const snowDepth=(x,z)=>Math.max(driftDepth(x,z),powderDepth(x,z),ridgeGladeDepth(x,z),powderToGladeMask(x,z));
+export const snowDepth=(x,z)=>{
+ const alpine=highlineTrailAt(x,z);
+ return Math.max(driftDepth(x,z),powderDepth(x,z),ridgeGladeDepth(x,z),powderToGladeMask(x,z),
+  alpine?.kind==='glade'?.65:alpine?.kind==='bowl'?.72:0);
+};
 export const bowlStart=juniperZ(148),bowlEnd=juniperZ(584);
 export function bowlX(z){
  const section=juniperSection(z);
@@ -298,6 +304,9 @@ export const bowlRocks=[
 export function trailAt(x,z){
  const expert=expertLine(x,z);
  if(expert)return expert;
+ const highline=highlineTrailAt(x,z);
+ if(highline)return highline;
+ if(x>OLD_EAST)return null;
  if(ridgeDropMask(x,z)>.55)return driftRoute;
  if(powderToGladeMask(x,z)>.4)return x<-260?bowlRoute:driftRoute;
  if(driftDepth(x,z)>.22)return driftRoute;
@@ -321,6 +330,9 @@ export function gladeBoundary(z){
  return {west,east:pathX(z,groomer)-groomer.width};
 }
 export function height(x,z){
+ return highlineHeight(x,z,juniperHeight(Math.min(x,OLD_EAST),z));
+}
+function juniperHeight(x,z){
  const y=mountainHeight(x,z);
  if(z<=-170||z>=391)return y;
  const {west,east}=gladeBoundary(z);
@@ -550,7 +562,10 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
   const s=.65+rand()*.68;
   shoulderTrees.push({x,z,s,r:.55+s*.27});
  }
- return [...existing,...lowerGlade,...shoulderTrees];
+ const alpine=highlineTrees(height,HIGHLINE_LIFTS.flatMap(lift=>[
+  liftWorld(lift,lift.center+8,lift.top),liftWorld(lift,lift.center+8,lift.bottom)
+ ]));
+ return [...existing,...lowerGlade,...shoulderTrees,...alpine];
 }
 export const turnStyles=[
  {id:'normal',label:'Normal turns',grip:8.8,scrub:.42},
@@ -564,8 +579,12 @@ export function spawn(){
   turnStyle:0,edgeAngle:0,spray:0,safeTrail:[],crash:null};
 }
 const expertLoading=liftWorld(EXPERT,8,EXPERT.bottom);
+const highlineLoading=HIGHLINE_LIFTS.map(lift=>({lift,...liftWorld(lift,lift.center+8,lift.bottom)}));
 export function boardingLift(p){
  if(p.mode!=='ski')return null;
+ if(p.x>OLD_EAST){
+  return highlineLoading.find(point=>Math.hypot(p.x-point.x,p.z-point.z)<=35)?.lift??null;
+ }
  if(Math.hypot(p.x-expertLoading.x,p.z-expertLoading.z)<=35)return EXPERT;
  if(Math.hypot(p.x-BOARD_CENTER.x,p.z-BOARD_CENTER.z)<=BOARD_RADIUS)return JUNIPER;
  return null;
@@ -577,19 +596,21 @@ export function board(p){
  p.activeLift=lift;p.mode='lift';p.ride=0;p.speed=0;p.air=false;p.angle=lift.yaw;p.yaw=0;
  p.edgeAngle=0;p.spray=0;
  p.safeTrail=[];
+ p.race=null;
  return true;
 }
 export const canUnload=p=>p.mode==='lift'&&p.ride>=1;
 export function unload(p){
  if(!canUnload(p))return false;
  const lift=p.activeLift;
- // Stand just past the ramp in the same lane, facing down the hill with no push to either side.
- Object.assign(p,liftWorld(lift,lift.center+8,lift.top+7));
+ // The auto-unload ramps continue uphill in the arriving chair's lane.
+ const exitZ=lift.top+(lift.autoUnload?-10:7);
+ Object.assign(p,liftWorld(lift,lift.center+8,exitZ));
  p.y=height(p.x,p.z);
- p.mode='ski';p.angle=lift.yaw;p.speed=0;p.measuredSpeed=0;p.travelAngle=null;p.slip=0;
+ p.mode='ski';p.angle=lift.yaw+(lift.autoUnload?Math.PI:0);p.speed=0;p.measuredSpeed=0;p.travelAngle=null;p.slip=0;
  p.yaw=0;p.vy=0;p.groundV=0;p.drive='glide';
  p.passedTop=true;
- p.route=lift===EXPERT?'Timberline Summit':'Summit · pick a line';
+ p.route=lift.landing??(lift===EXPERT?'Timberline Summit':'Summit · pick a line');
  return true;
 }
 const gravity=9.81;
@@ -659,6 +680,7 @@ function startCrash(p,colliders,nx,nz,impactSpeed){
   slideTime:tumble?1.7:.45+.35*severity,
   flying:tumble,verticalSpeed:tumble?2.25+severity*.5:0,yardSale,recovery};
  p.mode='crash';p.air=false;p.vy=0;p.y=height(p.x,p.z);p.speed=0;p.measuredSpeed=0;
+ p.race=null;
  p.yaw=0;p.edgeAngle=0;p.spray=0;p.drive='crash';
 }
 export function step(p,input,dt,colliders=[]){const events=[];
@@ -703,6 +725,9 @@ export function step(p,input,dt,colliders=[]){const events=[];
   const point=liftWorld(lift,lift.center+8,z);
   p.x=point.x;p.z=point.z;p.y=liftCableHeight(z,lift)-4.6;
   p.angle=lift.yaw;
+  if(lift.autoUnload&&p.ride>=1){
+   unload(p);events.push('unload');
+  }
   return events;
  }
  p.bump=Math.max(0,p.bump-dt);
@@ -710,10 +735,11 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const style=turnStyles[p.turnStyle]??turnStyles[0];
  const carve=style.id==='carve'&&!input.brake;
  const shortSkid=style.id==='skid';
- const gladeSnow=Math.max(driftDepth(p.x,p.z),ridgeGladeDepth(p.x,p.z));
+ const alpine=highlineTrailAt(p.x,p.z);
+ const gladeSnow=Math.max(driftDepth(p.x,p.z),ridgeGladeDepth(p.x,p.z),alpine?.kind==='glade'?.65:0);
  const ridge=ridgeDropMask(p.x,p.z);
  const entry=driftEntryMask(p.x,p.z);
- const powder=Math.max(gladeSnow,powderDepth(p.x,p.z));
+ const powder=Math.max(gladeSnow,powderDepth(p.x,p.z),alpine?.kind==='bowl'?.72:0);
  const edgeLimit=(11.4-3.4*powder)/Math.max(5,p.speed);
  let turnRate=(input.brake?1.9:1.55)/(1+p.speed*.019);
  if(carve)turnRate=Math.min(turnRate,edgeLimit*.88);
@@ -758,7 +784,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
 
  // Judge skating and tucking from the main slope, beyond any nearby jump lip.
  const headingX=Math.sin(p.angle),headingZ=Math.cos(p.angle);
- const downhillGrade=expert||powder>.2||ridge>.2||entry>.2
+ const downhillGrade=expert||alpine||p.x>OLD_EAST||powder>.2||ridge>.2||entry>.2
   ?(height(p.x-12*headingX,p.z-12*headingZ)-height(p.x+12*headingX,p.z+12*headingZ))/24
   :p.z>=590?0:(baseHeight(p.z-12*headingZ)-baseHeight(p.z+12*headingZ))/24;
  const wasTucking=p.drive==='tuck';
@@ -771,7 +797,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  if(p.drive==='skate')p.skatePhase=(p.skatePhase||0)+dt*(1.35+Math.min(6,p.speed)*.07)*Math.PI*2;
  const push=p.drive==='skate'?8.8*Math.max(0,1-p.speed/10)+.9*Math.max(0,Math.sin(p.skatePhase*2)):0;
  const softSnow=powder*(.60+p.speed*.045)-gladeSnow*(.23+p.speed*.01);
- const trailDrag=(onTrail(p.x,p.z)||powder>.2?.30:.72)+softSnow;
+ const trailDrag=(alpine||onTrail(p.x,p.z)||powder>.2?.30:.72)+softSnow;
  const surfaceDrag=trailDrag+(.18-trailDrag)*Math.max(entry,ridge,powderToGladeMask(p.x,p.z));
  const aeroDrag=(p.drive==='tuck'?.0038:.0058)*p.speed**2;
  const edgeDrag=Math.abs(sideSlip)*p.speed*(input.brake?Math.max(.42,style.scrub):style.scrub);
@@ -838,10 +864,12 @@ export function step(p,input,dt,colliders=[]){const events=[];
  }
  const stillAtTimberline=p.route==='Timberline Summit'&&!expert&&powder<=.2&&expertLocal(p.x,p.z).z<20;
  const route=stillAtTimberline?null:trailAt(p.x,p.z);
- if(route&&(expert||route===driftRoute||p.z>juniperZ(105)&&p.z<570)){if(route.name!==p.route){p.route=route.name;events.push('route');}p.lastRoute=route.name;}
- const returnedToBase=p.z>585&&p.x>-86;
+ if(route&&(alpine||expert||route===driftRoute||p.z>juniperZ(105)&&p.z<570)){if(route.name!==p.route){p.route=route.name;events.push('route');}p.lastRoute=route.name;}
+ if(p.x>OLD_EAST||p.race)advanceRace(p,oldX,oldZ,dt,events);
+ const returnedToBase=p.z>585&&p.x>-86&&p.x<OLD_EAST;
  const returnedToExpert=p.activeLift===EXPERT&&boardingLift(p)===EXPERT;
- if(p.passedTop&&(returnedToBase||returnedToExpert)){p.laps++;p.passedTop=false;events.push('lap');}
+ const returnedToHighline=p.activeLift?.autoUnload&&boardingLift(p)===p.activeLift;
+ if(p.passedTop&&(returnedToBase||returnedToExpert||returnedToHighline)){p.laps++;p.passedTop=false;events.push('lap');}
  if(p.z>590&&returnedToBase)p.route='Lift base';
  if(!p.air&&p.speed<.05){p.speed=0;p.measuredSpeed=0;}
  if(!p.air){
