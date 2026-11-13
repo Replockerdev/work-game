@@ -106,7 +106,7 @@ export function addRange(scene){
   shader.vertexShader='attribute float cloudCover; '+varyings+shader.vertexShader;
   shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>',
    '#include <worldpos_vertex>\nvRangeWorld=(modelMatrix*vec4(transformed,1.0)).xyz; vCloudCover=cloudCover;');
-  shader.fragmentShader=varyings+alpineSkyGLSL+shader.fragmentShader;
+  shader.fragmentShader=varyings+alpineSkyGLSL+'\n'+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
    float rocky=1.0-smoothstep(.28,.55,dot(diffuseColor.rgb,vec3(.333)));
    float strata=sin(vRangeWorld.x*.19+vRangeWorld.y*.23+vRangeWorld.z*.07)*sin(vRangeWorld.y*.31-vRangeWorld.z*.11);
