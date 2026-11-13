@@ -1,6 +1,6 @@
 import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,HIGHLINE_CHUTE_ROCKS,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
 import {Quaternion,Vector3} from './vendor/three.module.js';
-import {advanceCrashBody,crashContacts,crashHipHeight,obstacleDistance,obstacleNormal,obstacleTop} from './crash-physics.js';
+import {advanceCrashBody,advanceCrashLimbs,createCrashLimbs,crashContacts,crashHipHeight,obstacleDistance,obstacleNormal,obstacleTop} from './crash-physics.js';
 
 // Stretch Juniper toward the north ridge while keeping the shared lower hill in place.
 export function juniperZ(section){
@@ -772,9 +772,10 @@ function startCrash(p,colliders,nx,nz,impactSpeed){
   position:new Vector3(p.x,p.y+crashHipHeight,p.z),velocity:launch.clone(),
   orientation,
   spin:new Vector3(dz*pitch+dx*roll,side*severity,-dx*pitch+dz*roll),
-  contacts:crashContacts(yardSale),inverseInertia:1.8,snowDrag:tumble?2:3.8,forwardX:dx,forwardZ:dz
+  contacts:crashContacts,inverseInertia:1.8,snowDrag:tumble?2:3.8,forwardX:dx,forwardZ:dz
  };
  advanceCrashBody(p.crash,0,height,colliders,crashBounds);
+ p.crash.limbs=createCrashLimbs(p.crash);
  p.mode='crash';p.air=false;p.pop=false;p.stopSide=0;p.vy=0;p.speed=0;
  p.race=null;
  p.yaw=0;p.edgeAngle=0;p.spray=0;p.suspension=0;p.drive='crash';
@@ -784,6 +785,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  if(p.mode==='crash'){
   const crash=p.crash;crash.time+=dt;
   const grounded=advanceCrashBody(crash,dt,height,colliders,crashBounds);
+  advanceCrashLimbs(crash,dt,height,colliders);
   p.x=crash.position.x;p.z=crash.position.z;p.y=Math.max(height(p.x,p.z),crash.position.y-crashHipHeight);
   const slow=crash.velocity.lengthSq()<.75&&crash.spin.lengthSq()<2.25;
   if(!slow)crash.restTime=0;
