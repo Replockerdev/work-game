@@ -42,15 +42,15 @@ const types={
 };
 const lifts=[JUNIPER,EXPERT,...HIGHLINE_LIFTS];
 const width=920, mapHeight=508, west=-780,east=1090,north=-334,south=685;
-const px=x=>28+(east-x)/(east-west)*(width-56);
+const px=x=>28+(x-west)/(east-west)*(width-56);
 const py=z=>24+(z-north)/(south-north)*(mapHeight-48);
 const places=[
- ['JUNIPER SUMMIT',liftWorld(JUNIPER,JUNIPER.center,JUNIPER.top),-14,-13,'right'],
- ['JUNIPER BASE',BASE,13,17,'left'],
- ['TIMBERLINE',liftWorld(EXPERT,EXPERT.center,EXPERT.top),3,15,'center'],
- ['HIGHLINE SUMMIT',HIGHLINE_PEAK,-14,-12,'left'],
- ['TREELINE SADDLE',TREELINE,14,-4,'left'],
- ['HOLLOW BASE',HOLLOW_BASE,-12,20,'right']
+ ['JUNIPER SUMMIT',liftWorld(JUNIPER,JUNIPER.center,JUNIPER.top),14,-13,'left'],
+ ['JUNIPER BASE',BASE,-13,17,'right'],
+ ['TIMBERLINE',liftWorld(EXPERT,EXPERT.center,EXPERT.top),-3,15,'center'],
+ ['HIGHLINE SUMMIT',HIGHLINE_PEAK,14,-12,'right'],
+ ['TREELINE SADDLE',TREELINE,-14,-4,'right'],
+ ['HOLLOW BASE',HOLLOW_BASE,12,20,'left']
 ];
 
 function paintRelief(canvas){
@@ -58,7 +58,7 @@ function paintRelief(canvas){
  const image=ctx.createImageData(width,mapHeight);
  const spacing=4,columns=Math.ceil(width/spacing)+1,rows=Math.ceil(mapHeight/spacing)+1;
  const grid=Array.from({length:rows},(_,j)=>Array.from({length:columns},(_,i)=>{
-  const x=east-(i*spacing-28)/(width-56)*(east-west);
+  const x=west+(i*spacing-28)/(width-56)*(east-west);
   const z=north+(j*spacing-24)/(mapHeight-48)*(south-north);
   return height(x,z);
  }));
