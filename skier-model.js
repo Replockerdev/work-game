@@ -1,5 +1,6 @@
 import * as T from './vendor/three.module.js';
-import {height} from './mountain-core.js';
+import {height,crashBounds} from './mountain-core.js';
+import {advanceCrashBody,crashHipHeight,gearContacts} from './crash-physics.js';
 export function makeSkier(scene){
  const root=new T.Group();scene.add(root);const cloth=new T.MeshStandardMaterial({color:'#c66d46',roughness:.91}),darkCloth=new T.MeshStandardMaterial({color:'#34485a',roughness:.94}),trim=new T.MeshStandardMaterial({color:'#dfaa70',roughness:.8}),rubber=new T.MeshStandardMaterial({color:'#263743',roughness:.74}),metal=new T.MeshStandardMaterial({color:'#a3b0b8',roughness:.28,metalness:.65}),skin=new T.MeshStandardMaterial({color:'#d8ac83',roughness:.9}),helmetMat=new T.MeshStandardMaterial({color:'#e8be63',roughness:.36});
  function mesh(g,m,parent=root){const o=new T.Mesh(g,m);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o;}
@@ -16,7 +17,12 @@ export function makeSkier(scene){
  function trackGear(mounted,kind,side){
   const loose=mounted.clone(true);
   loose.name='Loose '+kind;loose.visible=false;scene.add(loose);
-  equipment.push({mounted,loose,kind,side,velocity:new T.Vector3(),spinAxis:new T.Vector3()});
+  const ski=kind==='ski';
+  equipment.push({mounted,loose,side,ski,body:{
+   position:loose.position,orientation:loose.quaternion,velocity:new T.Vector3(),spin:new T.Vector3(),
+   contacts:gearContacts(ski?3.1:1,ski?.16:.08,ski?'z':'y'),
+   inverseInertia:ski?1.1:3,snowDrag:2.7,forwardX:0,forwardZ:1
+  }});
  }
  function skiGeometry(){const points=[];for(let i=0;i<=22;i++){const z=-1.3+i/22*3.15,t=i/22,w=.105+.035*Math.sin(t*Math.PI),y=.035+Math.pow(Math.max(0,(t-.84)/.16),2)*.28+Math.pow(Math.max(0,(.1-t)/.1),2)*.05;points.push({z,w,y});}const p=[],ind=[];for(const v of points)p.push(-v.w,v.y,v.z,v.w,v.y,v.z,-v.w,v.y+.055,v.z,v.w,v.y+.055,v.z);for(let i=0;i<points.length-1;i++){const k=i*4,n=k+4;ind.push(k+2,n+2,k+3,k+3,n+2,n+3,k,n,k+2,k+2,n,n+2,k+1,k+3,n+1,k+3,n+3,n+1,k,n+1,n,k,k+1,n+1);}const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setIndex(ind);g.computeVertexNormals();return g;}
  const skiMat=new T.MeshStandardMaterial({color:'#d49b54',metalness:.24,roughness:.37});
@@ -38,29 +44,28 @@ export function makeSkier(scene){
  const basis=new T.Matrix4(),yaw=new T.Quaternion(),roll=new T.Quaternion();
  const vertical=new T.Vector3(0,1,0),skiAxis=new T.Vector3(0,0,1);
  const contact=new T.Vector3(),anklePoint=new T.Vector3(),shoulderPoint=new T.Vector3(),crashPivot=new T.Vector3();
- const poleDirection=new T.Vector3(),gearRotation=new T.Quaternion(),restPose=new T.Euler(0,0,0,'YXZ');
+ const poleDirection=new T.Vector3();
  let gearCrash=null,gearTime=0;
- function animateGear(p){
+ function animateGear(p,colliders){
   const crash=p.crash?.yardSale?p.crash:null;
   if(crash!==gearCrash){
    gearCrash=crash;
    if(crash)root.updateMatrixWorld(true);
    for(const item of equipment){
-    const {mounted,loose,kind,side,velocity,spinAxis}=item;
+    const {mounted,loose,side,ski,body}=item;
     mounted.visible=!crash;loose.visible=Boolean(crash);
     if(!crash)continue;
     mounted.getWorldPosition(loose.position);
     mounted.getWorldQuaternion(loose.quaternion);
     mounted.getWorldScale(loose.scale);
-    const ski=kind==='ski';
-    const forwardSpeed=crash.slideSpeed*(ski?.83+side*.07:.5-side*.06);
-    const sideways=side*(ski?3.8:5.6);
-    const sin=Math.sin(crash.heading),cos=Math.cos(crash.heading);
-    velocity.set(sin*forwardSpeed+cos*sideways,ski?2.6+side*.45:3.65-side*.6,cos*forwardSpeed-sin*sideways);
-    item.heading=Math.atan2(velocity.x,velocity.z);
-    spinAxis.set(.65,side*.85,ski?.4:1).normalize();
-    item.spinSpeed=ski?5.5+side:9.1-side;
-    item.landed=false;
+    const sideways=side*(ski?3.1:4.2);
+    body.forwardX=crash.forwardX;body.forwardZ=crash.forwardZ;
+    body.velocity.copy(crash.launch).multiplyScalar(ski?.85:.62);
+    body.velocity.x+=body.forwardZ*sideways;
+    body.velocity.z-=body.forwardX*sideways;
+    body.velocity.y+=ski?1.6:2.1;
+    body.spin.set(2.8,side*3.5,ski?1.8:4.2);
+    advanceCrashBody(body,0,height,colliders,crashBounds);
    }
    gearTime=crash?.time??0;
   }
@@ -69,24 +74,7 @@ export function makeSkier(scene){
   gearTime=crash.time;
   while(remaining>1e-6){
    const dt=Math.min(remaining,1/120);remaining-=dt;
-   for(const item of equipment){
-    const {loose,velocity,kind,heading}=item;
-    if(!item.landed)velocity.y-=9.81*dt;
-    loose.position.addScaledVector(velocity,dt);
-    const {x,z}=loose.position;
-    const floor=height(x,z)+.09;
-    if(loose.position.y<=floor)item.landed=true;
-    if(item.landed){
-     loose.position.y=floor;
-     velocity.y=0;velocity.multiplyScalar(Math.exp(-4.8*dt));
-     const dx=Math.sin(heading),dz=Math.cos(heading);
-     const pitch=-Math.atan2(height(x+dx,z+dz)-height(x-dx,z-dz),2);
-     restPose.set(pitch+(kind==='pole'?Math.PI/2:0),heading,0);
-     loose.quaternion.slerp(gearRotation.setFromEuler(restPose),1-Math.exp(-18*dt));
-    }else{
-     loose.quaternion.multiply(gearRotation.setFromAxisAngle(item.spinAxis,item.spinSpeed*dt));
-    }
-   }
+   for(const item of equipment)advanceCrashBody(item.body,dt,height,colliders,crashBounds);
   }
  }
  const runningSole=[-1.05,-.45,.15,.75,1.33];
@@ -116,20 +104,12 @@ export function makeSkier(scene){
   }
   foot.position.y=floor-p.y+.025+lift;
  }
- function animate(p,time){
- const crashed=p.mode==='crash',crashTime=p.crash?.time??0;
+ function animate(p,colliders=[]){
+ const crashed=p.mode==='crash';
  if(crashed){
-  const {heading,side,tumble,severity}=p.crash;
-  const fallTime=tumble?1.15:.42+.1*severity;
-  const roll=T.MathUtils.smoothstep(crashTime,0,fallTime);
-  const pitch=tumble?Math.PI*2.5*roll:.15*Math.sin(crashTime*5)*Math.exp(-crashTime*1.4);
-  const bank=tumble?.32*Math.sin(Math.PI*roll):Math.PI*.5*roll;
-  root.rotation.set(pitch,heading+.12*side*roll,side*bank,'YXZ');
-  // Tumble around the hips, then settle onto the snow.
-  crashPivot.set(0,.9,0).applyEuler(root.rotation);
-  const bounce=.05*Math.sin(Math.PI*T.MathUtils.clamp(crashTime/fallTime,0,1));
-  const settle=.55*T.MathUtils.smoothstep(crashTime,tumble?1:.12,tumble?1.55:fallTime+.16);
-  root.position.set(p.x-crashPivot.x,p.y+.95+bounce-settle-crashPivot.y,p.z-crashPivot.z);
+  root.quaternion.copy(p.crash.orientation);
+  crashPivot.set(0,crashHipHeight,0).applyQuaternion(root.quaternion);
+  root.position.copy(p.crash.position).sub(crashPivot);
  }
  const seated=p.mode==='lift',grounded=!seated&&!crashed&&!p.air;
  const skating=grounded&&p.drive==='skate',tucking=!seated&&p.drive==='tuck';
@@ -142,7 +122,7 @@ export function makeSkier(scene){
  const crouch=stance+suspension*(tucking?.53:.84);
  const hipZ=(seated?-.05:tucking?-.24:-.12)-compression*.24;
  torso.position.set(skating?Math.sin(phase)*.065:hipShift,crouch,hipZ);
- torso.rotation.x=crashed?.35+Math.sin(crashTime*10)*.1*Math.exp(-crashTime*3):seated?-.08:tucking?.48:skating?.16+Math.cos(phase*2)*.035:.06+Math.min(.23,p.speed*.007);
+ torso.rotation.x=crashed?.27:seated?-.08:tucking?.48:skating?.16+Math.cos(phase*2)*.035:.06+Math.min(.23,p.speed*.007);
  torso.rotation.z=crashed?p.crash.side*.18:-edge*.9;
  skiGroup.position.set(0,seated?.05:0,seated?.77:0);
  skiGroup.rotation.x=seated?.2:0;
@@ -168,17 +148,16 @@ export function makeSkier(scene){
   const {s}=a,push=skating?Math.sin(phase+(s>0?Math.PI:0)):0;
   const shoulder=shoulderPoint.set(s*.43,.77,.04).applyQuaternion(torso.quaternion).add(torso.position);
   const lean=shoulder.x-s*.43;
-  const flail=crashed?Math.sin(crashTime*13+s)*.16*Math.exp(-crashTime*2):0;
-  const elbow=[s*(crashed?.84:.65)+lean*.65,crouch+.4+flail,hipZ+(seated?.35:tucking?.45:.12)+push*.12];
-  const hand=[s*(crashed?1.04:.7)+lean*.32,crouch+(crashed?.45:.15)+flail,hipZ+(seated?.88:tucking?.65:.43)+push*.35];
+  const elbow=[s*(crashed?.61:.65)+lean*.65,crouch+.4,hipZ+(seated?.35:tucking?.45:.12)+push*.12];
+  const hand=[s*(crashed?.70:.7)+lean*.32,crouch+(crashed?.22:.15),hipZ+(seated?.88:tucking?.65:.43)+push*.35];
   a.upper.update(shoulder.toArray(),elbow);a.lower.update(elbow,hand);a.glove.position.set(...hand);
-  const tip=[s*(crashed?1.25:skating?1.02:.88),crashed?.4+flail:seated?.05:.07,seated?1.48:skating?push*.7-.3:-.3];
+  const tip=[s*(crashed?.86:skating?1.02:.88),crashed?.38:seated?.05:.07,seated?1.48:skating?push*.7-.3:-.3];
   poleDirection.set(hand[0]-tip[0],hand[1]-tip[1],hand[2]-tip[2]);
   a.pole.position.set((hand[0]+tip[0])/2,(hand[1]+tip[1])/2,(hand[2]+tip[2])/2);
   a.pole.scale.y=poleDirection.length();
   a.pole.quaternion.setFromUnitVectors(vertical,poleDirection.normalize());
  }
- animateGear(p);
+ animateGear(p,colliders);
  }
  return {root,animate};
 }

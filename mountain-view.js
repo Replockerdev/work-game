@@ -477,7 +477,7 @@ export function createMountain(canvas){
  const airPitch=!lift&&p.air?Math.atan2(height(p.x+skiX,p.z+skiZ)-height(p.x-skiX,p.z-skiZ),.8)*-.65:0;
  const airBank=!lift&&p.air?-p.yaw*Math.min(.25,p.speed*.015):0;
  skier.rotation.set(airPitch,lift?config.yaw+Math.PI:p.angle,airBank,'YXZ');
- rig.animate(p,time);
+ rig.animate(p,colliders);
  for(const animateLift of animateLifts)animateLift(p,time);
  if(!paused)animateSpray(p,dt);
  if(!lift&&!crashed&&!p.air&&p.speed>1&&!paused){

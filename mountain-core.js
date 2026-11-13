@@ -1,4 +1,6 @@
 import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,HIGHLINE_CHUTE_ROCKS,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
+import {Quaternion,Vector3} from './vendor/three.module.js';
+import {advanceCrashBody,crashContacts,crashHipHeight,obstacleDistance,obstacleNormal,obstacleTop} from './crash-physics.js';
 
 // Stretch Juniper toward the north ridge while keeping the shared lower hill in place.
 export function juniperZ(section){
@@ -14,6 +16,7 @@ export function juniperSection(z){
 }
 export const LENGTH=640, BASE={x:-28,z:622},TOP={x:-20,z:juniperZ(35)};
 export const SNOW_WEST=-875,SNOW_EAST=HIGHLINE_EAST,SNOW_NORTH=-340,SNOW_SOUTH=690;
+export const crashBounds={west:SNOW_WEST+12,east:SNOW_EAST-12,north:SNOW_NORTH+14,south:655};
 export const BOARD_CENTER={x:0,z:610},BOARD_RADIUS=58;
 export const LIFT={upX:-22,downX:-38,towerX:-30,towerWidth:.9,crossbeamClearance:1.5,chairWidth:3.6,
  lane:8,hanger:5.2,rider:4.6,terminalHeight:5.1};
@@ -717,25 +720,6 @@ function timberlineDrop(x,z,nextX,nextZ){
  const a=expertLocal(x,z),b=expertLocal(nextX,nextZ);
  return cliffDrops.some(cliff=>a.z<=cliff.z&&b.z>cliff.z&&Math.abs(b.x-cliff.x)<cliff.width*.62);
 }
-function obstacleDistance(x,z,obstacle){
- const dx=x-obstacle.x,dz=z-obstacle.z;
- if(!obstacle.box)return Math.hypot(dx,dz)-(obstacle.r??.8);
- const {cos,sin,halfWidth,halfDepth}=obstacle.box;
- const across=Math.abs(dx*cos-dz*sin)-halfWidth;
- const along=Math.abs(dx*sin+dz*cos)-halfDepth;
- return Math.hypot(Math.max(0,across),Math.max(0,along))+Math.min(0,Math.max(across,along));
-}
-function obstacleNormal(x,z,obstacle,forwardX,forwardZ){
- let nx=x-obstacle.x,nz=z-obstacle.z;
- if(obstacle.box){
-  const e=.04;
-  nx=obstacleDistance(x+e,z,obstacle)-obstacleDistance(x-e,z,obstacle);
-  nz=obstacleDistance(x,z+e,obstacle)-obstacleDistance(x,z-e,obstacle);
- }
- const length=Math.hypot(nx,nz);
- return length?[nx/length,nz/length]:[-forwardX,-forwardZ];
-}
-const obstacleTop=o=>o.top??height(o.x,o.z)+(o.chuteRock?o.size*1.32:o.size??5);
 function safeRecovery(x,z,colliders){
  if(x<SNOW_WEST+12||x>SNOW_EAST-12||z<SNOW_NORTH+14||z>655)return false;
  if(chuteWall(x,z)>.24||colliders.some(o=>obstacleDistance(x,z,o)<(o.chuteRock?1.1:2.3)))return false;
@@ -772,16 +756,26 @@ function startCrash(p,colliders,nx,nz,impactSpeed){
  const recovery=crashRecovery(p,colliders);
  const heading=p.travelAngle??p.angle,dx=Math.sin(heading),dz=Math.cos(heading);
  const side=nx*dz-nz*dx>=0?1:-1;
- const deflection=.25-Math.min(0,dx*nx+dz*nz);
  const severity=smooth((impactSpeed-4)/13);
  const tumble=impactSpeed>=14;
  const yardSale=impactSpeed>=23;
- const slideHeading=tumble?heading+side*.32:Math.atan2(dx+nx*deflection,dz+nz*deflection);
- p.crash={time:0,duration:1.25+.6*severity,heading,side,severity,tumble,slideHeading,
-  slideSpeed:tumble?Math.min(p.speed*.88,28):impactSpeed*.24,
-  slideTime:tumble?1.7:.45+.35*severity,
-  flying:tumble,verticalSpeed:tumble?2.25+severity*.5:0,yardSale,recovery};
- p.mode='crash';p.air=false;p.pop=false;p.stopSide=0;p.vy=0;p.y=height(p.x,p.z);p.speed=0;
+ const carry=tumble?Math.min(p.speed*.8,26):p.speed*.44;
+ const inward=Math.max(0,-carry*(dx*nx+dz*nz));
+ const launch=new Vector3(dx*carry+nx*inward*1.07,p.air?p.vy:tumble?2.3:0,dz*carry+nz*inward*1.07);
+ const square=inward>carry*.8;
+ const pitch=tumble?(5.5+severity*2)*(square?-1:1):1.3;
+ const roll=side*(tumble?2.9:3.4);
+ const orientation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),p.angle);
+ orientation.multiply(new Quaternion().setFromAxisAngle(new Vector3(0,0,1),side*(square?.45:.28)));
+ p.crash={
+  time:0,restTime:0,side,tumble,yardSale,recovery,launch,
+  position:new Vector3(p.x,p.y+crashHipHeight,p.z),velocity:launch.clone(),
+  orientation,
+  spin:new Vector3(dz*pitch+dx*roll,side*severity,-dx*pitch+dz*roll),
+  contacts:crashContacts(yardSale),inverseInertia:1.8,snowDrag:tumble?2:3.8,forwardX:dx,forwardZ:dz
+ };
+ advanceCrashBody(p.crash,0,height,colliders,crashBounds);
+ p.mode='crash';p.air=false;p.pop=false;p.stopSide=0;p.vy=0;p.speed=0;
  p.race=null;
  p.yaw=0;p.edgeAngle=0;p.spray=0;p.suspension=0;p.drive='crash';
 }
@@ -789,28 +783,12 @@ export function step(p,input,dt,colliders=[]){const events=[];
  p.horizontalSpeed=0;p.trailId=null;
  if(p.mode==='crash'){
   const crash=p.crash;crash.time+=dt;
-  const slide=crash.slideSpeed*Math.max(0,1-crash.time/crash.slideTime)*dt;
-  const dx=Math.sin(crash.slideHeading),dz=Math.cos(crash.slideHeading);
-  let x=p.x+dx*slide,z=p.z+dz*slide,y=p.y;
-  if(crash.flying){
-   crash.verticalSpeed-=gravity*dt;
-   y+=crash.verticalSpeed*dt;
-  }
-  if(crash.tumble&&slide>0){
-   // Keep forward momentum while sliding around obstacles too tall to clear.
-   for(const o of colliders){
-    const clearance=obstacleDistance(x,z,o);
-    if(clearance>=.4||y>=obstacleTop(o))continue;
-    const [nx,nz]=obstacleNormal(x,z,o,dx,dz);
-    x+=nx*(.4-clearance);z+=nz*(.4-clearance);
-   }
-  }
-  p.x=clamp(x,SNOW_WEST+12,SNOW_EAST-12);
-  p.z=clamp(z,SNOW_NORTH+14,655);
-  const snow=height(p.x,p.z);
-  if(y<=snow)crash.flying=false;
-  p.y=crash.flying?y:snow;
-  if(crash.time>=crash.duration){
+  const grounded=advanceCrashBody(crash,dt,height,colliders,crashBounds);
+  p.x=crash.position.x;p.z=crash.position.z;p.y=Math.max(height(p.x,p.z),crash.position.y-crashHipHeight);
+  const slow=crash.velocity.lengthSq()<.75&&crash.spin.lengthSq()<2.25;
+  if(!slow)crash.restTime=0;
+  else if(grounded)crash.restTime+=dt;
+  if((crash.time>1.25&&crash.restTime>.22)||(grounded&&crash.time>4.5)||crash.time>7){
    const spot=crash.recovery;
    p.x=spot.x;p.z=spot.z;p.y=height(p.x,p.z);p.angle=spot.angle;
    p.mode='ski';p.crash=null;p.safeTrail=[];
@@ -991,7 +969,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  for(const o of colliders){
   const clearance=obstacleDistance(p.x,p.z,o);
   if(clearance>=.4||p.bump>0)continue;
-  if(p.y>=obstacleTop(o))continue;
+  if(p.y>=obstacleTop(o,height))continue;
   const [nx,nz]=obstacleNormal(p.x,p.z,o,forwardX,forwardZ);
   const inward=Math.max(0,-forwardX*nx-forwardZ*nz);
   const impactSpeed=p.speed*inward;
