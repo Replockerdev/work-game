@@ -215,12 +215,12 @@ export function liftChairPosition(lift,seconds){
 export const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
 export const chuteFloorRocks=[
- ...[[87,-2.8,.76],[109,2.25,.7],[142,-2.2,.83],[171,1.2,.62],[193,-1.8,.72],
-  [224,2.25,.8],[250,-3.1,.71],[274,3.6,.75]].map(([section,side,size])=>({
+ ...[[87,-1.1,1.55],[112,.85,1.45],[142,-.85,1.5],
+  [206,.95,1.46],[237,-.9,1.55],[270,2.15,1.58]].map(([section,side,size])=>({
    ...liftWorld(EXPERT,chuteX(section)+side,timberlineZ(section)),size
   })),
  ...HIGHLINE_CHUTE_ROCKS
-].map(rock=>({...rock,r:rock.size*.83,chuteRock:true}));
+].map(rock=>({...rock,r:rock.size*.87,chuteRock:true}));
 export const routes=[{id:'groomer',name:'The Groomer',offset:-103,width:23,color:'#72bfb4'},{id:'park',name:'The Park',offset:0,width:24,color:'#e3a36b'},{id:'glades',name:'The Glades',offset:103,width:36,color:'#8da776'}];
 export const pathX=(z,r)=>r.offset*Math.sin(Math.PI*clamp((juniperSection(z)-60)/530,0,1));
 const groomer=routes[0];
@@ -735,7 +735,7 @@ function obstacleNormal(x,z,obstacle,forwardX,forwardZ){
  const length=Math.hypot(nx,nz);
  return length?[nx/length,nz/length]:[-forwardX,-forwardZ];
 }
-const obstacleTop=o=>o.top??height(o.x,o.z)+(o.size??5);
+const obstacleTop=o=>o.top??height(o.x,o.z)+(o.chuteRock?o.size*1.32:o.size??5);
 function safeRecovery(x,z,colliders){
  if(x<SNOW_WEST+12||x>SNOW_EAST-12||z<SNOW_NORTH+14||z>655)return false;
  if(chuteWall(x,z)>.24||colliders.some(o=>obstacleDistance(x,z,o)<(o.chuteRock?1.1:2.3)))return false;

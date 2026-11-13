@@ -201,11 +201,11 @@ export function createMountain(canvas){
  }
  const rockShape=new T.DodecahedronGeometry(1,0);
  for(const [i,{x,z,size,chuteRock}] of [...bowlRocks,...chuteFloorRocks].entries()){
-  const colors=chuteRock?['#495761','#62717a']:['#535e64','#69767b'];
+  const colors=chuteRock?['#34414c','#4d5a63']:['#535e64','#69767b'];
   const rock=mesh(rockShape,colors[i%2]);
-  rock.scale.set(size,size*.72,size*.85);
-  rock.rotation.set(.18*i,.63*i,-.27);
-  rock.position.set(x,height(x,z)+size*.18,z);
+  rock.scale.set(size,size*(chuteRock?.91:.72),size*(chuteRock?.96:.85));
+  rock.rotation.set(chuteRock?.16:.18*i,.63*i,chuteRock?-.12:-.27);
+  rock.position.set(x,height(x,z)+size*(chuteRock?.45:.18),z);
  }
  function makeLift(config){
   const group=new T.Group();
