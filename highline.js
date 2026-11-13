@@ -77,6 +77,22 @@ export const SUN_BOWL=trail('sun-bowl','Sunbreak Bowl','#799aa8','bowl',56,[
  [914,-192,690],[962,-153,660],[1000,-82,578],[1010,-5,496],
  [969,67,417],[902,115,362],[822,145,324]
 ]);
+// Individual bumps with skiable gaps and an open line on either side.
+const sunbreakMoguls=[
+ [149,-13,12,8,.80],[159,6,11,8,1.05],[172,-5,13,7,.90],[179,15,10,7,.74],
+ [189,-18,11,8,.97],[193,3,12,8,1.18],[204,19,12,7,.90],
+ [214,-10,13,9,1.05],[222,9,11,8,1.14],[236,-20,10,7,.85],[241,-1,13,8,1.14],
+ [253,17,13,8,.92],[263,-12,12,9,1.07],[271,6,11,8,1.02],[284,-3,13,8,.79]
+];
+function mogulHeight(along,across){
+ if(along<137||along>297||Math.abs(across)>29)return 0;
+ let height=0;
+ for(const [center,side,length,width,rise] of sunbreakMoguls){
+  const radius=((along-center)/length)**2+((across-side)/width)**2;
+  if(radius<1)height+=rise*(1-radius)**3;
+ }
+ return height;
+}
 export const WIND_BOWL=trail('wind-bowl','Windward Bowl','#658da2','bowl',42,[
  [880,-197,694],[838,-172,660],[805,-127,601],[768,-76,532],
  [748,-18,471],[747,39,410],[767,101,350],[797,145,324]
@@ -243,6 +259,7 @@ export function highlineHeight(x,z,original){
    floor+=chuteBanks(route,s,width);
   }else if(route.kind==='bowl'){
    floor+=22*smooth((s.distance-width*.45)/(width*.65));
+   if(route===SUN_BOWL)floor+=mogulHeight(s.along,s.across);
   }else if(route.kind==='glade'){
    floor+=.33*Math.sin(s.along*.064+s.across*.07);
   }

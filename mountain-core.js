@@ -574,7 +574,7 @@ export const turnStyles=[
 ];
 export function spawn(){
  return {x:BASE.x,z:BASE.z-10,y:height(BASE.x,BASE.z-10),angle:0,yaw:0,speed:0,measuredSpeed:0,
-  travelAngle:null,slip:0,vy:0,groundV:0,suspension:0,air:false,jumps:0,airtime:0,bump:0,mode:'ski',ride:0,laps:0,
+  travelAngle:null,slip:0,vy:0,groundV:0,suspension:0,air:false,pop:false,stopSide:0,jumps:0,airtime:0,bump:0,mode:'ski',ride:0,laps:0,
   passedTop:false,route:'Lift base',lastRoute:'',distance:0,drive:'glide',skatePhase:0,
   turnStyle:0,edgeAngle:0,spray:0,safeTrail:[],crash:null};
 }
@@ -593,7 +593,7 @@ export const canBoard=p=>Boolean(boardingLift(p));
 export function board(p){
  const lift=boardingLift(p);
  if(!lift)return false;
- p.activeLift=lift;p.mode='lift';p.ride=0;p.speed=0;p.air=false;p.angle=lift.yaw;p.yaw=0;
+ p.activeLift=lift;p.mode='lift';p.ride=0;p.speed=0;p.air=false;p.pop=false;p.stopSide=0;p.angle=lift.yaw;p.yaw=0;
  p.edgeAngle=0;p.spray=0;p.suspension=0;
  p.safeTrail=[];
  p.race=null;
@@ -614,6 +614,7 @@ export function unload(p){
  return true;
 }
 const gravity=9.81;
+const popVelocity=Math.sqrt(2*gravity*.5);
 const angleDelta=(target,current)=>Math.atan2(Math.sin(target-current),Math.cos(target-current));
 function skiGrade(x,z,dx,dz){
  const reach=2.5;
@@ -695,7 +696,7 @@ function startCrash(p,colliders,nx,nz,impactSpeed){
   slideSpeed:tumble?Math.min(p.speed*.88,28):impactSpeed*.24,
   slideTime:tumble?1.7:.45+.35*severity,
   flying:tumble,verticalSpeed:tumble?2.25+severity*.5:0,yardSale,recovery};
- p.mode='crash';p.air=false;p.vy=0;p.y=height(p.x,p.z);p.speed=0;p.measuredSpeed=0;
+ p.mode='crash';p.air=false;p.pop=false;p.stopSide=0;p.vy=0;p.y=height(p.x,p.z);p.speed=0;p.measuredSpeed=0;
  p.race=null;
  p.yaw=0;p.edgeAngle=0;p.spray=0;p.suspension=0;p.drive='crash';
 }
@@ -748,8 +749,16 @@ export function step(p,input,dt,colliders=[]){const events=[];
  }
  p.bump=Math.max(0,p.bump-dt);
  const direction=Number(Boolean(input.left))-Number(Boolean(input.right));
+ const stopping=Boolean(input.brake&&!p.air);
+ const previousTravel=p.travelAngle??p.angle;
+ const unwinding=!stopping&&!p.air&&p.stopSide&&p.speed>1.2&&Math.abs(p.slip)>.24;
+ if(stopping&&p.speed>.12){
+  p.stopSide ||= direction||Math.sign(p.yaw)||1;
+ }else if(!stopping&&!unwinding){
+  p.stopSide=0;
+ }
  const style=turnStyles[p.turnStyle]??turnStyles[0];
- const carve=style.id==='carve'&&!input.brake;
+ const carve=style.id==='carve'&&!stopping;
  const shortSkid=style.id==='skid';
  const alpine=highlineTrailAt(p.x,p.z);
  const gladeSnow=Math.max(driftDepth(p.x,p.z),ridgeGladeDepth(p.x,p.z),alpine?.kind==='glade'?.65:0);
@@ -757,11 +766,14 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const entry=driftEntryMask(p.x,p.z);
  const powder=Math.max(gladeSnow,powderDepth(p.x,p.z),alpine?.kind==='bowl'?.72:0);
  const edgeLimit=(11.4-3.4*powder)/Math.max(5,p.speed);
- let turnRate=(input.brake?1.9:1.55)/(1+p.speed*.019);
+ let turnRate=1.55/(1+p.speed*.019);
  if(carve)turnRate=Math.min(turnRate,edgeLimit*.88);
  if(shortSkid)turnRate=Math.max(turnRate,2.45/(1+p.speed*.028));
  if(p.air)turnRate=.76;
- p.yaw+=(direction*turnRate-p.yaw)*(1-Math.exp(-dt*(shortSkid?13:9)));
+ const stopTurn=angleDelta(previousTravel+(stopping?p.stopSide*Math.PI*.48:0),p.angle);
+ const pivot=(stopping&&p.stopSide)||unwinding;
+ const targetYaw=pivot?clamp(stopTurn*10,-10,10)+(unwinding?direction*turnRate:0):direction*turnRate;
+ p.yaw+=(targetYaw-p.yaw)*(1-Math.exp(-dt*(pivot?24:shortSkid?13:9)));
  p.angle+=p.yaw*dt;
 
  const eps=.55;
@@ -769,12 +781,11 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const fallX=(height(p.x-eps,p.z)-height(p.x+eps,p.z))/(2*eps);
  const expert=expertLine(p.x,p.z);
  // The skis turn first. Edges bring the momentum around while gravity pulls toward the fall line.
- const previousTravel=p.travelAngle??p.angle;
  let travel=previousTravel;
- if(!p.air){
+ if(!p.air&&!stopping&&!unwinding){
   if(p.speed<1.2)travel=p.angle;
   else{
-   const gripBase=input.brake?5.5:shortSkid&&!direction?14:style.grip;
+   const gripBase=shortSkid&&!direction?14:style.grip;
    const grip=gripBase/(1+p.speed*.081)*(1-powder*.16);
    const edgeTurn=angleDelta(p.angle,travel)*(1-Math.exp(-grip*dt));
    travel+=carve?clamp(edgeTurn,-edgeLimit*dt,edgeLimit*dt):edgeTurn;
@@ -790,10 +801,12 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const lean=Math.atan(turnLoad);
  const edge=carve?lean*.84:lean*(shortSkid?.22:.34)+p.yaw*(shortSkid?.11:.085);
  const maxEdge=carve?.64:shortSkid?.40:.47;
- const edgeTarget=p.air?0:clamp(edge,-maxEdge,maxEdge)*smooth((p.speed-2)/7);
+ const stopEdge=smooth((Math.abs(sideSlip)-.15)/.75);
+ const edgeTarget=p.air?0:stopping?p.stopSide*.48*stopEdge*smooth(p.speed/6)
+  :clamp(edge,-maxEdge,maxEdge)*smooth((p.speed-2)/7);
  p.edgeAngle+=(edgeTarget-p.edgeAngle)*(1-Math.exp(-dt*12));
  p.spray=p.air?0:smooth((p.speed-3)/8)*smooth((Math.abs(sideSlip)-.12)/.48)
-  *(shortSkid?1:input.brake?.52:0);
+  *(stopping||shortSkid?1:0);
  const forwardX=Math.sin(travel),forwardZ=Math.cos(travel);
  const grade=fallX*forwardX+fallZ*forwardZ;
  const downhillPull=gravity*grade/(1+fallX**2+fallZ**2);
@@ -805,7 +818,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
   :p.z>=590?0:(baseHeight(p.z-12*headingZ)-baseHeight(p.z+12*headingZ))/24;
  const wasTucking=p.drive==='tuck';
  const canTuck=downhillGrade>=(wasTucking?.055:.085)&&p.speed>=(wasTucking?6:7.5);
- p.drive=input.brake&&!p.air?'brake':'glide';
+ p.drive=stopping?'brake':'glide';
  if(input.tuck&&!input.brake&&!p.air){
   if(canTuck)p.drive='tuck';
   else if(p.speed<11)p.drive='skate';
@@ -817,8 +830,8 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const trailDrag=(connector?.085:alpine||onTrail(p.x,p.z)||powder>.2?.30:.72)+softSnow;
  const surfaceDrag=trailDrag+(.18-trailDrag)*Math.max(entry,ridge,powderToGladeMask(p.x,p.z));
  const aeroDrag=(p.drive==='tuck'?.0038:.0058)*p.speed**2;
- const edgeDrag=Math.abs(sideSlip)*p.speed*(input.brake?Math.max(.42,style.scrub):style.scrub);
- const brake=p.drive==='brake'?5.6+p.speed*.32:0;
+ const edgeDrag=stopping?0:Math.abs(sideSlip)*p.speed*style.scrub;
+ const brake=stopping?4.5+p.speed*.14+stopEdge*(6.8+p.speed*.24):0;
  const acceleration=p.air?-.0024*p.speed**2:downhillPull+push-surfaceDrag-aeroDrag-edgeDrag-brake;
  p.speed=clamp(p.speed+acceleration*dt,0,39);
  if(!p.air&&p.speed<.05)p.speed=0;
@@ -834,7 +847,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  }
  const ground=height(p.x,p.z);
  const groundV=(ground-(p.air?height(oldX,oldZ):oldY))/dt;
- if(!p.air){
+ if(!p.air||p.pop){
   const powderDrop=powderCliffOffset(oldX,oldZ)<=0&&powderCliffOffset(p.x,p.z)>0&&powderCliffSpan(p.z)>.88;
   const ridgeDrop=ridge>.6&&oldZ<=ridgeDropLip(oldX)&&p.z>ridgeDropLip(p.x)&&dz>0;
   const expertDrop=expert&&timberlineDrop(oldX,oldZ,p.x,p.z);
@@ -844,20 +857,27 @@ export function step(p,input,dt,colliders=[]){const events=[];
   // the shoulders between nearby lines skiable even where the grade changes fast.
   const bigDrop=p.speed>8&&oldGroundV-groundV>5&&!alpine&&!highlineTrailAt(p.x,p.z)
    &&unmarkedDrop(oldX,oldZ,oldY,forwardX,forwardZ,p.speed);
-  const jumping=input.jump&&p.speed>1;
-  if(jumping||powderDrop||ridgeDrop||expertDrop||parkLip||sideHit||bigDrop){
-  const minLaunch=powderDrop||ridgeDrop||expertDrop?0:sideHit?-.65:parkLip?.7:oldGroundV;
-   p.vy=jumping?Math.max(-1.6,p.speed*skiGrade(oldX,oldZ,forwardX,forwardZ))+4.4:Math.max(oldGroundV,minLaunch);
+  if(powderDrop||ridgeDrop||expertDrop||parkLip||sideHit||bigDrop){
+   const minLaunch=powderDrop||ridgeDrop||expertDrop?0:sideHit?-.65:parkLip?.7:oldGroundV;
+   p.vy=Math.max(oldGroundV,minLaunch);
+   if(p.pop)p.vy=Math.max(p.vy,oldGroundV+popVelocity-gravity*p.airtime);
+   else events.push('takeoff');
+   p.pop=false;p.air=true;p.airtime=0;
+  }else if(input.jump&&!p.air&&!stopping){
+   p.pop=true;
+   p.vy=popVelocity;
    p.air=true;p.airtime=0;events.push('takeoff');
   }
  }
  if(p.air){
-  p.vy-=gravity*dt;p.y+=p.vy*dt;p.airtime+=dt;
+  p.vy-=gravity*dt;p.airtime+=dt;
+  // A small pop follows the slope below it. Terrain lips use full ballistic flight.
+  p.y=p.pop?ground+p.airtime*(popVelocity-.5*gravity*p.airtime):p.y+p.vy*dt;
   p.suspension*=Math.exp(-12*dt);
   if(p.y<=ground){
-   const impact=groundV-p.vy;
+   const impact=(p.pop?0:groundV)-p.vy;
    p.suspension=Math.min(p.suspension,-clamp(impact*.036,0,.42));
-   p.y=ground;p.air=false;p.vy=0;
+   p.y=ground;p.air=false;p.pop=false;p.vy=0;
    if(p.airtime>.25){p.jumps++;events.push('land');}
   }
  }else{
