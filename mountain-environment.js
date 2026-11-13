@@ -43,22 +43,29 @@ export const rangeHeight=basinHeight;
 // The sky and the far side of the rim share the same cloud layer. At full
 // coverage the terrain blends into the sky at exactly the same view angle.
 const alpineSkyGLSL=`
+float skyHash(vec2 cell){
+ vec3 p=fract(vec3(cell.xyx)*.1031);
+ p+=dot(p,p.yzx+33.33);
+ return fract((p.x+p.y)*p.z);
+}
 float skyNoise(vec2 p){
  vec2 i=floor(p),f=fract(p);
  f=f*f*(3.0-2.0*f);
- vec4 v=fract(sin(vec4(0.0,127.1,311.7,438.8)+dot(i,vec2(127.1,311.7)))*43758.5453);
- return mix(mix(v.x,v.y,f.x),mix(v.z,v.w,f.x),f.y);
+ float nearEdge=mix(skyHash(i),skyHash(i+vec2(1.0,0.0)),f.x);
+ float farEdge=mix(skyHash(i+vec2(0.0,1.0)),skyHash(i+vec2(1.0,1.0)),f.x);
+ return mix(nearEdge,farEdge,f.y);
 }
 vec3 alpineSky(vec3 d){
  float h=max(d.y,0.0);
  vec3 color=mix(vec3(.77,.86,.92),vec3(.29,.57,.78),pow(h,.45));
  float sun=pow(max(dot(d,normalize(vec3(-.7,.5,.25))),0.0),650.0);
  color+=vec3(1.0,.86,.60)*sun*.40;
- vec2 p=d.xz*10.0/(.36+max(d.y,-.19));
- float wisps=.58*skyNoise(p)+.28*skyNoise(p*2.07+vec2(4.2,7.1))+.14*skyNoise(p*4.05);
- float cloud=smoothstep(.38,.72,wisps+.14*(1.0-smoothstep(-.07,.22,d.y)));
- float layer=smoothstep(-.31,-.13,d.y)*(1.0-smoothstep(.26,.56,d.y));
- color=mix(color,vec3(.92,.95,.98),layer*(.24+.66*cloud));
+ vec2 p=d.xz*5.0/(.46+max(d.y,-.19));
+ p+=vec2(skyNoise(p*.66),skyNoise(p*.69+vec2(2.0,7.0)))*1.15;
+ float wisps=.61*skyNoise(p)+.26*skyNoise(p*2.07+vec2(4.2,7.1))+.13*skyNoise(p*4.05);
+ float cloud=smoothstep(.42,.75,wisps+.13*(1.0-smoothstep(-.07,.22,d.y)));
+ float layer=smoothstep(-.31,-.13,d.y)*(1.0-smoothstep(.17,.43,d.y));
+ color=mix(color,vec3(.92,.95,.98),layer*(.18+.73*cloud));
  return color;
 }`;
 export function addRange(scene){
