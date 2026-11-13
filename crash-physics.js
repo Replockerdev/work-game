@@ -159,9 +159,10 @@ export function advanceCrashBody(body,dt,height,colliders,bounds){
 // follow the torso while the other joints are free to fold and hit the ground.
 const limbOffset=new Vector3(),limbNormal=new Vector3();
 const upper=new Vector3(),lower=new Vector3(),hinge=new Vector3(),bend=new Vector3();
-const bodyRight=new Vector3(),rest=new Vector3();
+const bodyRight=new Vector3(),bodyForward=new Vector3(),rest=new Vector3();
+const elbowPlane=new Vector3(),preferredBend=new Vector3();
 const bootUp=new Vector3(),bootForward=new Vector3(),bootRight=new Vector3(),bootBase=new Vector3();
-const snowUp=new Vector3(),snowForward=new Vector3(),snowBoot=new Quaternion();
+const snowUp=new Vector3(),snowForward=new Vector3(),snowBoot=new Quaternion(),bootTarget=new Quaternion();
 const bootBasis=new Matrix4();
 const legAxis=new Vector3(),kneeDirection=new Vector3(),targetKnee=new Vector3();
 function makeLimb(body,anchor,points,radii,restDirection,maxSwing,maxBend){
@@ -172,23 +173,24 @@ function makeLimb(body,anchor,points,radii,restDirection,maxSwing,maxBend){
   const position=offset.clone().add(body.position);
   const previous=position.clone().addScaledVector(body.velocity,-1/240);
   previous.addScaledVector(new Vector3().crossVectors(body.spin,offset),-1/240);
-  return {position,previous,radius:radii[i]};
+  return {position,previous,predicted:position.clone(),radius:radii[i]};
  });
  const links=nodes.map((node,i)=>[i-1,i,node.position.distanceTo(i?nodes[i-1].position:origin)]);
  return {local,origin,nodes,links,restDirection:new Vector3(...restDirection).normalize(),maxSwing,maxBend};
 }
 export function createCrashLimbs(body){
  return [-1,1].map(side=>({
-  arm:makeLimb(body,[side*.43,.61,.12],[
+  arm:{...makeLimb(body,[side*.43,.61,.12],[
    [side*.63,.24,.16],[side*.7,.06,.32],...(body.yardSale?[]:[[side*.86,-.39,-.29]])
   ],[.15,.15,.11],[side*.36,-1,.20],1.65,2.30),
+   elbowBend:new Vector3(0,0,1).applyQuaternion(body.orientation)},
   leg:makeLimb(body,[side*.22,-.10,-.12],[
    [side*.28,-.31,.18],[side*.38,-.58,.03]
   ],[.18,.20],[side*.15,-1,.30],1.28,2.17),
   boot:new Quaternion()
  }));
 }
-function limitJoints(limb,body,isLeg){
+function limitJoints(limb,body,isLeg,dt){
  const [joint,end]=limb.nodes;
  const middle=joint.position,tip=end.position;
  upper.subVectors(middle,limb.origin).normalize();
@@ -201,10 +203,22 @@ function limitJoints(limb,body,isLeg){
   middle.add(limbOffset);
   tip.add(limbOffset);
  }
- // Knees fold toward the heel. Elbows fold toward the shoulder's front.
- bend.crossVectors(upper,bodyRight);
- if(bend.lengthSq()<.01)bend.set(0,0,1).applyQuaternion(body.orientation).addScaledVector(upper,-bend.dot(upper));
- bend.normalize().multiplyScalar(isLeg?-1:1);
+ // Retain the elbow's bend plane when the arm points sideways. Rebuilding it
+ // from a cross product alone can make the forearm flip across the upper arm.
+ if(isLeg){
+  bend.crossVectors(bodyRight,upper).normalize();
+ }else{
+  bend.copy(limb.elbowBend).addScaledVector(upper,-limb.elbowBend.dot(upper));
+  preferredBend.copy(bodyForward).addScaledVector(upper,-bodyForward.dot(upper));
+  if(bend.lengthSq()<.05)bend.copy(preferredBend);
+  if(bend.lengthSq()<.05)bend.crossVectors(upper,bodyRight);
+  bend.normalize();
+  elbowPlane.crossVectors(upper,bend);
+  const turn=Math.atan2(preferredBend.dot(elbowPlane),preferredBend.dot(bend));
+  const limit=dt*9;
+  bend.applyAxisAngle(upper,Math.max(-limit,Math.min(limit,turn)));
+  limb.elbowBend.copy(bend);
+ }
  hinge.crossVectors(upper,bend).normalize();
  lower.subVectors(tip,middle);
  const flex=Math.min(limb.maxBend,Math.atan2(Math.max(0,lower.dot(bend)),lower.dot(upper)));
@@ -214,39 +228,53 @@ function limitJoints(limb,body,isLeg){
  tip.copy(middle).addScaledVector(upper,Math.cos(flex)*reach)
   .addScaledVector(bend,Math.sin(flex)*reach).addScaledVector(hinge,splay);
 }
-function fitCrashBoot(side,body,height){
+function fitCrashBoot(side,body,height,dt){
  const [knee,ankle]=side.leg.nodes;
  const p=ankle.position,boot=side.boot;
- bootUp.subVectors(knee.position,p).normalize();
- if(bootUp.lengthSq()<.01)bootUp.set(0,1,0).applyQuaternion(body.orientation);
- bootRight.copy(bodyRight).addScaledVector(bootUp,-bodyRight.dot(bootUp));
- if(bootRight.lengthSq()<.01)bootRight.set(body.forwardZ,0,-body.forwardX);
- bootForward.crossVectors(bootRight,bootUp).normalize();
- if(bootForward.lengthSq()<.01)bootForward.set(body.forwardX,0,body.forwardZ);
- bootRight.crossVectors(bootUp,bootForward).normalize();
- bootUp.crossVectors(bootForward,bootRight);
- boot.setFromRotationMatrix(bootBasis.makeBasis(bootRight,bootUp,bootForward));
- if(body.yardSale)return;
- bootBase.copy(crashBootOffset).applyQuaternion(boot).negate().add(p);
- let gap=skiClearance(bootBase,boot,height);
- if(gap<.01){
-  // The ski can tip or slide when it meets the slope. Keep the boot at the binding.
-  const x=p.x,z=p.z;
-  snowUp.set(height(x-.4,z)-height(x+.4,z),.8,height(x,z-.4)-height(x,z+.4)).normalize();
-  snowForward.set(bootForward.x,0,bootForward.z);
-  if(snowForward.lengthSq()<.02)snowForward.set(body.forwardX,0,body.forwardZ);
-  snowForward.addScaledVector(snowUp,-snowForward.dot(snowUp)).normalize();
-  bootRight.crossVectors(snowUp,snowForward).normalize();
-  snowBoot.setFromRotationMatrix(bootBasis.makeBasis(bootRight,snowUp,snowForward));
-  boot.slerp(snowBoot,Math.min(1,(.01-gap)/.37));
-  bootBase.copy(crashBootOffset).applyQuaternion(boot).negate().add(p);
-  gap=skiClearance(bootBase,boot,height);
-  if(gap<.012){
-   const lift=.012-gap;
-   p.y+=lift;
-   ankle.previous.y+=lift*.7;
+ // Keep the boot's roll aligned with the leg. A shin crossing the body's
+ // sideways axis must not flip the ski around to find a new heading.
+ bootUp.subVectors(knee.position,p);
+ const pitch=Math.atan2(bootUp.dot(bodyForward),Math.max(.09,bootUp.dot(bodyUp)));
+ bootUp.copy(bodyUp).multiplyScalar(Math.cos(pitch)).addScaledVector(bodyForward,Math.sin(pitch));
+ bootForward.crossVectors(bodyRight,bootUp);
+ bootTarget.setFromRotationMatrix(bootBasis.makeBasis(bodyRight,bootUp,bootForward));
+ if(!body.yardSale){
+  bootBase.copy(crashBootOffset).applyQuaternion(bootTarget).negate().add(p);
+  const gap=skiClearance(bootBase,bootTarget,height);
+  // Keep settling onto the snow while the foot is bearing weight, even if the
+  // last clearance correction lifted it out of contact for a substep.
+  let restingGap=gap;
+  if(dt>0){
+   bootBase.copy(crashBootOffset).applyQuaternion(boot).negate().add(p);
+   restingGap=skiClearance(bootBase,boot,height);
+  }
+  const [hipLink,kneeLink]=side.leg.links;
+  const reach=hipLink[2]+kneeLink[2];
+  const extension=Math.max(0,Math.min(1,(p.distanceTo(side.leg.origin)-reach+.07)/.12));
+  const contact=Math.max(0,Math.min(1,Math.max((.12-gap)/.42,(.10-restingGap)/.25+extension)));
+  if(contact>0){
+   const x=p.x,z=p.z;
+   snowUp.set(height(x-.4,z)-height(x+.4,z),.8,height(x,z-.4)-height(x,z+.4)).normalize();
+   // Carry the existing heading through contact, even when the ski is close to vertical.
+   snowForward.set(0,0,1).applyQuaternion(dt>0?boot:bootTarget);
+   snowForward.addScaledVector(snowUp,-snowForward.dot(snowUp));
+   if(snowForward.lengthSq()<.04){
+    snowForward.crossVectors(bodyRight,snowUp);
+    if(snowForward.lengthSq()<.04)snowForward.set(body.forwardX,0,body.forwardZ)
+     .addScaledVector(snowUp,-(body.forwardX*snowUp.x+body.forwardZ*snowUp.z));
+   }
+   snowForward.normalize();
+   bootRight.crossVectors(snowUp,snowForward).normalize();
+   snowBoot.setFromRotationMatrix(bootBasis.makeBasis(bootRight,snowUp,snowForward));
+   bootTarget.slerp(snowBoot,contact*contact*(3-2*contact));
   }
  }
+ if(dt===0)boot.copy(bootTarget);
+ else boot.rotateTowards(bootTarget,Math.min(9*dt,boot.angleTo(bootTarget)*(1-Math.exp(-20*dt))));
+ if(body.yardSale)return;
+ bootBase.copy(crashBootOffset).applyQuaternion(boot).negate().add(p);
+ const gap=skiClearance(bootBase,boot,height);
+ p.y+=Math.max(0,.012-gap);
 }
 function keepKneeBentForward(leg){
  // A ski that catches the snow can move the ankle after the joint solve.
@@ -260,7 +288,7 @@ function keepKneeBentForward(leg){
  if(kneeDirection.lengthSq()<.01)return;
  const thigh=leg.links[0][2],shin=leg.links[1][2];
  const minimum=Math.sqrt(thigh**2+shin**2+2*thigh*shin*Math.cos(leg.maxBend));
- const span=Math.max(minimum,distance);
+ const span=Math.max(minimum,Math.min(thigh+shin,distance));
  const along=(thigh**2-shin**2+span**2)/(2*span);
  const rise=Math.sqrt(Math.max(0,thigh**2-along**2));
  targetKnee.copy(leg.origin).addScaledVector(legAxis,Math.min(distance,along*distance/span))
@@ -270,26 +298,27 @@ function keepKneeBentForward(leg){
 function placeJoint(node,height,nearby,body){
  const p=node.position,r=node.radius;
  const snow=height(p.x,p.z);
- if(p.y<snow+r){p.y=snow+r;node.previous.lerp(p,.55);}
+ if(p.y<snow+r)p.y=snow+r;
  for(const obstacle of nearby){
   const side=obstacleDistance(p.x,p.z,obstacle),above=p.y-obstacleTop(obstacle,height);
   if(side>=r||above>=r)continue;
-  if(above>side&&side<=0){p.y+=r-above;node.previous.lerp(p,.4);}
+  if(above>side&&side<=0)p.y+=r-above;
   else{
    const reach=above>0?Math.sqrt(r*r-above*above):r;
    if(side>=reach)continue;
    const [x,z]=obstacleNormal(p.x,p.z,obstacle,body.forwardX,body.forwardZ);
    limbNormal.set(x,0,z);
    p.addScaledVector(limbNormal,reach-side+.001);
-   node.previous.lerp(p,.45);
   }
  }
 }
 export function advanceCrashLimbs(body,dt,height,colliders){
  const nearby=colliders.filter(o=>obstacleDistance(body.position.x,body.position.z,o)<3.5);
  const steps=Math.max(1,Math.ceil(dt*240)),slice=dt/steps;
- const damping=Math.exp(-6*slice);
+ const damping=Math.exp(-12*slice);
  bodyRight.set(1,0,0).applyQuaternion(body.orientation);
+ bodyForward.set(0,0,1).applyQuaternion(body.orientation);
+ bodyUp.set(0,1,0).applyQuaternion(body.orientation);
  for(let step=0;step<steps;step++){
   const momentum=slice/(body.limbStep??1/240)*damping;
   if(slice>0)body.limbStep=slice;
@@ -303,6 +332,17 @@ export function advanceCrashLimbs(body,dt,height,colliders){
      node.previous.copy(node.position);
      node.position.add(limbOffset);
      node.position.y-=gravity*slice*slice;
+     node.predicted.copy(node.position);
+    }
+   }
+   if(slice>0){
+    // Position corrections can be large on impact. Only carry a fraction of
+    // that motion into the next step so the limb doesn't spring back.
+    for(const node of nodes){
+     limbOffset.subVectors(node.position,node.predicted);
+     node.previous.addScaledVector(limbOffset,.70);
+     limbOffset.subVectors(node.position,node.previous).clampLength(0,slice*7);
+     node.previous.copy(node.position).sub(limbOffset);
     }
    }
    for(let pass=0;pass<6;pass++){
@@ -315,10 +355,10 @@ export function advanceCrashLimbs(body,dt,height,colliders){
      second.addScaledVector(limbOffset,a<0?-1:-.5);
      if(a>=0)first.addScaledVector(limbOffset,.5);
     }
-    limitJoints(limb,body,isLeg);
+    limitJoints(limb,body,isLeg,slice/6);
     for(const node of nodes)placeJoint(node,height,nearby,body);
     if(isLeg&&pass===5){
-     fitCrashBoot(side,body,height);
+     fitCrashBoot(side,body,height,slice);
      keepKneeBentForward(limb);
      placeJoint(nodes[0],height,nearby,body);
     }
