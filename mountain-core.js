@@ -657,7 +657,7 @@ export const turnStyles=[
  {id:'skid',label:'Short skid turns',grip:6.1,scrub:1.25}
 ];
 export function spawn(){
- return {x:BASE.x,z:BASE.z-10,y:height(BASE.x,BASE.z-10),angle:0,yaw:0,speed:0,measuredSpeed:0,
+ return {x:BASE.x,z:BASE.z-10,y:height(BASE.x,BASE.z-10),angle:0,yaw:0,speed:0,horizontalSpeed:0,trailId:null,
   travelAngle:null,slip:0,vy:0,groundV:0,suspension:0,air:false,pop:false,stopSide:0,jumps:0,airtime:0,bump:0,mode:'ski',ride:0,laps:0,
   passedTop:false,route:'Lift base',lastRoute:'',distance:0,drive:'glide',skatePhase:0,
   turnStyle:0,edgeAngle:0,spray:0,safeTrail:[],crash:null};
@@ -692,7 +692,7 @@ export function unload(p){
  const exitZ=lift.top+(lift.autoUnload?-10:7);
  Object.assign(p,liftWorld(lift,lift.center+8,exitZ));
  p.y=height(p.x,p.z);
- p.mode='ski';p.angle=lift.yaw+(lift.autoUnload?Math.PI:0);p.speed=0;p.measuredSpeed=0;p.travelAngle=null;p.slip=0;
+ p.mode='ski';p.angle=lift.yaw+(lift.autoUnload?Math.PI:0);p.speed=0;p.travelAngle=null;p.slip=0;
  p.yaw=0;p.vy=0;p.groundV=0;p.suspension=0;p.drive='glide';
  p.passedTop=true;
  p.route=lift.landing??(lift===EXPERT?'Timberline Summit':'Summit · pick a line');
@@ -781,11 +781,12 @@ function startCrash(p,colliders,nx,nz,impactSpeed){
   slideSpeed:tumble?Math.min(p.speed*.88,28):impactSpeed*.24,
   slideTime:tumble?1.7:.45+.35*severity,
   flying:tumble,verticalSpeed:tumble?2.25+severity*.5:0,yardSale,recovery};
- p.mode='crash';p.air=false;p.pop=false;p.stopSide=0;p.vy=0;p.y=height(p.x,p.z);p.speed=0;p.measuredSpeed=0;
+ p.mode='crash';p.air=false;p.pop=false;p.stopSide=0;p.vy=0;p.y=height(p.x,p.z);p.speed=0;
  p.race=null;
  p.yaw=0;p.edgeAngle=0;p.spray=0;p.suspension=0;p.drive='crash';
 }
 export function step(p,input,dt,colliders=[]){const events=[];
+ p.horizontalSpeed=0;p.trailId=null;
  if(p.mode==='crash'){
   const crash=p.crash;crash.time+=dt;
   const slide=crash.slideSpeed*Math.max(0,1-crash.time/crash.slideTime)*dt;
@@ -813,7 +814,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
    const spot=crash.recovery;
    p.x=spot.x;p.z=spot.z;p.y=height(p.x,p.z);p.angle=spot.angle;
    p.mode='ski';p.crash=null;p.safeTrail=[];
-   p.travelAngle=null;p.slip=0;p.speed=0;p.measuredSpeed=0;p.groundV=0;p.vy=0;p.airtime=0;
+   p.travelAngle=null;p.slip=0;p.speed=0;p.groundV=0;p.vy=0;p.airtime=0;
    p.drive='glide';p.bump=0;p.skatePhase=0;
    events.push('respawn');
   }
@@ -970,10 +971,11 @@ export function step(p,input,dt,colliders=[]){const events=[];
   p.y=ground;
  }
  p.groundV=groundV;
- // Measure the actual distance in 3D before any collision push-out can move the skier.
+ // Keep the full path for crash recovery. The speedometer measures skiing
+ // over the map, so falling or being pushed away from a rock adds no speed.
  const distance=Math.hypot(horizontal,p.y-oldY);
  p.distance+=distance;
- p.measuredSpeed+=(distance/dt-p.measuredSpeed)*(1-Math.exp(-dt*9));
+ p.horizontalSpeed=horizontal/dt;
  if(horizontal>1e-5){
   for(const offset of [-.42,0,.42]){
    const x=p.x+forwardZ*offset,z=p.z-forwardX*offset;
@@ -1010,20 +1012,27 @@ export function step(p,input,dt,colliders=[]){const events=[];
    p.yaw=0;p.slip=0;
   }
   const retainedSpeed=skating?.48:.25;
-  p.speed*=retainedSpeed;p.measuredSpeed*=retainedSpeed;
+  p.speed*=retainedSpeed;
   if(!p.air){p.y=height(p.x,p.z);p.groundV=-grade*p.speed;}
   p.bump=skating?.22:.8;events.push('bump');
  }
  const stillAtTimberline=p.route==='Timberline Summit'&&!expert&&powder<=.2&&expertLocal(p.x,p.z).z<20;
  const route=stillAtTimberline?null:trailAt(p.x,p.z);
- if(route&&(alpine||expert||route===driftRoute||p.z>juniperZ(105)&&p.z<570)){if(route.name!==p.route){p.route=route.name;events.push('route');}p.lastRoute=route.name;}
+ if(route&&(alpine||expert||route===driftRoute||p.z>juniperZ(105)&&p.z<570)){
+  if(route.name!==p.route){p.route=route.name;events.push('route');}
+  p.lastRoute=route.name;
+  if(!routes.includes(route)||Math.abs(p.x-pathX(p.z,route))<=route.width){
+   p.trailId=route===driftRoute&&p.z>315&&p.z<490&&Math.abs(p.x-ridgeDropX(p.z))<24
+    ?ridgeDropRoute.id:route.id;
+  }
+ }
  if(p.x>OLD_EAST||p.race)advanceRace(p,oldX,oldZ,dt,events);
  const returnedToBase=p.z>585&&p.x>-86&&p.x<OLD_EAST;
  const returnedToExpert=p.activeLift===EXPERT&&boardingLift(p)===EXPERT;
  const returnedToHighline=p.activeLift?.autoUnload&&boardingLift(p)===p.activeLift;
  if(p.passedTop&&(returnedToBase||returnedToExpert||returnedToHighline)){p.laps++;p.passedTop=false;events.push('lap');}
  if(p.z>590&&returnedToBase&&(!alpine||boardingLift(p)===JUNIPER))p.route='Lift base';
- if(!p.air&&p.speed<.05){p.speed=0;p.measuredSpeed=0;}
+ if(!p.air&&p.speed<.05)p.speed=0;
  if(!p.air){
   const trail=p.safeTrail??[],last=trail.at(-1);
   if((!last||p.distance-last.distance>=.7)&&safeRecovery(p.x,p.z,colliders)){

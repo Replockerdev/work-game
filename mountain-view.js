@@ -523,11 +523,14 @@ export function createMountain(canvas){
  // Close in beneath the terminal roof before the usual trailing camera resumes.
  const summit=liftWorld(config,config.center+8,config.top);
  const dock=1-T.MathUtils.smoothstep(Math.hypot(p.x-summit.x,p.z-summit.z),9,26);
- const behind=T.MathUtils.lerp(lift?17:13.5,4,dock),ahead=T.MathUtils.lerp(lift?38:14,5.5,dock);
+ // Lower the ski camera as speed builds so nearby snow gives a clearer sense of motion.
+ const moving=p.mode==='ski'?T.MathUtils.smoothstep(p.horizontalSpeed,3,14):0;
+ const behind=T.MathUtils.lerp(lift?17:13.5-2.5*moving,4,dock);
+ const ahead=T.MathUtils.lerp(lift?38:14,5.5,dock);
  const eyeX=p.x-forwardX*behind,eyeZ=p.z-forwardZ*behind;
  const lookX=p.x+forwardX*ahead,lookZ=p.z+forwardZ*ahead;
  const cameraHeight=p.y+(p.mode==='ski'&&!p.air?p.suspension*.78:0);
- const eyeY=Math.max(cameraHeight+T.MathUtils.lerp(lift?6:8.5,3.7,dock),surfaceHeight(eyeX,eyeZ)+3);
+ const eyeY=Math.max(cameraHeight+T.MathUtils.lerp(lift?6:8.5-2.5*moving,3.7,dock),surfaceHeight(eyeX,eyeZ)+3);
  const rearView=T.MathUtils.smoothstep(-forwardZ,.45,1)*(1-T.MathUtils.smoothstep(p.z,juniperZ(50),juniperZ(105)));
  const lookY=lift?p.y+T.MathUtils.lerp(2,1,dock):Math.max(cameraHeight-6,surfaceHeight(lookX,lookZ)+.6)+rearView*4;
  desired.set(eyeX,eyeY,eyeZ);
