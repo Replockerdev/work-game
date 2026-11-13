@@ -776,6 +776,7 @@ function startCrash(p,colliders,nx,nz,impactSpeed){
  };
  advanceCrashBody(p.crash,0,height,colliders,crashBounds);
  p.crash.limbs=createCrashLimbs(p.crash);
+ advanceCrashLimbs(p.crash,0,height,colliders);
  p.mode='crash';p.air=false;p.pop=false;p.stopSide=0;p.vy=0;p.speed=0;
  p.race=null;
  p.yaw=0;p.edgeAngle=0;p.spray=0;p.suspension=0;p.drive='crash';

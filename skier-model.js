@@ -1,6 +1,6 @@
 import * as T from './vendor/three.module.js';
 import {height,crashBounds} from './mountain-core.js';
-import {advanceCrashBody,crashHipHeight,gearContacts} from './crash-physics.js';
+import {advanceCrashBody,crashBootOffset,crashHipHeight,gearContacts,skiClearance,skiProfile} from './crash-physics.js';
 export function makeSkier(scene){
  const root=new T.Group();scene.add(root);const cloth=new T.MeshStandardMaterial({color:'#c66d46',roughness:.91}),darkCloth=new T.MeshStandardMaterial({color:'#34485a',roughness:.94}),trim=new T.MeshStandardMaterial({color:'#dfaa70',roughness:.8}),rubber=new T.MeshStandardMaterial({color:'#263743',roughness:.74}),metal=new T.MeshStandardMaterial({color:'#a3b0b8',roughness:.28,metalness:.65}),skin=new T.MeshStandardMaterial({color:'#d8ac83',roughness:.9}),helmetMat=new T.MeshStandardMaterial({color:'#e8be63',roughness:.36});
  function mesh(g,m,parent=root){const o=new T.Mesh(g,m);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o;}
@@ -20,11 +20,11 @@ export function makeSkier(scene){
   const ski=kind==='ski';
   equipment.push({mounted,loose,side,ski,body:{
    position:loose.position,orientation:loose.quaternion,velocity:new T.Vector3(),spin:new T.Vector3(),
-   contacts:gearContacts(ski?3.1:1,ski?.16:.08,ski?'z':'y'),
+   contacts:ski?skiProfile.filter((_,i)=>i%2===0).map(({y,z})=>[0,y+.025,z,.145]):gearContacts(1,.08,'y'),
    inverseInertia:ski?1.1:3,snowDrag:2.7,forwardX:0,forwardZ:1
   }});
  }
- function skiGeometry(){const points=[];for(let i=0;i<=22;i++){const z=-1.3+i/22*3.15,t=i/22,w=.105+.035*Math.sin(t*Math.PI),y=.035+Math.pow(Math.max(0,(t-.84)/.16),2)*.28+Math.pow(Math.max(0,(.1-t)/.1),2)*.05;points.push({z,w,y});}const p=[],ind=[];for(const v of points)p.push(-v.w,v.y,v.z,v.w,v.y,v.z,-v.w,v.y+.055,v.z,v.w,v.y+.055,v.z);for(let i=0;i<points.length-1;i++){const k=i*4,n=k+4;ind.push(k+2,n+2,k+3,k+3,n+2,n+3,k,n,k+2,k+2,n,n+2,k+1,k+3,n+1,k+3,n+3,n+1,k,n+1,n,k,k+1,n+1);}const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setIndex(ind);g.computeVertexNormals();return g;}
+ function skiGeometry(){const p=[],ind=[];for(const {w,y,z} of skiProfile)p.push(-w,y,z,w,y,z,-w,y+.055,z,w,y+.055,z);for(let i=0;i<skiProfile.length-1;i++){const k=i*4,n=k+4;ind.push(k+2,n+2,k+3,k+3,n+2,n+3,k,n,k+2,k+2,n,n+2,k+1,k+3,n+1,k+3,n+3,n+1,k,n+1,n,k,k+1,n+1);}const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setIndex(ind);g.computeVertexNormals();return g;}
  const skiMat=new T.MeshStandardMaterial({color:'#d49b54',metalness:.24,roughness:.37});
  for(const s of[-1,1]){const foot=new T.Group();foot.position.x=s*.29;skiGroup.add(foot);feet.push({foot,s});
  const ski=new T.Group();ski.name='Mounted ski';foot.add(ski);
@@ -46,6 +46,15 @@ export function makeSkier(scene){
  const contact=new T.Vector3(),anklePoint=new T.Vector3(),shoulderPoint=new T.Vector3(),crashPivot=new T.Vector3();
  const poleDirection=new T.Vector3();
  let gearCrash=null,gearTime=0;
+ function stepGear(item,dt,colliders){
+  const {body,ski}=item;
+  advanceCrashBody(body,dt,height,colliders,crashBounds);
+  if(!ski)return;
+  const gap=skiClearance(body.position,body.orientation,height);
+  if(gap>=.012)return;
+  body.position.y+=.012-gap;
+  body.velocity.y=Math.max(0,body.velocity.y);
+ }
  function animateGear(p,colliders){
   const crash=p.crash?.yardSale?p.crash:null;
   if(crash!==gearCrash){
@@ -65,7 +74,7 @@ export function makeSkier(scene){
     body.velocity.z-=body.forwardX*sideways;
     body.velocity.y+=ski?1.6:2.1;
     body.spin.set(2.8,side*3.5,ski?1.8:4.2);
-    advanceCrashBody(body,0,height,colliders,crashBounds);
+    stepGear(item,0,colliders);
    }
    gearTime=crash?.time??0;
   }
@@ -74,7 +83,7 @@ export function makeSkier(scene){
   gearTime=crash.time;
   while(remaining>1e-6){
    const dt=Math.min(remaining,1/120);remaining-=dt;
-   for(const item of equipment)advanceCrashBody(item.body,dt,height,colliders,crashBounds);
+   for(const item of equipment)stepGear(item,dt,colliders);
   }
  }
  const runningSole=[-1.05,-.45,.15,.75,1.33];
@@ -104,20 +113,20 @@ export function makeSkier(scene){
   }
   foot.position.y=floor-p.y+.025+lift;
  }
- const inverseFall=new T.Quaternion(),gearAxis=new T.Vector3();
+ const inverseFall=new T.Quaternion();
  function poseFall(crash){
   root.quaternion.copy(crash.orientation);
   crashPivot.set(0,crashHipHeight,0).applyQuaternion(root.quaternion);
   root.position.copy(crash.position).sub(crashPivot);
   inverseFall.copy(root.quaternion).invert();
   const local=world=>world.clone().sub(root.position).applyQuaternion(inverseFall);
-  torso.position.set(0,.63,-.12);
-  torso.rotation.set(.27,0,crash.side*.18);
+  torso.position.set(0,.65,-.08);
+  torso.rotation.set(.12,0,0);
   skiGroup.position.set(0,0,0);
   skiGroup.rotation.set(0,0,0);
-  crash.limbs.forEach(({arm,leg},i)=>{
+  crash.limbs.forEach(({arm,leg,boot},i)=>{
    const [elbow,hand,poleTip]=arm.nodes.map(node=>local(node.position));
-   const [knee,ankle,skiTip,skiTail]=leg.nodes.map(node=>local(node.position));
+   const [knee,ankle]=leg.nodes.map(node=>local(node.position));
    const {foot}=feet[i],{thigh,shin}=legs[i],{upper,lower,glove,pole}=arms[i];
    thigh.update(local(leg.origin).toArray(),knee.toArray());
    shin.update(knee.toArray(),ankle.toArray());
@@ -125,12 +134,8 @@ export function makeSkier(scene){
    lower.update(elbow.toArray(),hand.toArray());
    glove.position.copy(hand);
    foot.position.copy(ankle);
-   foot.quaternion.identity();
-   if(skiTip){
-    gearAxis.subVectors(skiTip,skiTail).normalize();
-    foot.quaternion.setFromUnitVectors(skiAxis,gearAxis);
-   }
-   anklePoint.set(0,.25,0).applyQuaternion(foot.quaternion);
+   foot.quaternion.copy(boot).premultiply(inverseFall);
+   anklePoint.copy(crashBootOffset).applyQuaternion(foot.quaternion);
    foot.position.sub(anklePoint);
    const tip=poleTip??elbow;
    poleDirection.subVectors(hand,tip);
