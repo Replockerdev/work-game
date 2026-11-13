@@ -1,4 +1,4 @@
-import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,highlineHeight,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
+import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,HIGHLINE_CHUTE_ROCKS,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
 
 // Stretch Juniper toward the north ridge while keeping the shared lower hill in place.
 export function juniperZ(section){
@@ -56,7 +56,8 @@ export function chuteX(z){
 }
 export function chuteHalfWidth(z){
  return 13-6*smooth((z-74)/32)+3*smooth((z-115)/29)
-  -5.7*smooth((z-145)/26)+3.5*smooth((z-187)/26)+11*smooth((z-218)/86);
+  -5.7*smooth((z-145)/26)+3.5*smooth((z-187)/26)+11*smooth((z-218)/86)
+  -1.35*smooth((z-75)/41)*(1-smooth((z-210)/73));
 }
 function chuteRib(z,crest,upper,lower){
  const offset=z-crest;
@@ -80,6 +81,12 @@ export function chuteRockMask(x,z){
  const edge=chuteWallEdge(across,z,side);
  const exposure=smooth(chuteWallStrength(z,side)/.8);
  return exposure*smooth((edge+.3)/2.1)*(1-smooth((edge-6)/15));
+}
+function chuteWall(x,z){
+ if(x>540)return highlineRock(x,z);
+ if(x> -85||z<440)return 0;
+ const local=expertLocal(x,z);
+ return chuteRockMask(local.x,local.z);
 }
 export function timberX(z){return Math.max(23,expertFaceX(z)-24);}
 export function expertLine(x,z){
@@ -207,6 +214,13 @@ export function liftChairPosition(lift,seconds){
 }
 export const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
+export const chuteFloorRocks=[
+ ...[[87,-2.8,.76],[109,2.25,.7],[142,-2.2,.83],[171,1.2,.62],[193,-1.8,.72],
+  [224,2.25,.8],[250,-3.1,.71],[274,3.6,.75]].map(([section,side,size])=>({
+   ...liftWorld(EXPERT,chuteX(section)+side,timberlineZ(section)),size
+  })),
+ ...HIGHLINE_CHUTE_ROCKS
+].map(rock=>({...rock,r:rock.size*.83,chuteRock:true}));
 export const routes=[{id:'groomer',name:'The Groomer',offset:-103,width:23,color:'#72bfb4'},{id:'park',name:'The Park',offset:0,width:24,color:'#e3a36b'},{id:'glades',name:'The Glades',offset:103,width:36,color:'#8da776'}];
 export const pathX=(z,r)=>r.offset*Math.sin(Math.PI*clamp((juniperSection(z)-60)/530,0,1));
 const groomer=routes[0];
@@ -724,7 +738,7 @@ function obstacleNormal(x,z,obstacle,forwardX,forwardZ){
 const obstacleTop=o=>o.top??height(o.x,o.z)+(o.size??5);
 function safeRecovery(x,z,colliders){
  if(x<SNOW_WEST+12||x>SNOW_EAST-12||z<SNOW_NORTH+14||z>655)return false;
- if(colliders.some(o=>obstacleDistance(x,z,o)<2.3))return false;
+ if(chuteWall(x,z)>.24||colliders.some(o=>obstacleDistance(x,z,o)<(o.chuteRock?1.1:2.3)))return false;
  const grade=Math.hypot(height(x+1,z)-height(x-1,z),height(x,z+1)-height(x,z-1))/2;
  return grade<1.8;
 }
@@ -960,6 +974,18 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const distance=Math.hypot(horizontal,p.y-oldY);
  p.distance+=distance;
  p.measuredSpeed+=(distance/dt-p.measuredSpeed)*(1-Math.exp(-dt*9));
+ if(horizontal>1e-5){
+  for(const offset of [-.42,0,.42]){
+   const x=p.x+forwardZ*offset,z=p.z-forwardX*offset;
+   if(chuteWall(x,z)<.39||p.y>height(x,z)+.22)continue;
+   const nx=height(x-.55,z)-height(x+.55,z);
+   const nz=height(x,z-.55)-height(x,z+.55);
+   const normal=Math.hypot(nx,nz)||1;
+   const impact=p.speed*Math.max(.32,(-forwardX*nx-forwardZ*nz)/normal);
+   startCrash(p,colliders,nx/normal,nz/normal,impact);
+   events.push('crash');return events;
+  }
+ }
  for(const o of colliders){
   const clearance=obstacleDistance(p.x,p.z,o);
   if(clearance>=.4||p.bump>0)continue;
@@ -968,7 +994,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
   const inward=Math.max(0,-forwardX*nx-forwardZ*nz);
   const impactSpeed=p.speed*inward;
   const skating=p.drive==='skate'&&!p.air;
-  if(!skating&&impactSpeed>=3.3){
+  if((o.chuteRock&&p.speed>2)||(!skating&&impactSpeed>=3.3)){
    startCrash(p,colliders,nx,nz,impactSpeed);events.push('crash');return events;
   }
   p.x=clamp(p.x+nx*(.8-clearance),SNOW_WEST+10,SNOW_EAST-10);

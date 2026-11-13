@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,liftSupports,liftCycleSeconds,liftTerminalTurn,liftChairPosition,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,chuteHalfWidth,chuteRockMask,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,powderToGladeMask,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,liftSupports,liftCycleSeconds,liftTerminalTurn,liftChairPosition,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,chuteHalfWidth,chuteRockMask,bowlX,bowlWidth,inBowl,bowlRocks,chuteFloorRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,powderToGladeMask,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
@@ -162,7 +162,7 @@ export function createMountain(canvas){
  trailSign('◆  Timberline Chair  →',expertSignX,expertSignY+1.85,expertSignZ,'#354356',5.4);
  const trees=obstacles();
  const forest=detailedTrees(scene,[...trees,...surroundingForest()]);
- const colliders=[...trees,...bowlRocks,...addRange(scene)];
+ const colliders=[...trees,...bowlRocks,...chuteFloorRocks,...addRange(scene)];
  function waymark(label,x,z,color,width=5.3){
   const y=height(x,z);
   box(.15,2.2,.15,'#725c49',x,y+1.1,z);
@@ -200,8 +200,9 @@ export function createMountain(canvas){
   }
  }
  const rockShape=new T.DodecahedronGeometry(1,0);
- for(const [i,{x,z,size}] of bowlRocks.entries()){
-  const rock=mesh(rockShape,i%2?'#69767b':'#535e64');
+ for(const [i,{x,z,size,chuteRock}] of [...bowlRocks,...chuteFloorRocks].entries()){
+  const colors=chuteRock?['#495761','#62717a']:['#535e64','#69767b'];
+  const rock=mesh(rockShape,colors[i%2]);
   rock.scale.set(size,size*.72,size*.85);
   rock.rotation.set(.18*i,.63*i,-.27);
   rock.position.set(x,height(x,z)+size*.18,z);

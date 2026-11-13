@@ -97,11 +97,11 @@ export const WIND_BOWL=trail('wind-bowl','Windward Bowl','#658da2','bowl',42,[
  [880,-197,694],[838,-172,660],[805,-127,601],[768,-76,532],
  [748,-18,471],[747,39,410],[767,101,350],[797,145,324]
 ]);
-export const NEEDLE=trail('needle','Needle Chute','#546079','chute',9,[
+export const NEEDLE=trail('needle','Needle Chute','#546079','chute',7.6,[
  [889,-190,689],[874,-154,659],[859,-117,605],[846,-70,544],
  [839,-27,493],[829,25,438],[819,78,385],[815,126,336],[816,145,324]
 ]);
-export const WEST_NOTCH=trail('west-notch','Juniper Notch','#765b79','chute',8,[
+export const WEST_NOTCH=trail('west-notch','Juniper Notch','#765b79','chute',6.9,[
  [863,-192,688],[813,-184,655],[747,-158,588],[672,-132,509],[611,-95,445],
  [582,-45,400],[607,12,373],[676,74,351],[750,123,332],[807,147,324]
 ]);
@@ -110,6 +110,16 @@ export const HOLLOW_RETURN=trail('hollow-return','Hollow Return','#68a69f','link
  [137,605,2.8],[48,610,.2]
 ]);
 export const HIGHLINE_TRAILS=[HOLLOW_LINK,MEADOW,RACE,FIR_GLADE,SUN_BOWL,WIND_BOWL,NEEDLE,WEST_NOTCH,HOLLOW_RETURN];
+export const HIGHLINE_CHUTE_ROCKS=[
+ [NEEDLE,74,-1.7,.65],[NEEDLE,109,1.85,.67],[NEEDLE,150,-1.9,.74],
+ [NEEDLE,187,1.75,.60],[NEEDLE,224,-2.1,.73],[NEEDLE,261,2.6,.68],
+ [WEST_NOTCH,109,1.8,.68],[WEST_NOTCH,153,-1.65,.63],[WEST_NOTCH,196,1.7,.76],
+ [WEST_NOTCH,243,-1.8,.69],[WEST_NOTCH,289,1.7,.61],[WEST_NOTCH,344,-1.8,.78],
+ [WEST_NOTCH,396,2.2,.65],[WEST_NOTCH,451,-2.45,.73]
+].map(([route,along,side,size])=>{
+ const p=trailPoint(route,along);
+ return {x:p.x+p.dz*side,z:p.z-p.dx*side,size};
+});
 
 export function trailPoint(route,distance){
  const along=clamp(distance,0,route.distance);
