@@ -1,6 +1,6 @@
 import * as T from './vendor/three.module.js';
 import {height,pathX,routes,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,inBowl,driftDepth,ridgeDropMask,juniperZ} from './mountain-core.js';
-import {basinHeight,basinSample,terrainNoise} from './basin-terrain.js';
+import {basinHeight,terrainNoise} from './basin-terrain.js';
 const fract=x=>x-Math.floor(x),lerp=(a,b,t)=>a+(b-a)*t;
 function hash(x,z){return fract(Math.sin(x*127.1+z*311.7)*43758.5453);}
 function noise(x,z){const ix=Math.floor(x),iz=Math.floor(z),u=fract(x),v=fract(z),sx=u*u*(3-2*u),sz=v*v*(3-2*v);return lerp(lerp(hash(ix,iz),hash(ix+1,iz),sx),lerp(hash(ix,iz+1),hash(ix+1,iz+1),sx),sz);}
@@ -40,110 +40,30 @@ if(vRockExposure>.01){
 `);};return material;
 }
 export const rangeHeight=basinHeight;
-// The sky and the far side of the rim share the same cloud layer. At full
-// coverage the terrain blends into the sky at exactly the same view angle.
-const alpineSkyGLSL=`
-float skyHash(vec2 cell){
- vec3 p=fract(vec3(cell.xyx)*.1031);
- p+=dot(p,p.yzx+33.33);
- return fract((p.x+p.y)*p.z);
-}
-float skyNoise(vec2 p){
- vec2 i=floor(p),f=fract(p);
- f=f*f*(3.0-2.0*f);
- float nearEdge=mix(skyHash(i),skyHash(i+vec2(1.0,0.0)),f.x);
- float farEdge=mix(skyHash(i+vec2(0.0,1.0)),skyHash(i+vec2(1.0,1.0)),f.x);
- return mix(nearEdge,farEdge,f.y);
-}
-vec3 alpineSky(vec3 d){
- float h=max(d.y,0.0);
- vec3 color=mix(vec3(.77,.86,.92),vec3(.29,.57,.78),pow(h,.45));
- float sun=pow(max(dot(d,normalize(vec3(-.7,.5,.25))),0.0),650.0);
- color+=vec3(1.0,.86,.60)*sun*.40;
- vec2 p=d.xz*5.0/(.46+max(d.y,-.19));
- p+=vec2(skyNoise(p*.66),skyNoise(p*.69+vec2(2.0,7.0)))*1.15;
- float wisps=.61*skyNoise(p)+.26*skyNoise(p*2.07+vec2(4.2,7.1))+.13*skyNoise(p*4.05);
- float cloud=smoothstep(.42,.75,wisps+.13*(1.0-smoothstep(-.07,.22,d.y)));
- float layer=smoothstep(-.31,-.13,d.y)*(1.0-smoothstep(.17,.43,d.y));
- color=mix(color,vec3(.92,.95,.98),layer*(.18+.73*cloud));
- return color;
-}`;
 export function addRange(scene){
- // Refine the mesh where it meets the playable terrain and round off the far slope.
- function axis(min,max,step){
-  const points=[];
-  for(let d=1360;d>0;d-=d>330?65:step)points.push(min-d);
-  points.push(min);
-  for(let v=min+step;v<max;v+=step)points.push(v);
-  points.push(max);
-  for(let d=step;d<=1400;d+=d>330?65:step)points.push(max+d);
-  return points;
- }
- const xs=axis(SNOW_WEST,SNOW_EAST,11),zs=axis(SNOW_NORTH,SNOW_SOUTH,11);
- const verts=[],cols=[],normals=[],clouds=[];
- const snow=new T.Color('#d6e4ed'),rock=new T.Color('#58666f'),rockWarm=new T.Color('#8b8074');
- const cache=new Map();
+ // An irregular heightfield with connected ridgelines and exposed rock faces,
+ // surrounding an exact hole for the playable snow surface.
+ const xs=[];for(let x=-4200;x<-1200;x+=80)xs.push(x);for(let x=-1200;x<SNOW_WEST;x+=11)xs.push(x);xs.push(SNOW_WEST);for(let x=SNOW_WEST+25;x<SNOW_EAST;x+=25)xs.push(x);xs.push(SNOW_EAST);for(let x=SNOW_EAST+12;x<1200;x+=12)xs.push(x);for(let x=1200;x<=4200;x+=80)xs.push(x);
+ const zs=[];for(let z=-3400;z<-900;z+=80)zs.push(z);for(let z=-900;z<SNOW_NORTH;z+=15)zs.push(z);zs.push(SNOW_NORTH);for(let z=SNOW_NORTH+14;z<SNOW_SOUTH;z+=14)zs.push(z);zs.push(SNOW_SOUTH);for(let z=SNOW_SOUTH+15;z<1800;z+=15)zs.push(z);for(let z=1800;z<=3900;z+=80)zs.push(z);
+ const verts=[],cols=[],normals=[];const snow=new T.Color('#d6e4ed'),rock=new T.Color('#58666f'),rockWarm=new T.Color('#8b8074');const cache=new Map();
  function point(x,z){
   const key=x+','+z;
   if(cache.has(key))return cache.get(key);
-  const {y,cloud}=basinSample(x,z),e=4;
+  const y=rangeHeight(x,z),e=5;
   const n=new T.Vector3(rangeHeight(x-e,z)-rangeHeight(x+e,z),e*2,rangeHeight(x,z-e)-rangeHeight(x,z+e)).normalize();
   const strata=fbm(x*.024+y*.007,z*.024-y*.009);
   const exposure=fbm(x*.013+13,z*.013-7);
-  const snowAmount=T.MathUtils.smoothstep(n.y+strata*.25+exposure*.26,.62,.99);
+  const snowAmount=T.MathUtils.smoothstep(n.y+strata*.27+exposure*.31,.64,.91);
   const color=rock.clone().lerp(rockWarm,T.MathUtils.smoothstep(exposure,.28,.74)*.67).lerp(snow,snowAmount);
   color.multiplyScalar(.78+strata*.44+exposure*.12);
-  const p={x,y,z,n,color,cloud};
+  const p={x,y,z,n,color};
   cache.set(key,p);
   return p;
  }
- function tri(a,b,c){for(const p of[a,b,c]){
-  verts.push(p.x,p.y,p.z);normals.push(p.n.x,p.n.y,p.n.z);cols.push(p.color.r,p.color.g,p.color.b);
-  clouds.push(p.cloud);
- }}
+ function tri(a,b,c){for(const p of[a,b,c]){verts.push(p.x,p.y,p.z);normals.push(p.n.x,p.n.y,p.n.z);cols.push(p.color.r,p.color.g,p.color.b);}}
  for(let j=0;j<zs.length-1;j++)for(let i=0;i<xs.length-1;i++){const x=xs[i],xx=xs[i+1],z=zs[j],zz=zs[j+1];if(x>=SNOW_WEST&&xx<=SNOW_EAST&&z>=SNOW_NORTH&&zz<=SNOW_SOUTH)continue;const a=point(x,z),b=point(xx,z),c=point(x,zz),d=point(xx,zz);tri(a,c,b);tri(b,c,d);}
- const geo=new T.BufferGeometry();
- geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));
- geo.setAttribute('color',new T.Float32BufferAttribute(cols,3));
- geo.setAttribute('normal',new T.Float32BufferAttribute(normals,3));
- geo.setAttribute('cloudCover',new T.Float32BufferAttribute(clouds,1));
- const rangeMat=new T.MeshStandardMaterial({vertexColors:true,roughness:1});
- rangeMat.onBeforeCompile=shader=>{
-  const varyings='varying vec3 vRangeWorld; varying float vCloudCover;\n';
-  shader.vertexShader='attribute float cloudCover; '+varyings+shader.vertexShader;
-  shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>',
-   '#include <worldpos_vertex>\nvRangeWorld=(modelMatrix*vec4(transformed,1.0)).xyz; vCloudCover=cloudCover;');
-  shader.fragmentShader=varyings+alpineSkyGLSL+'\n'+shader.fragmentShader;
-  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
-   float rocky=1.0-smoothstep(.28,.55,dot(diffuseColor.rgb,vec3(.333)));
-   vec3 p=vRangeWorld;
-   float layers=p.y*.38+p.x*.10-p.z*.07+2.4*skyNoise(p.xz*.035);
-   float seams=pow(.5+.5*sin(layers),7.0);
-   float fractures=skyNoise(vec2(p.x*.12+p.z*.08,p.y*.13));
-   float grain=skyNoise(vec2(p.x*.57-p.z*.38,p.y*.61));
-   diffuseColor.rgb*=mix(1.0,.89+.21*fractures+.09*grain-.22*seams,rocky);
-  `);
-  shader.fragmentShader=shader.fragmentShader.replace('#include <fog_fragment>',`#include <fog_fragment>
-   if(vCloudCover>0.0){
-    vec3 direction=normalize(vRangeWorld-cameraPosition);
-    float wisps=skyNoise(direction.xz*18.0+vec2(direction.y*26.0));
-    float veil=pow(clamp(vCloudCover,0.0,1.0),mix(1.65,.62,wisps));
-    gl_FragColor.rgb=mix(gl_FragColor.rgb,alpineSky(direction),veil);
-   }
-  `);
- };
- const terrain=new T.Mesh(geo,rangeMat);terrain.receiveShadow=true;scene.add(terrain);
- const sky=new T.Mesh(new T.SphereGeometry(7800,32,16),new T.ShaderMaterial({
-  side:T.BackSide,depthWrite:false,
-  vertexShader:`varying vec3 vSkyWorld; void main(){
-   vSkyWorld=(modelMatrix*vec4(position,1.0)).xyz;
-   gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
-  }`,
-  fragmentShader:alpineSkyGLSL+`varying vec3 vSkyWorld; void main(){
-   gl_FragColor=vec4(alpineSky(normalize(vSkyWorld-cameraPosition)),1.0);
-  }`
- }));
- sky.renderOrder=-100;scene.add(sky);
+ const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setAttribute('color',new T.Float32BufferAttribute(cols,3));geo.setAttribute('normal',new T.Float32BufferAttribute(normals,3));const rangeMat=new T.MeshStandardMaterial({vertexColors:true,roughness:1});rangeMat.onBeforeCompile=shader=>{shader.vertexShader='varying vec3 vRangeWorld;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvRangeWorld=(modelMatrix*vec4(transformed,1.0)).xyz;');shader.fragmentShader='varying vec3 vRangeWorld;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\nfloat rocky=1.0-smoothstep(.28,.55,dot(diffuseColor.rgb,vec3(.333)));float strata=sin(vRangeWorld.x*.19+vRangeWorld.y*.23+vRangeWorld.z*.07)*sin(vRangeWorld.y*.31-vRangeWorld.z*.11);float fleck=fract(sin(dot(floor(vRangeWorld.xz*2.0),vec2(12.9898,78.233)))*43758.5453);diffuseColor.rgb*=1.0-rocky*(.035+.045*strata+.025*fleck);');};const terrain=new T.Mesh(geo,rangeMat);terrain.receiveShadow=true;scene.add(terrain);
+ const sky=new T.Mesh(new T.SphereGeometry(7800,32,16),new T.ShaderMaterial({side:T.BackSide,depthWrite:false,vertexShader:'varying vec3 vDir; void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:`varying vec3 vDir;void main(){vec3 d=normalize(vDir);float h=max(d.y,0.0);vec3 color=mix(vec3(.80,.88,.92),vec3(.29,.58,.79),pow(h,.42));float sun=pow(max(dot(d,normalize(vec3(-.7,.5,.25))),0.0),650.0);color+=vec3(1.0,.86,.60)*sun*.45;float streak=sin(d.x*28.0+d.z*14.0+sin(d.z*35.0)*.5);float cloud=smoothstep(.75,1.0,streak)*smoothstep(.15,.4,h)*(1.0-smoothstep(.4,.56,h));color=mix(color,vec3(.91,.94,.94),cloud*.24);gl_FragColor=vec4(color,1.0);}`}));sky.renderOrder=-100;scene.add(sky);
  const rocks=new T.InstancedMesh(new T.IcosahedronGeometry(1,1),new T.MeshStandardMaterial({color:'#7f888b',roughness:1,flatShading:true}),100);
  const o=new T.Object3D(),rockColliders=[];
  for(let i=0;i<100;i++){
@@ -218,10 +138,10 @@ export function surroundingForest(){
   const x=(hash(i,26)-.5)*(back?1360:2000);
   const z=back?-850+hash(i,55)*550:-460+hash(i,55)*2310;
   if(x>SNOW_WEST&&x<SNOW_EAST&&z>SNOW_NORTH&&z<SNOW_SOUTH)continue;
-  const {y,cloud}=basinSample(x,z);
+  const y=rangeHeight(x,z);
   const sx=(rangeHeight(x+6,z)-rangeHeight(x-6,z))/12;
   const sz=(rangeHeight(x,z+6)-rangeHeight(x,z-6))/12;
-  if(cloud>.08||y>430||y<(back?-100:-20)||Math.hypot(sx,sz)>.7)continue;
+  if(y>430||y<(back?-100:-20)||Math.hypot(sx,sz)>.7)continue;
   trees.push({x,z,y,s:.65+hash(i,43)*.9});
  }
  return trees;
