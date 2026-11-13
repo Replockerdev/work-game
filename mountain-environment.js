@@ -6,17 +6,23 @@ function hash(x,z){return fract(Math.sin(x*127.1+z*311.7)*43758.5453);}
 function noise(x,z){const ix=Math.floor(x),iz=Math.floor(z),u=fract(x),v=fract(z),sx=u*u*(3-2*u),sz=v*v*(3-2*v);return lerp(lerp(hash(ix,iz),hash(ix+1,iz),sx),lerp(hash(ix,iz+1),hash(ix+1,iz+1),sx),sz);}
 function fbm(x,z){let sum=0,amp=.5;for(let i=0;i<5;i++){sum+=noise(x,z)*amp;x=x*2.03+11;z=z*2.01-13;amp*=.5;}return sum;}
 export function snowMaterial(renderer){
- const c=document.createElement('canvas');c.width=c.height=1024;const ctx=c.getContext('2d'),im=ctx.createImageData(1024,1024);let seed=12388;for(let y=0;y<1024;y++)for(let x=0;x<1024;x++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;const grain=(seed/4294967296-.5)*32,wind=Math.sin(x*.033+Math.sin(y*.016)*3)*4+Math.sin(y*.063+x*.009)*2,n=232+grain+wind,k=(y*1024+x)*4;im.data[k]=n-3;im.data[k+1]=n;im.data[k+2]=Math.min(255,n+5);im.data[k+3]=255;}ctx.putImageData(im,0,0);const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.repeat.set((SNOW_EAST-SNOW_WEST)/5,(SNOW_SOUTH-SNOW_NORTH)/5);tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
- const bump=tex.clone();bump.colorSpace=T.NoColorSpace;bump.needsUpdate=true;const material=new T.MeshStandardMaterial({vertexColors:true,map:tex,bumpMap:bump,bumpScale:.16,roughness:.96});
+ const c=document.createElement('canvas');c.width=c.height=1024;
+ const ctx=c.getContext('2d'),im=ctx.createImageData(c.width,c.height);
+ let seed=12388;
+ for(let k=0;k<im.data.length;k+=4){
+  seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+  const snow=232+(seed/4294967296-.5)*16;
+  im.data[k]=snow-3;im.data[k+1]=snow;im.data[k+2]=snow+5;im.data[k+3]=255;
+ }
+ ctx.putImageData(im,0,0);
+ const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;tex.wrapS=tex.wrapT=T.RepeatWrapping;
+ tex.repeat.set((SNOW_EAST-SNOW_WEST)/5,(SNOW_SOUTH-SNOW_NORTH)/5);tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+ const material=new T.MeshStandardMaterial({vertexColors:true,map:tex,roughness:.96});
  material.onBeforeCompile=shader=>{
  shader.vertexShader='attribute float rockExposure; varying float vRockExposure; varying vec3 vSnowWorld;\n'+shader.vertexShader;
  shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvSnowWorld=(modelMatrix*vec4(transformed,1.0)).xyz;\nvRockExposure=rockExposure;');
  shader.fragmentShader='varying float vRockExposure; varying vec3 vSnowWorld;\n'+shader.fragmentShader;
  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
-float worldZ=vSnowWorld.z;
-float distanceFromRidge=clamp(worldZ+300.0,0.0,800.0);
-float section=worldZ>=500.0?worldZ:2.0*distanceFromRidge/(2.2+sqrt(4.84-.0048*distanceFromRidge));
-float tz=clamp((section-60.0)/530.0,0.0,1.0);float groom=-103.0*sin(3.14159265*tz);float dist=abs(vSnowWorld.x-groom);float inGroom=(1.0-smoothstep(20.5,23.0,dist))*smoothstep(85.0,100.0,section)*(1.0-smoothstep(555.0,575.0,section));float cord=sin(vSnowWorld.x*48.0);float aa=exp(-fwidth(vSnowWorld.x)*28.0);diffuseColor.rgb*=1.0-inGroom*(0.025+cord*aa*0.035);
 if(vRockExposure>.01){
  vec3 p=vSnowWorld;
  float beds=p.y*.94+p.x*.17+sin(p.z*.44)*.66;

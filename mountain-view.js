@@ -63,7 +63,7 @@ export function createMountain(canvas){
  const expertSnow=new T.Color('#e8eff8');
  const chuteSnow=new T.Color('#cfdfe9'),ledgeRock=new T.Color('#65717e');
  const rockShade=new T.Color('#37444e'),weatheredRock=new T.Color('#847468'),wallColor=new T.Color();
- for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<flatSummit||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?(Math.floor(z*.7)%2?'#edf3f5':'#e4edf1'):trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>bankStart&&z<560)color.multiplyScalar(.88);
+ for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<flatSummit||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?'#eaf1f4':trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>bankStart&&z<560)color.multiplyScalar(.88);
   if(inBowl(x,z)){
    const edgeFade=T.MathUtils.smoothstep(bowlWidth(z)-Math.abs(x-bowlX(z)),0,10);
    const endFade=T.MathUtils.smoothstep(z,bowlStart,bowlStart+42)*(1-T.MathUtils.smoothstep(z,bowlEnd-55,bowlEnd));
@@ -131,7 +131,8 @@ export function createMountain(canvas){
    const rock=terrainNoise(x*.19,z*.13);
    color.lerp(ledgeRock,face*ridgeDropMask(x,z)*(.80+rock*.2));
   }
-  const n=Math.sin(x*.31+z*.047)*.024; color.offsetHSL(0,0,n);colors.push(color.r,color.g,color.b);}
+  const tint=terrainNoise(x*.073,z*.071);
+  color.multiplyScalar(.985+.03*tint);colors.push(color.r,color.g,color.b);}
  geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));
  geo.setAttribute('rockExposure',new T.BufferAttribute(rockExposure,1));
  geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
