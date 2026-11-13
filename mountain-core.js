@@ -1,4 +1,4 @@
-import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,highlineHeight,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
+import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,highlineHeight,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
 
 // Stretch Juniper toward the north ridge while keeping the shared lower hill in place.
 export function juniperZ(section){
@@ -813,7 +813,8 @@ export function step(p,input,dt,colliders=[]){const events=[];
  if(p.drive==='skate')p.skatePhase=(p.skatePhase||0)+dt*(1.35+Math.min(6,p.speed)*.07)*Math.PI*2;
  const push=p.drive==='skate'?8.8*Math.max(0,1-p.speed/10)+.9*Math.max(0,Math.sin(p.skatePhase*2)):0;
  const softSnow=powder*(.60+p.speed*.045)-gladeSnow*(.23+p.speed*.01);
- const trailDrag=(alpine||onTrail(p.x,p.z)||powder>.2?.30:.72)+softSnow;
+ const connector=alpine===HOLLOW_LINK||alpine===HOLLOW_RETURN;
+ const trailDrag=(connector?.085:alpine||onTrail(p.x,p.z)||powder>.2?.30:.72)+softSnow;
  const surfaceDrag=trailDrag+(.18-trailDrag)*Math.max(entry,ridge,powderToGladeMask(p.x,p.z));
  const aeroDrag=(p.drive==='tuck'?.0038:.0058)*p.speed**2;
  const edgeDrag=Math.abs(sideSlip)*p.speed*(input.brake?Math.max(.42,style.scrub):style.scrub);
@@ -906,7 +907,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const returnedToExpert=p.activeLift===EXPERT&&boardingLift(p)===EXPERT;
  const returnedToHighline=p.activeLift?.autoUnload&&boardingLift(p)===p.activeLift;
  if(p.passedTop&&(returnedToBase||returnedToExpert||returnedToHighline)){p.laps++;p.passedTop=false;events.push('lap');}
- if(p.z>590&&returnedToBase)p.route='Lift base';
+ if(p.z>590&&returnedToBase&&(!alpine||boardingLift(p)===JUNIPER))p.route='Lift base';
  if(!p.air&&p.speed<.05){p.speed=0;p.measuredSpeed=0;}
  if(!p.air){
   const trail=p.safeTrail??[],last=trail.at(-1);

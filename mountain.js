@@ -1,6 +1,6 @@
 import {createMountain} from './mountain-view.js';
 import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,TOP,routes,pathX,JUNIPER,EXPERT,liftWorld,height,expertFaceX,expertRoute,chuteX,chuteRoute,timberX,timberRoute,juniperZ,timberlineZ,bowlRoute,powderToGladeZ,driftRoute,driftX,driftExitX,ridgeDropX} from './mountain-core.js';
-import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_LIFTS,HIGHLINE_TRAILS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,RACE,RACE_GATES} from './highline.js';
+import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_LIFTS,HIGHLINE_TRAILS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,RACE,RACE_GATES} from './highline.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
 const $=id=>document.getElementById(id),canvas=$('game');let view;try{view=createMountain(canvas);}catch(e){$('overlay').querySelector('h1').textContent='3D graphics unavailable';$('overlay').querySelector('p').textContent='This mountain needs WebGL. Try Chrome or Edge with graphics acceleration enabled.';throw e;}
 let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0,mapArea='juniper',raceBest=0;
@@ -49,7 +49,7 @@ function setMapArea(area){
  drawMap();
 }
 function drawHighlineMap(c){
- const sx=x=>247-(x-80)*.222,sz=z=>24+(z+230)*.339;
+ const sx=x=>240-(x-48)*.206,sz=z=>24+(z+230)*.339;
  c.strokeStyle='#91a2a9';c.lineWidth=2;c.setLineDash([4,4]);
  for(const lift of HIGHLINE_LIFTS){
   const top=liftWorld(lift,0,lift.top),bottom=liftWorld(lift,0,lift.bottom);
@@ -66,7 +66,8 @@ function drawHighlineMap(c){
  c.fillText('HIGHLINE SUMMIT',sx(HIGHLINE_PEAK.x),sz(HIGHLINE_PEAK.z)-7);
  c.fillText('TREELINE SADDLE',sx(TREELINE.x)-19,sz(TREELINE.z)-7);
  c.fillText('HOLLOW CHAIR',sx(HOLLOW_BASE.x),sz(HOLLOW_BASE.z)+15);
- c.fillText('OG GLADES',sx(103)-19,sz(233)-7);
+ const glades=HOLLOW_LINK.points[0];
+ c.fillText('OG GLADES',sx(glades.x)-21,sz(glades.z)-7);
  c.fillText('JUNIPER RETURN',sx(241)-15,sz(606)+16);
  if(p.x>72){c.fillStyle='#254e60';c.beginPath();c.arc(sx(p.x),sz(p.z),5,0,7);c.fill();c.strokeStyle='#fff';c.lineWidth=2;c.stroke();}
 }
@@ -85,6 +86,13 @@ function drawMap(){
   for(let z=TOP.z;z<=600;z+=5)c.lineTo(sx(pathX(z,r)),sz(z));
   c.stroke();
  }
+ c.strokeStyle=HOLLOW_LINK.color;c.lineWidth=2.5;c.setLineDash([3,4]);
+ for(const link of [HOLLOW_LINK,HOLLOW_RETURN]){
+  c.beginPath();
+  for(const point of link.points.filter(point=>point.x<=OLD_EAST))c.lineTo(sx(point.x),sz(point.z));
+  c.stroke();
+ }
+ c.setLineDash([]);
  for(const [route,center,start,end] of [[expertRoute,expertFaceX,26,382],[chuteRoute,chuteX,68,329],[timberRoute,timberX,182,322]]){
   c.strokeStyle=route.color;
   c.lineWidth=route===expertRoute?5:2.5;

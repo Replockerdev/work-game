@@ -3,7 +3,7 @@ import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,l
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,RACE_GATES,highlineTrailAt,highlineRock} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,RACE_GATES,highlineTrailAt,highlineRock} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 export function createMountain(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
@@ -40,7 +40,7 @@ export function createMountain(canvas){
  const snowWidth=SNOW_EAST-SNOW_WEST,snowLength=SNOW_SOUTH-SNOW_NORTH;
  const xs=[],rows=[];
  for(let x=SNOW_WEST;x<OLD_EAST;x+=2.5)xs.push(x);
- for(let x=OLD_EAST;x<SNOW_EAST;x+=x<535?4:3)xs.push(x);
+ for(let x=OLD_EAST;x<SNOW_EAST;x+=x<535?4:x<855?2:3)xs.push(x);
  xs.push(SNOW_EAST);
  const columns=xs.length-1;
  // Finer cross-slope samples through Splitrock keep its steep walls readable.
@@ -112,11 +112,11 @@ export function createMountain(canvas){
   const glade=Math.max(driftDepth(x,z),ridgeDropMask(x,z)*(1-T.MathUtils.smoothstep(z,478,532)),powderToGladeMask(x,z)*.78);
   color.lerp(driftSnow,glade*.78);
   color.multiplyScalar(1+glade*(terrainNoise(x*.17,z*.13)-.5)*.065);
+  const alpine=highlineTrailAt(x,z);
   if(x>OLD_EAST){
-   const route=highlineTrailAt(x,z);
    const wind=terrainNoise(x*.028,z*.028);
    color.set(y>340?'#e3edf4':'#dae9ee').multiplyScalar(.9+.16*wind);
-   if(route?.kind==='groomer'||route?.kind==='race')color.lerp(expertSnow,.75);
+   if(alpine?.kind==='groomer'||alpine?.kind==='race')color.lerp(expertSnow,.75);
    const rock=highlineRock(x,z);
    if(rock>0){
     const strata=terrainNoise(x*.15+y*.11,z*.14);
@@ -125,6 +125,7 @@ export function createMountain(canvas){
     rockExposure[i]=rock;
    }
   }
+  if(alpine===HOLLOW_LINK||alpine===HOLLOW_RETURN)color.lerp(expertSnow,.58);
  if(x>-230&&x<-105&&z>397&&z<432){
    const face=1-T.MathUtils.smoothstep(Math.abs(z-ridgeDropLip(x)-1.8),1.5,5.8);
    const rock=terrainNoise(x*.19,z*.13);
@@ -166,16 +167,16 @@ export function createMountain(canvas){
   box(.15,2.2,.15,'#725c49',x,y+1.1,z);
   trailSign(label,x,y+1.9,z,color,width);
  }
- waymark('← Hidden Hollow',115,228,'#3b6252',5.5);
+ waymark('← Hidden Hollow',86,155,'#3b6252',5.8);
  waymark('← Highline Chair',TREELINE.x-2,TREELINE.z+14,'#345b70',6.2);
  waymark('Meadow Way →',737,177,'#347652');
  waymark('Fir Hollow',777,184,'#487253',4.6);
  waymark('← Ridgeline Race',823,178,'#965825',6);
- waymark('← Sunbreak Bowl',HIGHLINE_PEAK.x+19,HIGHLINE_PEAK.z+17,'#4f7484',6.2);
- waymark('◆ Needle',HIGHLINE_PEAK.x-8,HIGHLINE_PEAK.z+21,'#4c506b',4.6);
- waymark('Windward Bowl →',HIGHLINE_PEAK.x-18,HIGHLINE_PEAK.z+23,'#4b6a7e',6.2);
- waymark('Juniper Notch →',HIGHLINE_PEAK.x-31,HIGHLINE_PEAK.z+13,'#664d71',5.7);
- waymark('Juniper return →',HOLLOW_BASE.x-21,HOLLOW_BASE.z+17,'#3b6252',6);
+ waymark('Sunbreak Bowl',HIGHLINE_PEAK.x+40,HIGHLINE_PEAK.z+23,'#4f7484',6.2);
+ waymark('◆ Needle',HIGHLINE_PEAK.x+12,HIGHLINE_PEAK.z+25,'#4c506b',4.6);
+ waymark('Windward Bowl',HIGHLINE_PEAK.x-13,HIGHLINE_PEAK.z+25,'#4b6a7e',6.2);
+ waymark('◆ Juniper Notch',HIGHLINE_PEAK.x-38,HIGHLINE_PEAK.z+23,'#664d71',6.2);
+ waymark('Juniper return →',HOLLOW_BASE.x-14,HOLLOW_BASE.z+15,'#3b6252',6);
  for(const [index,gate] of RACE_GATES.entries()){
   const terminal=index===0||index===RACE_GATES.length-1;
   const color=terminal?'#b57838':index%2?'#b9473a':'#306f9d';

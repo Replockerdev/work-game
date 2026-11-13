@@ -33,7 +33,7 @@ function trail(id,name,color,kind,width,anchors){
  }
  const last=anchors.at(-1);
  points.push({x:last[0],z:last[1],y:last[2]});
- const margin=width+(id==='hollow-link'?92:69);
+ const margin=width+(id==='hollow-link'?108:69);
  const bounds={left:Math.min(...points.map(p=>p.x))-margin,right:Math.max(...points.map(p=>p.x))+margin,
   top:Math.min(...points.map(p=>p.z))-margin,bottom:Math.max(...points.map(p=>p.z))+margin};
  let distance=0;
@@ -45,9 +45,10 @@ function trail(id,name,color,kind,width,anchors){
  });
  return {id,name,color,kind,width,points,segments,bounds,distance};
 }
-export const HOLLOW_LINK=trail('hollow-link','Hidden Hollow','#638a73','link',18,[
- [103,233,107],[138,242,99],[181,254,90],[221,285,83],[274,321,77],[357,369,66],
- [421,421,55],[482,478,44],[560,526,30],[647,550,23]
+export const HOLLOW_LINK=trail('hollow-link','Hidden Hollow','#638a73','link',23,[
+ [91,173,130],[120,181,124],[145,191,118],[159,214,112],[200,236,102],
+ [251,268,91],[319,315,77],[386,369,63],[448,434,49],[509,500,36],
+ [552,539,29],[593,548,25],[636,547,23]
 ]);
 export const MEADOW=trail('meadow','Meadow Way','#4e9b72','groomer',27,[
  [749,174,316],[656,210,279],[570,250,234],[559,317,196],[650,365,157],
@@ -73,7 +74,7 @@ export const NEEDLE=trail('needle','Needle Chute','#546079','chute',9,[
  [889,-190,689],[874,-154,659],[859,-117,605],[846,-70,544],
  [839,-27,493],[829,25,438],[819,78,385],[815,126,336],[816,145,324]
 ]);
-export const WEST_NOTCH=trail('west-notch','Juniper Notch','#765b79','chute',10,[
+export const WEST_NOTCH=trail('west-notch','Juniper Notch','#765b79','chute',8,[
  [863,-192,688],[813,-184,655],[747,-158,588],[672,-132,509],[611,-95,445],
  [582,-45,400],[607,12,373],[676,74,351],[750,123,332],[807,147,324]
 ]);
@@ -107,11 +108,16 @@ export function trailSample(route,x,z){
 function trailWidth(route,sample){
  if(route.kind!=='chute')return route.width;
  const p=sample.along/route.distance;
+ if(route===WEST_NOTCH){
+  const slot=smooth((p-.08)/.14)*(1-smooth((p-.66)/.22));
+  const pinch=.65+.6*Math.sin(sample.along*.081)+.35*Math.sin(sample.along*.151);
+  return route.width-slot*(3.45+pinch)+13*smooth((p-.71)/.25);
+ }
  return route.width-3.5*smooth((p-.16)/.21)*(1-smooth((p-.60)/.28))
   +13*smooth((p-.71)/.25);
 }
 export function highlineTrailAt(x,z){
- if(x<101||x>1115||z<-230||z>633)return null;
+ if(x<28||x>1115||z<-230||z>633)return null;
  let nearest=null,best=Infinity;
  for(const route of HIGHLINE_TRAILS){
   const sample=trailSample(route,x,z);
@@ -141,6 +147,27 @@ function deck(x,z,y,center,rx,rz){
 function rib(x,z,cx,cz,rx,rz,h){
  return h*Math.exp(-(((x-cx)/rx)**2+((z-cz)/rz)**2));
 }
+function chuteBanks(route,s,width){
+ const edge=s.distance-width;
+ const notch=route===WEST_NOTCH;
+ const face=smooth((s.along-27)/46)*(1-smooth((s.along-route.distance*.70)/(route.distance*.24)));
+ const side=s.across<0?0:2.5;
+ const ribs=(notch?20:16)+5*Math.sin(s.along*.062+side)+3*Math.sin(s.along*.18);
+ return face*ribs*smooth(edge/(notch?3.5:4.6))*(1-smooth((edge-5)/(notch?15:19)));
+}
+function summitApron(x,z,y){
+ const across=Math.abs(x-883),front=z+210;
+ const sides=1-smooth((across-52)/40);
+ const back=smooth((front+37)/21);
+ const apron=sides*back*(1-smooth((front-31)/46));
+ const fall=.16*front+.012*Math.max(0,front-6)**2;
+ const surface=700-fall-.0011*(x-896)**2;
+ // A shared downhill apron connects the terminal to the mouths of all four runs.
+ // Ahead of it, trim the high snow between the entrances as the runs separate.
+ const limit=surface+4+Math.max(0,front-40)*.65;
+ const cap=sides*back*smooth((front-22)/20)*(1-smooth((front-87)/34));
+ return mix(mix(y,Math.min(y,limit),cap),surface,apron);
+}
 export function highlineHeight(x,z,original){
  if(x<86)return original;
  let y=original;
@@ -154,7 +181,7 @@ export function highlineHeight(x,z,original){
   // The Juniper shoulder rises along the west side of the same summit ridge.
   const shoulder=(225+480*smooth((x-114)/756))*Math.exp(-(((z+242)/122)**2));
   const ridgeNoise=(Math.sin(x*.031+z*.019)*8+Math.sin(x*.071-z*.045)*3.2)*west*(1-south);
-  const woodedFold=rib(x,z,449,493,92,105,94)+rib(x,z,393,400,72,93,54);
+  const woodedFold=rib(x,z,426,528,98,108,48)+rib(x,z,357,447,91,105,32);
   const outerBank=rib(x,z,1155,400,118,240,74);
   const newGround=Math.max(face,shoulder)+ridgeNoise+woodedFold+outerBank;
   y=mix(original,newGround,smooth((x-OLD_EAST)/133));
@@ -164,22 +191,19 @@ export function highlineHeight(x,z,original){
   const s=trailSample(route,x,z);
   if(!s)continue;
   const width=trailWidth(route,s);
-  const fade=route===HOLLOW_LINK?44+48*smooth((x-216)/145):
+  const fade=route===HOLLOW_LINK?48+60*smooth((x-211)/141):
    route.kind==='bowl'?66:route.kind==='chute'?44:route.kind==='glade'?52:44;
-  const influence=1-smooth((s.distance-width)/fade);
+  const envelope=route===WEST_NOTCH?width+3.5:width;
+  const influence=1-smooth((s.distance-envelope)/fade);
   if(influence<=0)continue;
   const upper=route.kind==='bowl'||route.kind==='chute';
   const level=upper?1-smooth((z-150)/28):
    route.kind==='link'?1:smooth((z-143)/26);
   if(level<=0)continue;
-  const join=smooth(s.along/26)*smooth((route.distance-s.along)/23);
+  const join=smooth(s.along/(route===HOLLOW_LINK?44:26))*smooth((route.distance-s.along)/23);
   let floor=s.y;
   if(route.kind==='chute'){
-   const edge=s.distance-width;
-   const wall=smooth(edge/4.6)*(1-smooth((edge-5)/19));
-   const face=smooth((s.along-27)/46)*(1-smooth((s.along-route.distance*.70)/(route.distance*.24)));
-   const ribs=16+5*Math.sin(s.along*.062+(s.across<0?0:2.5))+3*Math.sin(s.along*.18);
-   floor+=wall*face*ribs;
+   floor+=chuteBanks(route,s,width);
   }else if(route.kind==='bowl'){
    floor+=22*smooth((s.distance-width*.45)/(width*.65));
    floor+=1.05*Math.sin(s.along*.095+s.across*.15)*smooth(s.distance/(width*.72));
@@ -187,7 +211,8 @@ export function highlineHeight(x,z,original){
    floor+=.75*Math.sin(s.along*.13+s.across*.29)+.44*Math.sin(s.along*.29-s.across*.13);
   }
   // The wider shoulders blend into the mountain while the trail beds retain their grade.
-  const strength=influence*level*(.28+.72*join);
+  const entryBlend=route===HOLLOW_LINK?smooth((x-89)/39)*smooth((z-154)/34):1;
+  const strength=influence*level*(.28+.72*join)*entryBlend;
   const priority=strength**4/(1+(s.distance/(width*.62))**4);
   target+=floor*priority;weight+=priority;coverage=Math.max(coverage,strength);
  }
@@ -195,7 +220,7 @@ export function highlineHeight(x,z,original){
  if(x>520){
   y=deck(x,z,y,HOLLOW_BASE,50,35);
   y=deck(x,z,y,TREELINE,76,44);
-  y=deck(x,z,y,HIGHLINE_PEAK,48,36);
+  if(x>785&&z<-89)y=summitApron(x,z,y);
  }
  return y;
 }
@@ -225,7 +250,7 @@ export function highlineTrees(height,loading){
   for(const route of HIGHLINE_TRAILS){
    const s=trailSample(route,x,z);
    if(!s)continue;
-   const clearance=route.kind==='glade'?9:route===HOLLOW_LINK?12:trailWidth(route,s)+4;
+   const clearance=route.kind==='glade'?9:route===HOLLOW_LINK?16:trailWidth(route,s)+4;
    if(s.distance<clearance){open=true;break;}
   }
   if(open||trees.some(t=>(t.x-x)**2+(t.z-z)**2<47))continue;
