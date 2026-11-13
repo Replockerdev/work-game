@@ -15,7 +15,8 @@ export function juniperSection(z){
 export const LENGTH=640, BASE={x:-28,z:622},TOP={x:-20,z:juniperZ(35)};
 export const SNOW_WEST=-875,SNOW_EAST=HIGHLINE_EAST,SNOW_NORTH=-340,SNOW_SOUTH=690;
 export const BOARD_CENTER={x:0,z:610},BOARD_RADIUS=58;
-export const LIFT={upX:-22,downX:-38,towerX:-30,towerWidth:.9,crossbeamClearance:1.5,chairWidth:3.6};
+export const LIFT={upX:-22,downX:-38,towerX:-30,towerWidth:.9,crossbeamClearance:1.5,chairWidth:3.6,
+ lane:8,hanger:5.2,rider:4.6,terminalHeight:5.1};
 export const SUMMIT_TERMINAL=juniperZ(12);
 export const RIDE_SECONDS=24;
 export const liftTowers=[12,65,118,170,225,275,330,380,435,485,590,622].map(juniperZ);
@@ -120,31 +121,90 @@ function expertRelief(x,z){
  }
  return relief;
 }
-export function liftCableHeight(z,lift=JUNIPER){
- const towers=lift.towers;
- z=clamp(z,lift.top,lift.bottom);
- let i=0;
- while(i<towers.length-2&&z>towers[i+1])i++;
- const a=towers[i],b=towers[i+1],t=(z-a)/(b-a);
- const terminalDistance=Math.min(z-lift.top,lift.bottom-z);
- const blend=smooth(terminalDistance/45);
- if(lift!==JUNIPER){
-  const ground=liftGround(lift,8,z);
-  const chord=liftGround(lift,8,a)*(1-t)+liftGround(lift,8,b)*t;
-  const highLane=Math.max(ground,liftGround(lift,-8,z));
-  const span=Math.max(chord+12-Math.sin(t*Math.PI)*.65,highLane+9);
-  return ground+5.1+blend*(span-ground-5.1);
- }
- const ground=baseHeight(z);
- const chord=baseHeight(a)*(1-t)+baseHeight(b)*t;
- const span=Math.max(chord+13-Math.sin(t*Math.PI)*.65,ground+11);
- return ground+5.1+blend*(span-ground-5.1);
-}
 export function liftGround(lift,x,z){
  const point=liftWorld(lift,x,z);
  return height(point.x,point.z);
 }
+const cableLayouts=new WeakMap();
+const spanSag=(length,t)=>Math.min(1.6,length*.012)*4*t*(1-t);
+function laneGround(lift,z){
+ let ground=-Infinity;
+ for(const offset of [-10.2,-8,-5.8,5.8,8,10.2])ground=Math.max(ground,liftGround(lift,lift.center+offset,z));
+ return ground;
+}
+export function liftSupports(lift){
+ if(cableLayouts.has(lift))return cableLayouts.get(lift);
+ const stations=[lift.top,lift.top+15,...lift.towers.slice(1,-1),lift.bottom-15,lift.bottom].sort((a,b)=>a-b);
+ const last=stations.length-1;
+ const supports=stations.map((z,i)=>{
+  if(i===0||i===last){
+   const direction=i===0?-1:1;
+   let y=Math.max(laneGround(lift,z)+LIFT.hanger+.08,
+    liftGround(lift,lift.center+LIFT.lane,z)+LIFT.terminalHeight);
+   for(let j=0;j<=32;j++){
+    const theta=j*Math.PI/32;
+    for(const radius of [6,8,10]){
+     const ground=liftGround(lift,lift.center+radius*Math.cos(theta),z+direction*radius*Math.sin(theta));
+     y=Math.max(y,ground+LIFT.hanger+.08);
+    }
+   }
+   return {z,y};
+  }
+  return {z,y:laneGround(lift,z)+(i===1||i===last-1?8.3:11.8)};
+ });
+ // Survey the chair envelope and raise only the adjacent supports. The
+ // resulting rope depends on those supports and sag, even over rough terrain.
+ for(let i=0;i<last;i++){
+  const a=supports[i],b=supports[i+1],length=b.z-a.z;
+  const samples=Math.ceil(length/.45);
+  for(let j=1;j<samples;j++){
+   const t=j/samples,z=a.z+length*t;
+   const fromTerminal=i===0?t:i===last-1?1-t:1;
+   const clearance=LIFT.hanger+.08+(lift===JUNIPER?4.9:2.35)*fromTerminal;
+   const deficit=laneGround(lift,z)+clearance-(a.y+(b.y-a.y)*t-spanSag(length,t));
+   if(deficit<=0)continue;
+   const left=i===0?0:1-t,right=i+1===last?0:t;
+   const adjustment=deficit/(left*left+right*right);
+   a.y+=left*adjustment;b.y+=right*adjustment;
+  }
+ }
+ cableLayouts.set(lift,supports);
+ return supports;
+}
+export function liftCableHeight(z,lift=JUNIPER){
+ const supports=liftSupports(lift);
+ z=clamp(z,lift.top,lift.bottom);
+ let i=0;
+ while(i<supports.length-2&&z>supports[i+1].z)i++;
+ const a=supports[i],b=supports[i+1],length=b.z-a.z,t=(z-a.z)/length;
+ return a.y+(b.y-a.y)*t-spanSag(length,t);
+}
+export function liftLocal(lift,x,z){
+ const dx=x-lift.x,dz=z-lift.z,cos=Math.cos(lift.yaw),sin=Math.sin(lift.yaw);
+ return {x:(dx*cos-dz*sin)*lift.hand,z:dx*sin+dz*cos};
+}
 export const chairProgress=t=>t-.86*Math.sin(t*2*Math.PI)/(2*Math.PI);
+export const liftRidePosition=(lift,progress)=>lift.bottom+(lift.top-lift.bottom)*chairProgress(progress);
+export function liftRiderPosition(lift,progress){
+ const z=liftRidePosition(lift,progress);
+ return {...liftWorld(lift,lift.center+LIFT.lane,z),y:liftCableHeight(z,lift)-LIFT.rider};
+}
+export const liftTurnSeconds=3;
+export const liftCycleSeconds=lift=>2*(lift.rideSeconds+liftTurnSeconds);
+export function liftTerminalTurn(lift,progress,atSummit){
+ const angle=Math.PI*progress,side=atSummit?1:-1,station=atSummit?lift.top:lift.bottom;
+ return {x:lift.center+side*LIFT.lane*Math.cos(angle),z:station-side*LIFT.lane*Math.sin(angle),
+  y:liftCableHeight(station,lift),heading:angle+(atSummit?Math.PI:0)};
+}
+export function liftChairPosition(lift,seconds){
+ const leg=lift.rideSeconds+liftTurnSeconds,cycle=2*leg;
+ const time=((seconds%cycle)+cycle)%cycle;
+ const uphill=time<leg,phase=uphill?time:time-leg;
+ if(phase>=lift.rideSeconds)return liftTerminalTurn(lift,(phase-lift.rideSeconds)/liftTurnSeconds,uphill);
+ const progress=phase/lift.rideSeconds;
+ const z=liftRidePosition(lift,uphill?progress:1-progress);
+ return {x:lift.center+(uphill?1:-1)*LIFT.lane,z,y:liftCableHeight(z,lift),heading:uphill?Math.PI:0};
+}
 export const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
 export const routes=[{id:'groomer',name:'The Groomer',offset:-103,width:23,color:'#72bfb4'},{id:'park',name:'The Park',offset:0,width:24,color:'#e3a36b'},{id:'glades',name:'The Glades',offset:103,width:36,color:'#8da776'}];
@@ -565,7 +625,17 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
  const alpine=highlineTrees(height,HIGHLINE_LIFTS.flatMap(lift=>[
   liftWorld(lift,lift.center+8,lift.top),liftWorld(lift,lift.center+8,lift.bottom)
  ]));
- return [...existing,...lowerGlade,...shoulderTrees,...alpine];
+ return [...existing,...lowerGlade,...shoulderTrees,...alpine].filter(tree=>{
+  return ![JUNIPER,EXPERT,...HIGHLINE_LIFTS].some(lift=>{
+   const p=liftLocal(lift,tree.x,tree.z),across=p.x-lift.center;
+   if(p.z<lift.top-16||p.z>lift.bottom+16||Math.abs(across)>18)return false;
+   const z=clamp(p.z,lift.top,lift.bottom);
+   const spread=tree.s*3.25+2.3,top=height(tree.x,tree.z)+tree.s*12;
+   const dist=p.z===z?Math.abs(Math.abs(across)-LIFT.lane)
+    :Math.abs(Math.hypot(across,p.z-z)-LIFT.lane);
+   return dist<spread&&top>liftCableHeight(z,lift)-LIFT.hanger-.6;
+  });
+ });
 }
 export const turnStyles=[
  {id:'normal',label:'Normal turns',grip:8.8,scrub:.42},
@@ -579,11 +649,11 @@ export function spawn(){
   turnStyle:0,edgeAngle:0,spray:0,safeTrail:[],crash:null};
 }
 const expertLoading=liftWorld(EXPERT,8,EXPERT.bottom);
-const highlineLoading=HIGHLINE_LIFTS.map(lift=>({lift,...liftWorld(lift,lift.center+8,lift.bottom)}));
+const highlineLoading=HIGHLINE_LIFTS.map(lift=>({lift,radius:lift.id==='highline'?45:35,...liftWorld(lift,lift.center+8,lift.bottom)}));
 export function boardingLift(p){
  if(p.mode!=='ski')return null;
  if(p.x>OLD_EAST){
-  return highlineLoading.find(point=>Math.hypot(p.x-point.x,p.z-point.z)<=35)?.lift??null;
+  return highlineLoading.find(point=>Math.hypot(p.x-point.x,p.z-point.z)<=point.radius)?.lift??null;
  }
  if(Math.hypot(p.x-expertLoading.x,p.z-expertLoading.z)<=35)return EXPERT;
  if(Math.hypot(p.x-BOARD_CENTER.x,p.z-BOARD_CENTER.z)<=BOARD_RADIUS)return JUNIPER;
@@ -594,6 +664,7 @@ export function board(p){
  const lift=boardingLift(p);
  if(!lift)return false;
  p.activeLift=lift;p.mode='lift';p.ride=0;p.speed=0;p.air=false;p.pop=false;p.stopSide=0;p.angle=lift.yaw;p.yaw=0;
+ Object.assign(p,liftRiderPosition(lift,0));
  p.edgeAngle=0;p.spray=0;p.suspension=0;
  p.safeTrail=[];
  p.race=null;
@@ -738,9 +809,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
   if(canUnload(p))return events;
   const lift=p.activeLift??JUNIPER;
   p.ride=Math.min(1,p.ride+dt/lift.rideSeconds);
-  const z=lift.bottom+(lift.top-lift.bottom)*chairProgress(p.ride);
-  const point=liftWorld(lift,lift.center+8,z);
-  p.x=point.x;p.z=point.z;p.y=liftCableHeight(z,lift)-4.6;
+  Object.assign(p,liftRiderPosition(lift,p.ride));
   p.angle=lift.yaw;
   if(lift.autoUnload&&p.ride>=1){
    unload(p);events.push('unload');

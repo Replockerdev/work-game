@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,chairProgress,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,chuteHalfWidth,chuteRockMask,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,powderToGladeMask,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,liftSupports,liftCycleSeconds,liftTerminalTurn,liftChairPosition,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,chuteHalfWidth,chuteRockMask,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,powderToGladeMask,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
@@ -212,7 +212,7 @@ export function createMountain(canvas){
   group.rotation.y=config.yaw;
   group.scale.x=config.hand;
   scene.add(group);
-  const upX=config.center+8,downX=config.center-8;
+ const upX=config.center+LIFT.lane,downX=config.center-LIFT.lane;
   const groundHeight=(x,z)=>liftGround(config,x,z);
   const cableHeight=z=>liftCableHeight(z,config);
   const liftBox=(w,h,d,color,x,y,z,parent=group)=>box(w,h,d,color,x,y,z,parent);
@@ -227,19 +227,19 @@ export function createMountain(canvas){
   };
   const liftLine=(points,color)=>line(points,color,group);
   // One continuous chairlift, with a visible cable, towers, terminals and moving chairs.
-  const cable=[];for(let z=config.top;z<config.bottom;z+=2)cable.push([upX,cableHeight(z),z]);
-  cable.push([upX,cableHeight(config.bottom),config.bottom]);
-  for(const z of config.towers.slice(1,-1)){
-   const h=groundHeight(config.center,z),c=cableHeight(z),beam=c+LIFT.crossbeamClearance;
+  const supports=liftSupports(config);
+  for(const {z,y:c} of supports.slice(1,-1)){
+   const h=groundHeight(config.center,z),beam=c+LIFT.crossbeamClearance;
    solidBox(LIFT.towerWidth,beam-h,.9,'#607580',config.center,(beam+h)/2,z);
    liftBox(21,.5,1.1,'#526874',config.center,beam,z);
    solidBox(2,.5,2,'#777b73',config.center,h+.1,z);
    for(const x of [upX,downX]){
     for(const dz of [-1.1,-.4,.4,1.1]){
      const wheel=mesh(new T.CylinderGeometry(.34,.34,.18,12),'#354a57',group);
-     wheel.rotation.z=Math.PI/2;wheel.position.set(x,c+.34,z+dz);
+     wheel.rotation.z=Math.PI/2;wheel.position.set(x,cableHeight(z+dz)+.34,z+dz);
     }
-    liftBox(1.1,.18,3.4,'#647983',x,c+.85,z);
+    const mount=liftBox(1.1,.18,3.4,'#647983',x,c+.85,z);
+    mount.rotation.x=-Math.atan2(cableHeight(z+1.1)-cableHeight(z-1.1),2.2);
    }
    for(let y=h+1;y<beam-1;y+=.9)liftBox(.7,.06,.16,'#9aa7a6',config.center+.55,y,z);
   }
@@ -247,7 +247,8 @@ export function createMountain(canvas){
    const center=config.center;
    const cableY=cableHeight(z);
    const approach=isBase?-1:1;
-   const eaveY=cableY+2;
+   const coveredSpan=cableHeight(z+approach*6);
+   const eaveY=Math.max(cableY,coveredSpan)+1.65;
    const shedZ=z-approach*3;
    const steel='#445a62',roof=config===EXPERT?'#384451':'#36515b',wood='#9a785a';
 
@@ -343,55 +344,64 @@ export function createMountain(canvas){
   const frameMat=new T.MeshStandardMaterial({color:'#586d79',roughness:.4,metalness:.65});
   function pipe(points,r=.055,parent=group){const curve=new T.CatmullRomCurve3(points.map(p=>new T.Vector3(...p)));const o=new T.Mesh(new T.TubeGeometry(curve,Math.max(6,points.length*3),r,6,false),frameMat);o.castShadow=true;parent.add(o);return o;}
   const cableMaterial=new T.MeshStandardMaterial({color:'#303c43',roughness:.62});
-  function haulRope(points){
-   const curve=new T.CatmullRomCurve3(points.map(point=>new T.Vector3(...point)));
-   group.add(new T.Mesh(new T.TubeGeometry(curve,points.length*2,.055,6,false),cableMaterial));
-  }
-  haulRope(cable);
-  haulRope(cable.map(([x,y,z])=>[downX,y,z]));
-  function chair(){const g=new T.Group();group.add(g);for(let i=0;i<4;i++){const x=-1.3+i*.87;liftBox(.8,.19,1.25,'#a57455',x,1,0,g);liftBox(.8,.65,.15,'#a57455',x,1.55,-.62,g);liftBox(.75,.035,1.15,'#c19471',x,1.11,0,g);}pipe([[-1.75,1,-.6],[-1.75,2.7,-.6],[0,3.3,-.6],[1.75,2.7,-.6],[1.75,1,-.6]],.065,g);pipe([[0,3.3,-.6],[0,4.65,-.45],[0,5.2,0]],.075,g);liftBox(.25,.16,.5,'#303c43',0,5.2,0,g);pipe([[-1.65,2.1,-.5],[-1.65,1.65,.7],[1.65,1.65,.7],[1.65,2.1,-.5]],.045,g);for(const x of[-.9,.9]){pipe([[x,1.65,.7],[x,.62,1.02],[x,.62,1.4]],.035,g);}return g;}
-  const chairs=Array.from({length:config===JUNIPER?12:8},chair),occupied=chair();occupied.visible=false;occupied.rotation.y=Math.PI;
-  const turnSeconds=3,cycleSeconds=2*(config.rideSeconds+turnSeconds);
-  function turnChair(chair,progress,atSummit){
-   const angle=Math.PI*progress,direction=atSummit?1:-1;
-   const terminalZ=atSummit?config.top:config.bottom;
-   chair.position.set(config.center+direction*8*Math.cos(angle),cableHeight(terminalZ)-5.2,terminalZ-direction*8*Math.sin(angle));
-   chair.rotation.y=atSummit?Math.PI+angle:angle;
-  }
-  function moveChair(chair,seconds){
-   const position=(seconds%cycleSeconds+cycleSeconds)%cycleSeconds;
-   const uphill=position<config.rideSeconds+turnSeconds;
-   const phase=position-(uphill?0:config.rideSeconds+turnSeconds);
-   if(phase>=config.rideSeconds){
-    turnChair(chair,(phase-config.rideSeconds)/turnSeconds,uphill);
-    return;
+  class RopeCurve extends T.Curve{
+   constructor(sample){super();this.sample=sample;}
+   getPoint(t,target=new T.Vector3()){
+    const {x,y,z}=this.sample(t);
+    return target.set(x,y,z);
    }
-   const t=chairProgress(phase/config.rideSeconds);
-   const z=uphill?config.bottom+(config.top-config.bottom)*t:config.top+(config.bottom-config.top)*t;
-   chair.position.set(uphill?upX:downX,cableHeight(z)-5.2,z);
-   chair.rotation.y=uphill?Math.PI:0;
+  }
+  function haulRope(sample,segments){
+   const curve=new RopeCurve(sample);
+   group.add(new T.Mesh(new T.TubeGeometry(curve,segments,.07,6,false),cableMaterial));
+  }
+  for(let i=1;i<supports.length;i++){
+   const a=supports[i-1].z,b=supports[i].z;
+   for(const x of [upX,downX])haulRope(t=>{
+    const z=a+(b-a)*t;
+    return {x,z,y:cableHeight(z)};
+   },Math.ceil((b-a)*1.5));
+  }
+  function chair(){const g=new T.Group();group.add(g);for(let i=0;i<4;i++){const x=-1.3+i*.87;liftBox(.8,.19,1.25,'#a57455',x,1,0,g);liftBox(.8,.65,.15,'#a57455',x,1.55,-.62,g);liftBox(.75,.035,1.15,'#c19471',x,1.11,0,g);}pipe([[-1.75,1,-.6],[-1.75,2.7,-.6],[0,3.3,-.6],[1.75,2.7,-.6],[1.75,1,-.6]],.065,g);pipe([[0,3.3,-.6],[0,4.65,-.45],[0,LIFT.hanger,0]],.075,g);liftBox(.25,.16,.5,'#303c43',0,LIFT.hanger,0,g);pipe([[-1.65,2.1,-.5],[-1.65,1.65,.7],[1.65,1.65,.7],[1.65,2.1,-.5]],.045,g);for(const x of[-.9,.9]){pipe([[x,1.65,.7],[x,.62,1.02],[x,.62,1.4]],.035,g);}return g;}
+  const chairs=Array.from({length:config===JUNIPER?12:8},chair);
+  const cycleSeconds=liftCycleSeconds(config);
+  function placeChair(chair,{x,y,z,heading}){
+   chair.position.set(x,y-LIFT.hanger,z);
+   chair.rotation.y=heading;
   }
 
-  const bullwheels=[];for(const z of[config.top,config.bottom]){const c=cableHeight(z),g=new T.Group();g.position.set(config.center,c+.25,z);group.add(g);const rim=new T.Mesh(new T.TorusGeometry(8,.18,6,36),frameMat);rim.rotation.x=Math.PI/2;g.add(rim);const hub=new T.Mesh(new T.CylinderGeometry(.9,.9,.8,12),frameMat);g.add(hub);for(let i=0;i<8;i++){const spoke=liftBox(7.8,.15,.15,'#657985',0,0,0,g);spoke.position.set(Math.cos(i*Math.PI/4)*4,0,Math.sin(i*Math.PI/4)*4);spoke.rotation.y=-i*Math.PI/4;}bullwheels.push(g);const arc=[];for(let i=0;i<=40;i++){const a=i/40*Math.PI;arc.push([config.center+Math.cos(a)*8,c,z+(z===config.top?-1:1)*Math.sin(a)*8]);}haulRope(arc);}
-  let waiting=false,departure=-Infinity;
-  return function animateLift(player,time){
-   for(const wheel of bullwheels)wheel.rotation.y=time*.7;
-   const active=player.activeLift===config;
-   if(waiting&&active&&player.mode==='ski'&&player.ride>=1)departure=time;
-   waiting=active&&player.mode==='lift';
-   const leaving=time-departure;
-   occupied.visible=active&&(player.mode==='lift'||leaving<turnSeconds);
-   if(active&&player.mode==='lift'){
-    const z=config.bottom+(config.top-config.bottom)*chairProgress(player.ride);
-    occupied.position.set(upX,player.y-.6,z);
-    occupied.rotation.y=Math.PI;
-   }else if(occupied.visible){
-    turnChair(occupied,leaving/turnSeconds,true);
+  const bullwheels=[];
+  for(const z of [config.top,config.bottom]){
+   const c=cableHeight(z),g=new T.Group();
+   g.position.set(config.center,c+.12,z);group.add(g);
+   const rim=new T.Mesh(new T.TorusGeometry(LIFT.lane,.18,6,48),frameMat);
+   rim.rotation.x=Math.PI/2;g.add(rim);
+   g.add(new T.Mesh(new T.CylinderGeometry(.9,.9,.8,12),frameMat));
+   for(let i=0;i<8;i++){
+    const spoke=liftBox(7.8,.15,.15,'#657985',0,0,0,g);
+    spoke.position.set(Math.cos(i*Math.PI/4)*4,0,Math.sin(i*Math.PI/4)*4);spoke.rotation.y=-i*Math.PI/4;
    }
+   bullwheels.push(g);
+   haulRope(t=>liftTerminalTurn(config,t,z===config.top),64);
+  }
+  let rider=null,clock=0,lastTime=0,boardingPhase=0;
+  const spacing=cycleSeconds/chairs.length;
+  return function animateLift(player,time){
+   const active=player.activeLift===config;
+   const riding=active&&player.mode==='lift';
+   if(riding){
+    if(rider!==player)boardingPhase=Math.round(clock/spacing)*spacing;
+    clock=boardingPhase+player.ride*config.rideSeconds;
+   }else if(rider&&active&&player.ride>=1){
+    clock=boardingPhase+config.rideSeconds;
+   }else{
+    clock+=time-lastTime;
+   }
+   lastTime=time;
+   rider=riding?player:null;
+   for(const wheel of bullwheels)wheel.rotation.y=clock*.7;
    for(let i=0;i<chairs.length;i++){
-    const empty=chairs[i];
-    moveChair(empty,time+i*cycleSeconds/chairs.length);
-    empty.visible=!occupied.visible||empty.position.distanceToSquared(occupied.position)>16;
+    placeChair(chairs[i],liftChairPosition(config,clock+i*spacing));
    }
   };
  }

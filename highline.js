@@ -19,7 +19,7 @@ function chair(id,name,top,bottom,rideSeconds,landing){
   hand:1,top:0,bottom:span,rideSeconds,towers,landing,autoUnload:true};
 }
 export const HOLLOW_CHAIR=chair('hollow','Hollow Chair',{x:759,z:154},HOLLOW_BASE,15,'Treeline Saddle');
-export const HIGHLINE_CHAIR=chair('highline','Highline Chair',HIGHLINE_PEAK,{x:808,z:142},17,'Highline Summit');
+export const HIGHLINE_CHAIR=chair('highline','Highline Chair',{x:911,z:-211},{x:832,z:151},17,'Highline Summit');
 export const HIGHLINE_LIFTS=[HOLLOW_CHAIR,HIGHLINE_CHAIR];
 
 // Catmull-Rom samples leave the trails continuous through the bends.
@@ -220,6 +220,15 @@ function summitApron(x,z,y){
  const cap=sides*back*smooth((front-22)/20)*(1-smooth((front-87)/34));
  return mix(mix(y,-smoothMax(-y,-limit,2),cap),surface,apron);
 }
+function highlineTerminal(x,z,y,station){
+ const lift=HIGHLINE_CHAIR;
+ const dx=x-lift.x,dz=z-lift.z,cos=Math.cos(lift.yaw),sin=Math.sin(lift.yaw);
+ const across=dx*cos-dz*sin,along=dx*sin+dz*cos-station;
+ const apron=Math.hypot(across/19,along/19);
+ const top=station===lift.top;
+ const floor=top?700.6:TREELINE.y;
+ return mix(y,floor,1-smooth((apron-.64)/.36));
+}
 export function highlineHeight(x,z,original){
  if(x<30)return original;
  if(x<=OLD_EAST&&z<154)return original;
@@ -276,6 +285,8 @@ export function highlineHeight(x,z,original){
   y=deck(x,z,y,HOLLOW_BASE,50,35);
   y=deck(x,z,y,TREELINE,76,44);
   if(x>785&&z<-89)y=summitApron(x,z,y);
+  if(x>811&&x<853&&z>130&&z<173)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.bottom);
+  if(x>890&&x<932&&z>-232&&z<-190)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.top);
  }
  return y;
 }
