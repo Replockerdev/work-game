@@ -79,18 +79,18 @@ export function addRange(scene){
   for(let d=step;d<=1400;d+=d>330?65:step)points.push(max+d);
   return points;
  }
- const xs=axis(SNOW_WEST,SNOW_EAST,13),zs=axis(SNOW_NORTH,SNOW_SOUTH,13);
+ const xs=axis(SNOW_WEST,SNOW_EAST,11),zs=axis(SNOW_NORTH,SNOW_SOUTH,11);
  const verts=[],cols=[],normals=[],clouds=[];
  const snow=new T.Color('#d6e4ed'),rock=new T.Color('#58666f'),rockWarm=new T.Color('#8b8074');
  const cache=new Map();
  function point(x,z){
   const key=x+','+z;
   if(cache.has(key))return cache.get(key);
-  const {y,cloud}=basinSample(x,z),e=5;
+  const {y,cloud}=basinSample(x,z),e=4;
   const n=new T.Vector3(rangeHeight(x-e,z)-rangeHeight(x+e,z),e*2,rangeHeight(x,z-e)-rangeHeight(x,z+e)).normalize();
   const strata=fbm(x*.024+y*.007,z*.024-y*.009);
   const exposure=fbm(x*.013+13,z*.013-7);
-  const snowAmount=T.MathUtils.smoothstep(n.y+strata*.27+exposure*.31,.64,.91);
+  const snowAmount=T.MathUtils.smoothstep(n.y+strata*.25+exposure*.26,.62,.99);
   const color=rock.clone().lerp(rockWarm,T.MathUtils.smoothstep(exposure,.28,.74)*.67).lerp(snow,snowAmount);
   color.multiplyScalar(.78+strata*.44+exposure*.12);
   const p={x,y,z,n,color,cloud};
@@ -116,9 +116,12 @@ export function addRange(scene){
   shader.fragmentShader=varyings+alpineSkyGLSL+'\n'+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
    float rocky=1.0-smoothstep(.28,.55,dot(diffuseColor.rgb,vec3(.333)));
-   float strata=sin(vRangeWorld.x*.19+vRangeWorld.y*.23+vRangeWorld.z*.07)*sin(vRangeWorld.y*.31-vRangeWorld.z*.11);
-   float fleck=fract(sin(dot(floor(vRangeWorld.xz*2.0),vec2(12.9898,78.233)))*43758.5453);
-   diffuseColor.rgb*=1.0-rocky*(.035+.045*strata+.025*fleck);
+   vec3 p=vRangeWorld;
+   float layers=p.y*.38+p.x*.10-p.z*.07+2.4*skyNoise(p.xz*.035);
+   float seams=pow(.5+.5*sin(layers),7.0);
+   float fractures=skyNoise(vec2(p.x*.12+p.z*.08,p.y*.13));
+   float grain=skyNoise(vec2(p.x*.57-p.z*.38,p.y*.61));
+   diffuseColor.rgb*=mix(1.0,.89+.21*fractures+.09*grain-.22*seams,rocky);
   `);
   shader.fragmentShader=shader.fragmentShader.replace('#include <fog_fragment>',`#include <fog_fragment>
    if(vCloudCover>0.0){
