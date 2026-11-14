@@ -1,7 +1,7 @@
 import {BASE,JUNIPER,EXPERT,height,liftWorld,routes,pathX,juniperZ,timberlineZ,expertFaceX,
  expertRoute,chuteRoute,chuteX,timberRoute,timberX,bowlRoute,powderToGladeZ,driftRoute,
  driftX,driftExitX,ridgeDropRoute,ridgeDropX} from './mountain-core.js';
-import {HIGHLINE_TRAILS,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE} from './highline.js';
+import {HIGHLINE_TRAILS,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,FIR_GLADE,FIR_HOLLOW_APPROACH} from './highline.js';
 
 const sample=(start,end,step,point)=>Array.from(
  {length:Math.ceil((end-start)/step)+1},(_,i)=>point(Math.min(start+i*step,end))
@@ -101,7 +101,11 @@ export function createTrailMap({canvas,visitedList,unvisitedList,count,visits}){
   }
   for(const trail of mapTrails){
    const highlighted=trail.id===selected;
-   line(trail.points);ctx.setLineDash([]);ctx.strokeStyle='#f4faf6';
+   line(trail.points);
+   if(trail===FIR_GLADE&&visits.has(trail.id)){
+    FIR_HOLLOW_APPROACH.points.forEach(({x,z},i)=>i?ctx.lineTo(px(x),py(z)):ctx.moveTo(px(x),py(z)));
+   }
+   ctx.setLineDash([]);ctx.strokeStyle='#f4faf6';
    ctx.lineWidth=highlighted?8:5.1;ctx.stroke();
    ctx.setLineDash(visits.has(trail.id)?[]:[4,4]);
    ctx.strokeStyle=types[trail.kind][1];ctx.lineWidth=highlighted?5:2.7;ctx.stroke();

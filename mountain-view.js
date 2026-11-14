@@ -3,7 +3,7 @@ import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,l
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,RACE_GATES,highlineTrailAt,highlineRock} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,RACE_GATES,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 export function createMountain(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
@@ -163,15 +163,19 @@ export function createMountain(canvas){
  const trees=obstacles();
  const forest=detailedTrees(scene,[...trees,...surroundingForest()]);
  const colliders=[...trees,...bowlRocks,...chuteFloorRocks,...addRange(scene)];
- function waymark(label,x,z,color,width=5.3){
+ function waymark(label,x,z,color,width=5.3,heading=0){
   const y=height(x,z);
-  box(.15,2.2,.15,'#725c49',x,y+1.1,z);
-  trailSign(label,x,y+1.9,z,color,width);
+  const post=new T.Group();
+  post.position.set(x,y,z);post.rotation.y=heading;scene.add(post);
+  box(.15,2.2,.15,'#725c49',0,1.1,0,post);
+  trailSign(label,0,1.9,0,color,width,-1,post);
  }
  waymark('← Hidden Hollow',86,155,'#3b6252',5.8);
  waymark('← Highline Chair',TREELINE.x-2,TREELINE.z+14,'#345b70',6.2);
  waymark('Meadow Way →',737,177,'#347652');
- waymark('Fir Hollow',777,184,'#487253',4.6);
+ const gladeEntrance=trailPoint(FIR_HOLLOW_APPROACH,168);
+ waymark('Fir Hollow',gladeEntrance.x-gladeEntrance.dz*10,gladeEntrance.z+gladeEntrance.dx*10,
+  '#487253',3.5,Math.atan2(gladeEntrance.dx,gladeEntrance.dz));
  waymark('← Ridgeline Race',823,178,'#965825',6);
  waymark('Sunbreak Bowl',HIGHLINE_PEAK.x+40,HIGHLINE_PEAK.z+23,'#4f7484',6.2);
  waymark('◆ Needle',HIGHLINE_PEAK.x+12,HIGHLINE_PEAK.z+25,'#4c506b',4.6);

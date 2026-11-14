@@ -77,6 +77,12 @@ export const SUN_BOWL=trail('sun-bowl','Sunbreak Bowl','#799aa8','bowl',56,[
  [914,-192,690],[962,-153,660],[1000,-82,578],[1010,-5,496],
  [969,67,417],[902,115,362],[822,145,324]
 ]);
+// Cross uphill of Highline Chair's loading shed, then drop into the trees.
+export const FIR_HOLLOW_APPROACH=trail('fir-hollow-approach','Fir Hollow approach',FIR_GLADE.color,'link',14,[
+ [929,94,382],[900,110,362],[872,118,347],[847,121,334],
+ [826,120,328],[809,128,324],[805,146,320],[804,164,316],[802,179,312],
+ [798,196,305],[792,220,289],[788,242,272]
+]);
 // Individual bumps with skiable gaps and an open line on either side.
 const sunbreakMoguls=[
  [149,-13,12,8,.80],[159,6,11,8,1.05],[172,-5,13,7,.90],[179,15,10,7,.74],
@@ -180,6 +186,10 @@ function trailWidth(route,sample){
 }
 export function highlineTrailAt(x,z){
  if(x<28||x>1115||z<-230||z>633)return null;
+ if(x>780&&x<832&&z>156&&z<232){
+  const entry=trailSample(FIR_HOLLOW_APPROACH,x,z);
+  if(entry.distance<FIR_HOLLOW_APPROACH.width)return FIR_GLADE;
+ }
  let nearest=null,best=Infinity;
  for(const route of HIGHLINE_TRAILS){
   const sample=trailSample(route,x,z);
@@ -294,6 +304,15 @@ export function highlineHeight(x,z,original){
  if(x>520){
   y=deck(x,z,y,HOLLOW_BASE,50,35);
   y=deck(x,z,y,TREELINE,76,44);
+  if(x>758&&x<963&&z>65&&z<268){
+   const approach=trailSample(FIR_HOLLOW_APPROACH,x,z,true);
+   const ends=smooth(approach.along/30)*smooth((FIR_HOLLOW_APPROACH.distance-approach.along)/29);
+   const edge=1-smooth((approach.distance-9)/15);
+   const chuteClearance=smooth((x-823)/19);
+   const blend=mix(chuteClearance,1,smooth((z-108)/18));
+   const westShoulder=mix(smooth((x-795)/10),1,smooth((z-151)/21));
+   y=mix(y,approach.y,edge*ends*blend*westShoulder);
+  }
   if(x>785&&z<-89)y=summitApron(x,z,y);
   if(x>811&&x<853&&z>130&&z<173)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.bottom);
   if(x>890&&x<932&&z>-232&&z<-190)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.top);
@@ -335,7 +354,17 @@ export function highlineTrees(height,loading){
   const s=.59+rand()*.67;
   trees.push({x,z,s,r:.56+s*.25});
  }
- return trees;
+ const clear=trees.filter(({x,z})=>x<778||x>935||z<99||z>244||
+  trailSample(FIR_HOLLOW_APPROACH,x,z).distance>=FIR_HOLLOW_APPROACH.width);
+ // Stagger the first firs on either side of the entrance so the gap
+ // reads from above. Leave the lower glade free to widen around them.
+ for(const [distance,offset,s] of [[178,-16,1.14],[185,16,1.10],[192,-18,.92],[199,17,1.03]]){
+  const p=trailPoint(FIR_HOLLOW_APPROACH,distance);
+  const x=p.x+p.dz*offset,z=p.z-p.dx*offset;
+  if(clear.some(tree=>Math.hypot(tree.x-x,tree.z-z)<6))continue;
+  clear.push({x,z,s,r:.56+s*.25});
+ }
+ return clear;
 }
 
 export const RACE_GATES=[.085,.19,.31,.43,.55,.67,.79,.89,.965].map((progress,index,array)=>{
