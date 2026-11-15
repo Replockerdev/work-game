@@ -183,18 +183,24 @@ export function createMountain(canvas){
  waymark('◆ Juniper Notch',HIGHLINE_PEAK.x-38,HIGHLINE_PEAK.z+23,'#664d71',6.2);
  waymark('Juniper return →',HOLLOW_BASE.x-14,HOLLOW_BASE.z+15,'#3b6252',6);
  const raceRed='#b42632',raceBlue=new T.MeshBasicMaterial({
-  color:'#1875c1',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2
+  color:'#2176b8',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2
  });
  function paintGate(gate){
-  const geometry=new T.PlaneGeometry(1,1,10,8);
-  const positions=geometry.attributes.position;
-  for(let i=0;i<positions.count;i++){
-   const right=T.MathUtils.lerp(RACE_PASS_INNER,RACE_PASS_OUTER,positions.getX(i)+.5)*gate.side;
-   const forward=positions.getY(i)*6;
-   const {x,z}=raceGatePoint(gate,right,forward);
-   positions.setXYZ(i,x,height(x,z)+.12,z);
+  const apex=T.MathUtils.lerp(RACE_PASS_INNER,RACE_PASS_OUTER,.41);
+  for(const skiOffset of [-.34,.34]){
+   const geometry=new T.PlaneGeometry(1,1,1,24);
+   const positions=geometry.attributes.position;
+   for(let i=0;i<positions.count;i++){
+    const progress=positions.getY(i)*2;
+    const taper=Math.cos(progress*Math.PI/2);
+    const width=.035+.28*taper;
+    const center=apex-2.35*progress**2;
+    const right=(center+skiOffset+positions.getX(i)*width)*gate.side;
+    const {x,z}=raceGatePoint(gate,right,progress*6.5);
+    positions.setXYZ(i,x,height(x,z)+.12,z);
+   }
+   scene.add(new T.Mesh(geometry,raceBlue));
   }
-  scene.add(new T.Mesh(geometry,raceBlue));
  }
  for(const [index,gate] of RACE_GATES.entries()){
   const terminal=gate.side===0;
