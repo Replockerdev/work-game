@@ -282,7 +282,17 @@ export function createMountain(canvas){
    // The operator booth is beside the loading lane, clear of the cable and skis.
    const boothX=center-14.7;
    const boothY=groundHeight(boothX,shedZ);
-   solidBox(4.3,3.2,5.2,wood,boothX,boothY+1.6,shedZ);
+   const boothWidth=4.3,boothDepth=5.2;
+   const ground=[];
+   for(const dx of [-boothWidth/2,0,boothWidth/2]){
+    for(const dz of [-boothDepth/2,0,boothDepth/2]){
+     ground.push(groundHeight(boothX+dx,shedZ+dz));
+    }
+   }
+   const footing=Math.min(...ground)-.35;
+   liftBox(boothWidth,.12+boothY-footing,boothDepth,'#777b73',
+    boothX,(boothY+footing+.12)/2,shedZ);
+   solidBox(boothWidth,3.2,boothDepth,wood,boothX,boothY+1.6,shedZ);
    liftBox(4.65,.23,5.65,roof,boothX,boothY+3.26,shedZ);
    liftBox(4.5,.10,5.5,'#e3ebee',boothX,boothY+3.41,shedZ);
    liftBox(.06,1.2,2.25,'#334b56',boothX+2.16,boothY+2.05,shedZ);

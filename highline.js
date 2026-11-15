@@ -80,7 +80,7 @@ export const SUN_BOWL=trail('sun-bowl','Sunbreak Bowl','#799aa8','bowl',56,[
 // Cross uphill of Highline Chair's loading shed, then drop into the trees.
 export const FIR_HOLLOW_APPROACH=trail('fir-hollow-approach','Fir Hollow approach',FIR_GLADE.color,'link',14,[
  [929,94,382],[900,110,362],[872,118,347],[847,121,334],
- [826,120,328],[809,128,324],[805,146,320],[804,164,316],[802,179,312],
+ [826,120,328],[809,128,326.5],[805,146,324],[804,164,320.5],[802,179,313],
  [798,196,305],[792,220,289],[788,242,272]
 ]);
 // Individual bumps with skiable gaps and an open line on either side.
@@ -249,6 +249,13 @@ function highlineTerminal(x,z,y,station){
  const floor=top?700.6:TREELINE.y;
  return mix(y,floor,1-smooth((apron-.64)/.36));
 }
+function treelineCrossing(x,z,y){
+ const along=smooth((x-776)/17)*(1-smooth((x-822)/13));
+ const away=Math.abs(z-147);
+ const width=1-smooth((away-7)/11);
+ const grade=TREELINE.y-.13*clamp(z-147,-8,8);
+ return mix(y,grade,along*width);
+}
 export function highlineHeight(x,z,original){
  if(x<30)return original;
  if(x<=OLD_EAST&&z<154)return original;
@@ -313,6 +320,7 @@ export function highlineHeight(x,z,original){
    const westShoulder=mix(smooth((x-795)/10),1,smooth((z-151)/21));
    y=mix(y,approach.y,edge*ends*blend*westShoulder);
   }
+  if(x>776&&x<835&&z>129&&z<165)y=treelineCrossing(x,z,y);
   if(x>785&&z<-89)y=summitApron(x,z,y);
   if(x>811&&x<853&&z>130&&z<173)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.bottom);
   if(x>890&&x<932&&z>-232&&z<-190)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.top);
