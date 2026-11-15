@@ -1,5 +1,5 @@
 import {createMountain} from './mountain-view.js';
-import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,EXPERT,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
+import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,activeTurnStyle,nextTurnStyle,BASE,EXPERT,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
 import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_GATES} from './highline.js';
 import {createTrailMap,mapTrails,readVisits,saveVisits} from './trail-map.js';
 import {readRaceBest,saveRaceBest,racePose,raceGhostAt} from './race-ghost.js';
@@ -39,11 +39,15 @@ function teleportToHollow(){
 }
 function cycleTurnStyle(){
  if(!started||paused)return;
- p.turnStyle=(p.turnStyle+1)%turnStyles.length;
- const style=turnStyles[p.turnStyle],button=$('turnStyle');
+ nextTurnStyle(p);
+ updateTurnStyle();
+ canvas.focus();
+}
+function updateTurnStyle(){
+ const style=turnStyles[activeTurnStyle(p)],button=$('turnStyle');
+ if(button.dataset.style===style.id)return;
  button.textContent=style.label+' · Shift';
  button.dataset.style=style.id;
- canvas.focus();
 }
 function interact(){
  if(!started||paused)return;
@@ -88,6 +92,7 @@ mapDialog.addEventListener('click',event=>{
  if(button)trailMap.select(button.dataset.trail,p);
 });
 function ui(){
+ updateTurnStyle();
  const lift=p.mode==='lift',near=boardingLift(p),atTop=canUnload(p);
  const alpine=p.x>OLD_EAST;
  const expertDescent=p.route==='Timberline Summit'||expertRoutes.some(route=>route.name===p.route);
@@ -120,7 +125,7 @@ function onSkiEvent(event){
  if(event==='unload'){keys={};jump=false;view.resetCamera();toast(p.route,3);}
  if(event==='race-start'){
   racePoses=[racePose(p,0)];
-  toast('Slalom · Follow the blue snow, right first.',2);
+  toast('Slalom carve on · Follow the blue lines, right first.',3);
  }
  if(event==='race-missed'){
   racePoses=null;

@@ -657,8 +657,19 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
 export const turnStyles=[
  {id:'normal',label:'Normal turns',grip:8.8,scrub:.42},
  {id:'carve',label:'Carve turns',grip:24,scrub:.16},
- {id:'skid',label:'Short skid turns',grip:6.1,scrub:1.25}
+ {id:'skid',label:'Short skid turns',grip:6.1,scrub:1.25},
+ {id:'slalom',label:'Slalom carve',grip:42,scrub:.16}
 ];
+const slalomStyle=turnStyles.findIndex(style=>style.id==='slalom');
+// Race overrides live on the run, so a finish, miss, or crash restores the regular selection.
+export function activeTurnStyle(p){
+ return p.race?p.race.turnStyle??slalomStyle:p.turnStyle;
+}
+export function nextTurnStyle(p){
+ const next=(activeTurnStyle(p)+1)%turnStyles.length;
+ if(p.race)p.race.turnStyle=next;
+ else p.turnStyle=next;
+}
 export function spawn(){
  return {x:BASE.x,z:BASE.z-10,y:height(BASE.x,BASE.z-10),angle:0,yaw:0,speed:0,horizontalSpeed:0,trailId:null,
   travelAngle:null,slip:0,vy:0,groundV:0,suspension:0,air:false,pop:false,stopSide:0,jumps:0,airtime:0,bump:0,mode:'ski',ride:0,laps:0,
@@ -822,23 +833,25 @@ export function step(p,input,dt,colliders=[]){const events=[];
  }else if(!stopping&&!unwinding){
   p.stopSide=0;
  }
- const style=turnStyles[p.turnStyle]??turnStyles[0];
- const carve=style.id==='carve'&&!stopping;
+ const style=turnStyles[activeTurnStyle(p)]??turnStyles[0];
+ const slalom=style.id==='slalom';
+ const carve=(style.id==='carve'||slalom)&&!stopping;
  const shortSkid=style.id==='skid';
  const alpine=highlineTrailAt(p.x,p.z);
  const gladeSnow=Math.max(driftDepth(p.x,p.z),ridgeGladeDepth(p.x,p.z),alpine?.kind==='glade'?.65:0);
  const ridge=ridgeDropMask(p.x,p.z);
  const entry=driftEntryMask(p.x,p.z);
  const powder=Math.max(gladeSnow,powderDepth(p.x,p.z),alpine?.kind==='bowl'?.72:0);
- const edgeLimit=(11.4-3.4*powder)/Math.max(5,p.speed);
+ const edgeLimit=(slalom?28-8*powder:11.4-3.4*powder)/Math.max(5,p.speed);
  let turnRate=1.55/(1+p.speed*.019);
- if(carve)turnRate=Math.min(turnRate,edgeLimit*.88);
+ if(carve)turnRate=Math.min(turnRate*(slalom?1.45:1),edgeLimit*.88);
  if(shortSkid)turnRate=Math.max(turnRate,2.45/(1+p.speed*.028));
  if(p.air)turnRate=.76;
  const stopTurn=angleDelta(previousTravel+(stopping?p.stopSide*Math.PI*.48:0),p.angle);
  const pivot=(stopping&&p.stopSide)||unwinding;
  const targetYaw=pivot?clamp(stopTurn*10,-10,10)+(unwinding?direction*turnRate:0):direction*turnRate;
- p.yaw+=(targetYaw-p.yaw)*(1-Math.exp(-dt*(pivot?24:shortSkid?13:9)));
+ const turnResponse=pivot?24:(shortSkid||slalom&&carve)?13:9;
+ p.yaw+=(targetYaw-p.yaw)*(1-Math.exp(-dt*turnResponse));
  p.angle+=p.yaw*dt;
 
  const eps=.55;
@@ -865,7 +878,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const turnLoad=angleDelta(travel,previousTravel)*p.speed/(gravity*dt);
  const lean=Math.atan(turnLoad);
  const edge=carve?lean*.84:lean*(shortSkid?.22:.34)+p.yaw*(shortSkid?.11:.085);
- const maxEdge=carve?.64:shortSkid?.40:.47;
+ const maxEdge=carve?(slalom?.79:.64):shortSkid?.40:.47;
  const stopEdge=smooth((Math.abs(sideSlip)-.15)/.75);
  const edgeTarget=p.air?0:stopping?p.stopSide*.48*stopEdge*smooth(p.speed/6)
   :clamp(edge,-maxEdge,maxEdge)*smooth((p.speed-2)/7);
