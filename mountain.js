@@ -1,5 +1,5 @@
 import {createMountain} from './mountain-view.js';
-import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,EXPERT,JUNIPER,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
+import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,EXPERT,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
 import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_GATES} from './highline.js';
 import {createTrailMap,mapTrails,readVisits,saveVisits} from './trail-map.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
@@ -19,19 +19,21 @@ function resetSkier(){
 function reset(){
  const home=p.x>OLD_EAST?(p.y>=310?HIGHLINE_CHAIR:HOLLOW_CHAIR):null;
  resetSkier();
- if(home){
-  Object.assign(p,liftWorld(home,home.center+8,home.bottom+7));
-  p.y=height(p.x,p.z);p.angle=home.yaw;p.route=home.name+' · Base';
- }
+ if(home)placeAtLiftBase(home);
  toast('Back at the chair. E to board.');
 }
+function placeAtLiftBase(lift){
+ Object.assign(p,liftWorld(lift,lift.center+8,lift.bottom+7));
+ p.y=height(p.x,p.z);
+ p.angle=lift.yaw;
+ p.route=lift.name+' · Base';
+}
 // Temporary shortcut for terrain playtesting.
-function teleportToJuniper(){
+function teleportToHollow(){
  resetSkier();
- Object.assign(p,{activeLift:JUNIPER,mode:'lift',ride:1});
- unload(p);
- p.passedTop=false;
- toast('Juniper Summit');
+ placeAtLiftBase(HOLLOW_CHAIR);
+ p.angle+=Math.PI;
+ toast('Hollow Chair · Base');
  ui();
 }
 function cycleTurnStyle(){
@@ -165,7 +167,7 @@ document.addEventListener('keydown',e=>{
  }
  if(started&&!paused&&e.altKey&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&k==='j'){
   e.preventDefault();
-  if(!e.repeat)teleportToJuniper();
+  if(!e.repeat)teleportToHollow();
   return;
  }
  if([' ','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(k)&&e.target.tagName!=='BUTTON')e.preventDefault();
