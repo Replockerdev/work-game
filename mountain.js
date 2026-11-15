@@ -1,5 +1,5 @@
 import {createMountain} from './mountain-view.js';
-import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,EXPERT,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
+import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,EXPERT,JUNIPER,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
 import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_GATES} from './highline.js';
 import {createTrailMap,mapTrails,readVisits,saveVisits} from './trail-map.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
@@ -10,15 +10,29 @@ try{
  raceBest=Number(localStorage.getItem('work-game-ridgeline-best'))||0;
 }catch{}
 function toast(s,time=3){$('toast').textContent=s;$('toast').hidden=false;toastTime=time;}
-function reset(){
+function resetSkier(){
  const {laps,turnStyle}=p;
+ p=Object.assign(spawn(),{laps,turnStyle});
+ speedKph=0;trackedTrail=null;trailDistance=0;keys={};jump=false;
+ view.resetCamera();canvas.focus();
+}
+function reset(){
  const home=p.x>OLD_EAST?(p.y>=310?HIGHLINE_CHAIR:HOLLOW_CHAIR):null;
- p=spawn();p.laps=laps;p.turnStyle=turnStyle;speedKph=0;trackedTrail=null;trailDistance=0;
+ resetSkier();
  if(home){
   Object.assign(p,liftWorld(home,home.center+8,home.bottom+7));
   p.y=height(p.x,p.z);p.angle=home.yaw;p.route=home.name+' · Base';
  }
- keys={};jump=false;view.resetCamera();toast('Back at the chair. E to board.');canvas.focus();
+ toast('Back at the chair. E to board.');
+}
+// Temporary shortcut for terrain playtesting.
+function teleportToJuniper(){
+ resetSkier();
+ Object.assign(p,{activeLift:JUNIPER,mode:'lift',ride:1});
+ unload(p);
+ p.passedTop=false;
+ toast('Juniper Summit');
+ ui();
 }
 function cycleTurnStyle(){
  if(!started||paused)return;
@@ -147,6 +161,11 @@ document.addEventListener('keydown',e=>{
  const k=e.key.length===1?e.key.toLowerCase():e.key;
  if(mapDialog.open){
   if(k==='m'||k==='Escape'){e.preventDefault();if(!e.repeat)mapDialog.close();}
+  return;
+ }
+ if(started&&!paused&&e.altKey&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&k==='j'){
+  e.preventDefault();
+  if(!e.repeat)teleportToJuniper();
   return;
  }
  if([' ','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(k)&&e.target.tagName!=='BUTTON')e.preventDefault();
