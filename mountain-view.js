@@ -1,5 +1,5 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,liftSupports,liftCycleSeconds,liftTerminalTurn,liftChairPosition,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,chuteHalfWidth,chuteRockMask,bowlX,bowlWidth,inBowl,bowlRocks,chuteFloorRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,powderToGladeMask,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,liftSupports,liftCycleSeconds,liftTerminalTurn,liftChairPosition,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,chuteHalfWidth,chuteRockMask,bowlX,bowlWidth,inBowl,bowlRocks,chuteFloorRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,powderToGladeMask,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ,slalomHardware,crashObstacles} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
@@ -202,35 +202,34 @@ export function createMountain(canvas){
    scene.add(new T.Mesh(geometry,raceBlue));
   }
  }
+ const animateGates=slalomHardware().map(gate=>{
+  const group=new T.Group();
+  group.matrixAutoUpdate=false;
+  scene.add(group);
+  for(const {right,y,extents:[w,h,d]} of gate.parts)box(w*2,h*2,d*2,raceRed,right,y,0,group);
+  let lastBend;
+  return p=>{
+   const bend=p.gateSprings?.get(gate.id)?.bend??0;
+   if(bend===lastBend)return;
+   lastBend=bend;
+   group.matrix.set(-gate.dz,gate.dx*bend,gate.dx,gate.x,
+    gate.slope,1,0,gate.base,
+    gate.dx,gate.dz*bend,gate.dz,gate.z,
+    0,0,0,1);
+   group.matrixWorldNeedsUpdate=true;
+  };
+ });
  for(const [index,gate] of RACE_GATES.entries()){
-  const terminal=gate.side===0;
-  const width=terminal?RACE_LINE_WIDTH:1.65;
-  const posts=[];
-  for(const right of [-width,width]){
-   const {x,z}=raceGatePoint(gate,right);
-   const y=height(x,z);
-   box(.13,2.4,.13,raceRed,x,y+1.2,z);
-   posts.push(new T.Vector3(x,y+1.78,z));
-   if(terminal){
-    const flag=box(1.4,.62,.12,raceRed,x,y+1.98,z);
-    flag.rotation.y=Math.atan2(gate.dx,gate.dz);
-   }
-  }
-  if(terminal){
+  if(!gate.side){
    const mark=[];
    for(let i=-10;i<=10;i++){
-    const {x,z}=raceGatePoint(gate,width*i/10);
+    const {x,z}=raceGatePoint(gate,RACE_LINE_WIDTH*i/10);
     mark.push([x,height(x,z)+.12,z]);
    }
    line(mark,raceRed);
-   const {x,z}=raceGatePoint(gate,-width-3);
+   const {x,z}=raceGatePoint(gate,-RACE_LINE_WIDTH-3);
    waymark(index===0?'SLALOM START':'FINISH',x,z,raceRed,4.6,Math.atan2(gate.dx,gate.dz));
-  }else{
-   const span=posts[1].clone().sub(posts[0]),center=posts[0].clone().lerp(posts[1],.5);
-   const flag=box(span.length(),.76,.12,raceRed,center.x,center.y,center.z);
-   flag.quaternion.setFromUnitVectors(new T.Vector3(1,0,0),span.normalize());
-   paintGate(gate);
-  }
+  }else paintGate(gate);
  }
  const rockShape=new T.DodecahedronGeometry(1,0);
  for(const [i,{x,z,size,chuteRock}] of [...bowlRocks,...chuteFloorRocks].entries()){
@@ -552,7 +551,8 @@ export function createMountain(canvas){
  const airPitch=!lift&&p.air?Math.atan2(height(p.x+skiX,p.z+skiZ)-height(p.x-skiX,p.z-skiZ),.8)*-.65:0;
  const airBank=!lift&&p.air?-p.yaw*Math.min(.25,p.speed*.015):0;
  skier.rotation.set(airPitch,lift?config.yaw+Math.PI:p.angle,airBank,'YXZ');
- rig.animate(p,colliders);
+ for(const animateGate of animateGates)animateGate(p);
+ rig.animate(p,p.crash?.yardSale?crashObstacles(p,colliders):colliders);
  renderGhost(ghost);
  for(const animateLift of animateLifts)animateLift(p,time);
  if(!paused)animateSpray(p,dt);

@@ -117,6 +117,14 @@ export function advanceCrashBody(body,dt,height,colliders,bounds){
      }
     }
     for(const obstacle of nearby){
+     if(obstacle.contact){
+      const penetration=obstacle.contact(point,radius,normal);
+      if(penetration>0){
+       resolve(body,normal,penetration,.18,.48);
+       point.copy(position).add(arm);contact=true;
+      }
+      continue;
+     }
      const side=obstacleDistance(point.x,point.z,obstacle);
      if(side>=radius)continue;
      const above=point.y-obstacleTop(obstacle,height);
@@ -300,6 +308,11 @@ function placeJoint(node,height,nearby,body){
  const snow=height(p.x,p.z);
  if(p.y<snow+r)p.y=snow+r;
  for(const obstacle of nearby){
+  if(obstacle.contact){
+   const penetration=obstacle.contact(p,r,limbNormal);
+   if(penetration>0)p.addScaledVector(limbNormal,penetration+.001);
+   continue;
+  }
   const side=obstacleDistance(p.x,p.z,obstacle),above=p.y-obstacleTop(obstacle,height);
   if(side>=r||above>=r)continue;
   if(above>side&&side<=0)p.y+=r-above;

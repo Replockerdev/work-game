@@ -1,6 +1,7 @@
 import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,HIGHLINE_CHUTE_ROCKS,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
 import {Quaternion,Vector3} from './vendor/three.module.js';
 import {advanceCrashBody,advanceCrashLimbs,createCrashLimbs,crashContacts,crashHipHeight,obstacleDistance,obstacleNormal,obstacleTop} from './crash-physics.js';
+import {makeGateHardware,sweepGate,stepGateSprings,springGate,gateCrashColliders} from './slalom-gates.js';
 
 // Stretch Juniper toward the north ridge while keeping the shared lower hill in place.
 export function juniperZ(section){
@@ -713,6 +714,12 @@ export function unload(p){
  return true;
 }
 const gravity=9.81;
+let hardware;
+export const slalomHardware=()=>hardware??=makeGateHardware(height);
+export function crashObstacles(p,colliders){
+ const gates=gateCrashColliders(p,slalomHardware());
+ return gates.length?[...colliders,...gates]:colliders;
+}
 const popVelocity=Math.sqrt(2*gravity*.5);
 const angleDelta=(target,current)=>Math.atan2(Math.sin(target-current),Math.cos(target-current));
 function skiGrade(x,z,dx,dz){
@@ -764,6 +771,7 @@ function crashRecovery(p,colliders){
  return {x:p.x,z:p.z,angle:heading};
 }
 function startCrash(p,colliders,nx,nz,impactSpeed){
+ colliders=crashObstacles(p,colliders);
  const recovery=crashRecovery(p,colliders);
  const heading=p.travelAngle??p.angle,dx=Math.sin(heading),dz=Math.cos(heading);
  const side=nx*dz-nz*dx>=0?1:-1;
@@ -793,8 +801,10 @@ function startCrash(p,colliders,nx,nz,impactSpeed){
  p.yaw=0;p.edgeAngle=0;p.spray=0;p.suspension=0;p.drive='crash';
 }
 export function step(p,input,dt,colliders=[]){const events=[];
+ stepGateSprings(p,dt);
  p.horizontalSpeed=0;p.trailId=null;
  if(p.mode==='crash'){
+  colliders=crashObstacles(p,colliders);
   const crash=p.crash;crash.time+=dt;
   const grounded=advanceCrashBody(crash,dt,height,colliders,crashBounds);
   advanceCrashLimbs(crash,dt,height,colliders);
@@ -852,6 +862,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const targetYaw=pivot?clamp(stopTurn*10,-10,10)+(unwinding?direction*turnRate:0):direction*turnRate;
  const turnResponse=pivot?24:(shortSkid||slalom&&carve)?13:9;
  p.yaw+=(targetYaw-p.yaw)*(1-Math.exp(-dt*turnResponse));
+ const oldAngle=p.angle;
  p.angle+=p.yaw*dt;
 
  const eps=.55;
@@ -970,6 +981,37 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const distance=Math.hypot(horizontal,p.y-oldY);
  p.distance+=distance;
  p.horizontalSpeed=horizontal/dt;
+ // Resolve hardware before timing a gate crossing, including the finish.
+ const gateHit=p.x>OLD_EAST?sweepGate(p,{x:oldX,y:oldY,z:oldZ,angle:oldAngle},slalomHardware(),fallX,fallZ):null;
+ if(gateHit){
+  const {gate,t,nx,nz,depth}=gateHit;
+  const stoppedAt=Math.max(0,t-.018/Math.max(horizontal,.018));
+  const pushOut=depth>0?depth+.018:0;
+  p.x=oldX+actualX*stoppedAt+nx*pushOut;
+  p.z=oldZ+actualZ*stoppedAt+nz*pushOut;
+  p.y=p.air?Math.max(height(p.x,p.z),oldY+(p.y-oldY)*stoppedAt):height(p.x,p.z);
+  p.distance-=distance*(1-stoppedAt);
+  p.horizontalSpeed*=stoppedAt;
+  const inward=Math.max(0,-forwardX*nx-forwardZ*nz);
+  const impact=p.speed*inward;
+  const along=forwardX*gate.dx+forwardZ*gate.dz;
+  const away=-nx*gate.dx-nz*gate.dz;
+  if(p.speed>.2)springGate(p,gate,Math.sign(Math.abs(away)>.15?away:along)||1,Math.max(impact,p.speed*.25));
+  const racing=Boolean(p.race);
+  p.race=null;
+  if(p.drive!=='skate'&&impact>=5.5){
+   startCrash(p,colliders,nx,nz,impact);
+   events.push('crash');
+  }else{
+   const vx=forwardX+nx*inward*1.18,vz=forwardZ+nz*inward*1.18;
+   p.speed*=Math.min(.8,Math.hypot(vx,vz)*.8);
+   p.angle=p.travelAngle=Math.atan2(vx,vz);
+   p.yaw=0;p.slip=0;
+   if(!p.air)p.groundV=-grade*p.speed;
+  }
+  if(racing)events.push('race-hit');
+  return events;
+ }
  if(horizontal>1e-5){
   for(const offset of [-.42,0,.42]){
    const x=p.x+forwardZ*offset,z=p.z-forwardX*offset;
