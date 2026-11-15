@@ -381,7 +381,7 @@ export const RACE_GATES=[.065,.14,.22,.30,.38,.46,.54,.62,.70,.78,.86,.93,.982]
   along:RACE.distance*progress,
   side:index===0||index===array.length-1?0:index%2?1:-1
  }));
-export const RACE_PASS_INNER=2.8,RACE_PASS_OUTER=13,RACE_LINE_WIDTH=19;
+export const RACE_GATE_HALF_WIDTH=1.65,RACE_PASS_OUTER=13,RACE_LINE_WIDTH=19;
 export function raceGatePoint(gate,right,forward=0){
  // The camera and the skier face downhill, so right is the negative cross-trail axis.
  return {x:gate.x-gate.dz*right+gate.dx*forward,z:gate.z+gate.dx*right+gate.dz*forward};
@@ -400,7 +400,10 @@ export function advanceRace(p,oldX,oldZ,dt,events){
  const x=mix(oldX,p.x,t),z=mix(oldZ,p.z,t);
  const right=(z-gate.z)*gate.dx-(x-gate.x)*gate.dz;
  const offset=right*gate.side;
- const valid=gate.side?offset>=RACE_PASS_INNER&&offset<=RACE_PASS_OUTER:Math.abs(right)<=RACE_LINE_WIDTH;
+ // The outside pole marks the inside of the legal line, even on a close brush.
+ // Allow room for the outward deflection when the skier brushes a finish stake.
+ const lineWidth=RACE_LINE_WIDTH+(p.race?.finishClip===Math.sign(right)?1.65:0);
+ const valid=gate.side?offset>=RACE_GATE_HALF_WIDTH&&offset<=RACE_PASS_OUTER:Math.abs(right)<=lineWidth;
  if(!valid){
   if(p.race){p.race=null;events.push('race-missed');}
   return;

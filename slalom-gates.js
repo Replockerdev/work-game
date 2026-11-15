@@ -1,15 +1,16 @@
-import {RACE_GATES,RACE_LINE_WIDTH,raceGatePoint} from './highline.js';
+import {RACE_GATES,RACE_GATE_HALF_WIDTH,RACE_LINE_WIDTH,raceGatePoint} from './highline.js';
 
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
 const part=(right,y,width,height,depth)=>({right,y,extents:[width/2,height/2,depth/2]});
 const pole=right=>part(right,1.2,.13,2.4,.13);
 export function makeGateHardware(height){
- return RACE_GATES.flatMap(gate=>{
+ return RACE_GATES.flatMap((gate,raceIndex)=>{
   if(!gate.side)return [-RACE_LINE_WIDTH,RACE_LINE_WIDTH].map(right=>{
    const {x,z}=raceGatePoint(gate,right);
-   return {...gate,x,z,base:height(x,z),slope:0,reach:2,parts:[pole(0),part(0,1.98,1.4,.62,.12)]};
+   return {...gate,x,z,raceIndex,terminalSide:Math.sign(right),
+    base:height(x,z),slope:0,reach:2,parts:[pole(0),part(0,1.98,1.4,.62,.12)]};
   });
-  const width=1.65,a=raceGatePoint(gate,-width),b=raceGatePoint(gate,width);
+  const width=RACE_GATE_HALF_WIDTH,a=raceGatePoint(gate,-width),b=raceGatePoint(gate,width);
   const left=height(a.x,a.z),right=height(b.x,b.z);
   return [{...gate,base:(left+right)/2,slope:(right-left)/(2*width),reach:3,
    parts:[pole(-width),pole(width),part(0,1.78,2*width,.76,.12)]}];

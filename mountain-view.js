@@ -3,7 +3,7 @@ import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,l
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,RACE_GATES,RACE_LINE_WIDTH,RACE_PASS_INNER,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,RACE_GATES,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 export function createMountain(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
@@ -186,7 +186,7 @@ export function createMountain(canvas){
   color:'#2176b8',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2
  });
  function paintGate(gate){
-  const apex=T.MathUtils.lerp(RACE_PASS_INNER,RACE_PASS_OUTER,.41);
+  const apex=T.MathUtils.lerp(2.8,RACE_PASS_OUTER,.41);
   for(const skiOffset of [-.34,.34]){
    const geometry=new T.PlaneGeometry(1,1,1,24);
    const positions=geometry.attributes.position;

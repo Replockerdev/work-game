@@ -131,10 +131,6 @@ function onSkiEvent(event){
   racePoses=null;
   toast('Missed a gate. Follow the blue side on your next run.',3);
  }
- if(event==='race-hit'){
-  racePoses=null;
-  toast('Gate clipped · Run ended.',3);
- }
  if(event==='race-finish'){
   const best=racePoses&&(!raceBest||p.raceResult<raceBest.time);
   if(best){

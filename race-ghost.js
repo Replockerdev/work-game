@@ -1,7 +1,7 @@
 // Times and replays belong to this layout of the slalom.
 const storageKey='work-game-ridgeline-slalom-v1';
 const poseFields=['x','y','z','angle','speed','yaw','edgeAngle','suspension','skatePhase'];
-const drives=['glide','skate','tuck','brake'];
+const drives=['glide','skate','tuck','brake','crash'];
 
 export function readRaceBest(storage){
  try{
@@ -35,6 +35,8 @@ export function raceGhostAt(best,time){
  const from=poses[low],to=poses[high];
  const t=Math.max(0,Math.min(1,(time-from.time)/(to.time-from.time)));
  const pose={...(t<.5?from:to),mode:'ski'};
+ if(pose.drive==='crash')return null;
+ if(from.drive==='crash'||to.drive==='crash')return pose;
  for(const key of poseFields)pose[key]=from[key]+(to[key]-from[key])*t;
  const turn=to.angle-from.angle;
  pose.angle=from.angle+Math.atan2(Math.sin(turn),Math.cos(turn))*t;

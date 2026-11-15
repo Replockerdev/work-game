@@ -1,4 +1,4 @@
-import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,HIGHLINE_CHUTE_ROCKS,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
+import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,HIGHLINE_CHUTE_ROCKS,RACE_GATE_HALF_WIDTH,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
 import {Quaternion,Vector3} from './vendor/three.module.js';
 import {advanceCrashBody,advanceCrashLimbs,createCrashLimbs,crashContacts,crashHipHeight,obstacleDistance,obstacleNormal,obstacleTop} from './crash-physics.js';
 import {makeGateHardware,sweepGate,stepGateSprings,springGate,gateCrashColliders} from './slalom-gates.js';
@@ -770,7 +770,7 @@ function crashRecovery(p,colliders){
  }
  return {x:p.x,z:p.z,angle:heading};
 }
-function startCrash(p,colliders,nx,nz,impactSpeed){
+function startCrash(p,colliders,nx,nz,impactSpeed,keepRace=false){
  colliders=crashObstacles(p,colliders);
  const recovery=crashRecovery(p,colliders);
  const heading=p.travelAngle??p.angle,dx=Math.sin(heading),dz=Math.cos(heading);
@@ -797,13 +797,14 @@ function startCrash(p,colliders,nx,nz,impactSpeed){
  p.crash.limbs=createCrashLimbs(p.crash);
  advanceCrashLimbs(p.crash,0,height,colliders);
  p.mode='crash';p.air=false;p.pop=false;p.stopSide=0;p.vy=0;p.speed=0;
- p.race=null;
+ if(!keepRace)p.race=null;
  p.yaw=0;p.edgeAngle=0;p.spray=0;p.suspension=0;p.drive='crash';
 }
 export function step(p,input,dt,colliders=[]){const events=[];
  stepGateSprings(p,dt);
  p.horizontalSpeed=0;p.trailId=null;
  if(p.mode==='crash'){
+  if(p.race)p.race.time+=dt;
   colliders=crashObstacles(p,colliders);
   const crash=p.crash;crash.time+=dt;
   const grounded=advanceCrashBody(crash,dt,height,colliders,crashBounds);
@@ -997,19 +998,31 @@ export function step(p,input,dt,colliders=[]){const events=[];
   const along=forwardX*gate.dx+forwardZ*gate.dz;
   const away=-nx*gate.dx-nz*gate.dz;
   if(p.speed>.2)springGate(p,gate,Math.sign(Math.abs(away)>.15?away:along)||1,Math.max(impact,p.speed*.25));
-  const racing=Boolean(p.race);
-  p.race=null;
-  if(p.drive!=='skate'&&impact>=5.5){
-   startCrash(p,colliders,nx,nz,impact);
+  const across=(p.z-gate.z)*gate.dx-(p.x-gate.x)*gate.dz;
+  const edgeClip=Math.abs(across)>=(gate.side?RACE_GATE_HALF_WIDTH:.22);
+  if(edgeClip&&gate.terminalSide&&p.race?.next===gate.raceIndex)p.race.finishClip=gate.terminalSide;
+  if(!edgeClip&&p.drive!=='skate'&&impact>=5.5){
+   startCrash(p,colliders,nx,nz,impact,true);
+   if(p.race)p.race.time+=dt;
    events.push('crash');
   }else{
-   const vx=forwardX+nx*inward*1.18,vz=forwardZ+nz*inward*1.18;
-   p.speed*=Math.min(.8,Math.hypot(vx,vz)*.8);
+   const side=Math.sign(across)||1;
+   if(edgeClip){
+    // Keep moving along the outside of the post even when the forward sweep is blocked.
+    const clearance=Math.min(9,1.8+p.speed*.35)*dt;
+    p.x-=gate.dz*side*clearance;
+    p.z+=gate.dx*side*clearance;
+    if(!p.air)p.y=height(p.x,p.z);
+   }
+   const slide=edgeClip?Math.max(0,.34-side*(forwardZ*gate.dx-forwardX*gate.dz)):0;
+   const vx=edgeClip?forwardX-gate.dz*side*slide:forwardX+nx*inward*1.18;
+   const vz=edgeClip?forwardZ+gate.dx*side*slide:forwardZ+nz*inward*1.18;
+   p.speed*=edgeClip?1-Math.min(.12,impact*.008):Math.min(.8,Math.hypot(vx,vz)*.8);
    p.angle=p.travelAngle=Math.atan2(vx,vz);
    p.yaw=0;p.slip=0;
    if(!p.air)p.groundV=-grade*p.speed;
+   advanceRace(p,oldX,oldZ,dt,events);
   }
-  if(racing)events.push('race-hit');
   return events;
  }
  if(horizontal>1e-5){
