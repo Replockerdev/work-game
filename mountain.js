@@ -2,18 +2,19 @@ import {createMountain} from './mountain-view.js';
 import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,BASE,EXPERT,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
 import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_GATES} from './highline.js';
 import {createTrailMap,mapTrails,readVisits,saveVisits} from './trail-map.js';
+import {readRaceBest,saveRaceBest,racePose,raceGhostAt} from './race-ghost.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
 const $=id=>document.getElementById(id),canvas=$('game');let view;try{view=createMountain(canvas);}catch(e){$('overlay').querySelector('h1').textContent='3D graphics unavailable';$('overlay').querySelector('p').textContent='This mountain needs WebGL. Try Chrome or Edge with graphics acceleration enabled.';throw e;}
-let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0,speedKph=0,raceBest=0;
+let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0,speedKph=0;
 try{
  p.laps=Math.max(0,Number(localStorage.getItem('work-game-three-lines-laps'))||0);
- raceBest=Number(localStorage.getItem('work-game-ridgeline-best'))||0;
 }catch{}
 function toast(s,time=3){$('toast').textContent=s;$('toast').hidden=false;toastTime=time;}
 function resetSkier(){
  const {laps,turnStyle}=p;
  p=Object.assign(spawn(),{laps,turnStyle});
  speedKph=0;trackedTrail=null;trailDistance=0;keys={};jump=false;
+ racePoses=null;
  view.resetCamera();canvas.focus();
 }
 function reset(){
@@ -55,6 +56,7 @@ function pause(){if(!started)return;paused=!paused;keys={};jump=false;$('pauseOv
 const mapDialog=$('trailMap');
 let visitStorage;
 try{visitStorage=window.localStorage;}catch{}
+let raceBest=readRaceBest(visitStorage),racePoses=null;
 const visits=readVisits(visitStorage);
 const trailMap=createTrailMap({canvas:$('map'),visitedList:$('visitedTrails'),
  unvisitedList:$('unvisitedTrails'),count:$('visitCount'),visits});
@@ -96,7 +98,11 @@ function ui(){
  $('routeDot').style.background=lift?'#d6a166':mapTrails.find(r=>r.name===p.route)?.color||'#72bfb4';
  const raceStatus=$('raceStatus');
  raceStatus.hidden=!p.race&&(p.route!==RACE.name||!raceBest);
- raceStatus.textContent=p.race?`${p.race.time.toFixed(1)} s · Gate ${p.race.next}/${RACE_GATES.length-1}`:`Race best · ${raceBest.toFixed(2)} s`;
+ if(p.race){
+  const side=RACE_GATES[p.race.next].side;
+  const next=side?`Gate ${p.race.next} · ${side>0?'Right':'Left'}`:'Finish';
+  raceStatus.textContent=`${p.race.time.toFixed(1)} s · ${next}`;
+ }else raceStatus.textContent=raceBest?`Slalom best · ${raceBest.time.toFixed(2)} s`:'';
  const atJuniperSummit=p.z<juniperZ(75);
  const prompt=$('prompt');
  const atSaddle=alpine&&Math.hypot(p.x-TREELINE.x,p.z-TREELINE.z)<53;
@@ -112,14 +118,22 @@ function onSkiEvent(event){
  if(event==='crash')toast('Wipeout · Getting back up…',2);
  if(event==='respawn'){keys={};jump=false;view.resetCamera();toastTime=0;}
  if(event==='unload'){keys={};jump=false;view.resetCamera();toast(p.route,3);}
- if(event==='race-start')toast('Ridgeline Race · Go!',2);
- if(event==='race-missed')toast('Missed a gate. Cross the start again for another run.',3);
+ if(event==='race-start'){
+  racePoses=[racePose(p,0)];
+  toast('Slalom · Follow the blue snow, right first.',2);
+ }
+ if(event==='race-missed'){
+  racePoses=null;
+  toast('Missed a gate. Follow the blue side on your next run.',3);
+ }
  if(event==='race-finish'){
-  const best=!raceBest||p.raceResult<raceBest;
+  const best=racePoses&&(!raceBest||p.raceResult<raceBest.time);
   if(best){
-   raceBest=p.raceResult;
-   try{localStorage.setItem('work-game-ridgeline-best',String(raceBest));}catch{}
+   if(racePoses.at(-1).time>=p.raceResult)racePoses.pop();
+   raceBest={time:p.raceResult,poses:[...racePoses,racePose(p,p.raceResult)]};
+   saveRaceBest(visitStorage,raceBest);
   }
+  racePoses=null;
   toast(`Finish · ${p.raceResult.toFixed(2)} s${best?' · Personal best':''}`,5);
  }
  if(event==='lap'){
@@ -142,13 +156,18 @@ function frame(t){
     distance+=motion;recordVisit(motion);
     jump=false;
     for(const event of events)onSkiEvent(event);
+    if(p.race&&racePoses&&p.race.time-racePoses.at(-1).time>=.05){
+     racePoses.push(racePose(p,p.race.time));
+    }
+    if(!p.race)racePoses=null;
     remaining-=d;
    }
    const currentKph=elapsed>0?distance/elapsed*3.6:0;
    speedKph=p.mode!=='ski'||(!p.air&&p.speed===0)?0:
     speedKph+(currentKph-speedKph)*(1-Math.exp(-elapsed*12));
   }
-  view.render(p,dt,!skiing);
+  const ghost=p.race?raceGhostAt(raceBest,p.race.time):null;
+  view.render(p,dt,!skiing,ghost);
   toastTime-=paused||mapDialog.open?0:dt;
   if(toastTime<=0)$('toast').hidden=true;
   uiTimer+=dt;

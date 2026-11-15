@@ -3,7 +3,7 @@ import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,l
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,RACE_GATES,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,RACE_GATES,RACE_LINE_WIDTH,RACE_PASS_INNER,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 export function createMountain(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
@@ -182,25 +182,48 @@ export function createMountain(canvas){
  waymark('Windward Bowl',HIGHLINE_PEAK.x-13,HIGHLINE_PEAK.z+25,'#4b6a7e',6.2);
  waymark('◆ Juniper Notch',HIGHLINE_PEAK.x-38,HIGHLINE_PEAK.z+23,'#664d71',6.2);
  waymark('Juniper return →',HOLLOW_BASE.x-14,HOLLOW_BASE.z+15,'#3b6252',6);
+ const raceRed='#b42632',raceBlue=new T.MeshBasicMaterial({
+  color:'#1875c1',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2
+ });
+ function paintGate(gate){
+  const geometry=new T.PlaneGeometry(1,1,10,8);
+  const positions=geometry.attributes.position;
+  for(let i=0;i<positions.count;i++){
+   const right=T.MathUtils.lerp(RACE_PASS_INNER,RACE_PASS_OUTER,positions.getX(i)+.5)*gate.side;
+   const forward=positions.getY(i)*6;
+   const {x,z}=raceGatePoint(gate,right,forward);
+   positions.setXYZ(i,x,height(x,z)+.12,z);
+  }
+  scene.add(new T.Mesh(geometry,raceBlue));
+ }
  for(const [index,gate] of RACE_GATES.entries()){
-  const terminal=index===0||index===RACE_GATES.length-1;
-  const color=terminal?'#b57838':index%2?'#b9473a':'#306f9d';
-  for(const side of [-1,1]){
-   const x=gate.x+gate.dz*gate.width*side,z=gate.z-gate.dx*gate.width*side;
+  const terminal=gate.side===0;
+  const width=terminal?RACE_LINE_WIDTH:1.65;
+  const posts=[];
+  for(const right of [-width,width]){
+   const {x,z}=raceGatePoint(gate,right);
    const y=height(x,z);
-   box(.13,2.4,.13,color,x,y+1.2,z);
-   const flag=box(1.55,.68,.1,color,x,y+2,z);
-   flag.rotation.y=Math.atan2(-gate.dx,gate.dz);
+   box(.13,2.4,.13,raceRed,x,y+1.2,z);
+   posts.push(new T.Vector3(x,y+1.78,z));
+   if(terminal){
+    const flag=box(1.4,.62,.12,raceRed,x,y+1.98,z);
+    flag.rotation.y=Math.atan2(gate.dx,gate.dz);
+   }
   }
   if(terminal){
    const mark=[];
    for(let i=-10;i<=10;i++){
-    const x=gate.x+gate.dz*gate.width*i/10,z=gate.z-gate.dx*gate.width*i/10;
-    mark.push([x,height(x,z)+.09,z]);
+    const {x,z}=raceGatePoint(gate,width*i/10);
+    mark.push([x,height(x,z)+.12,z]);
    }
-   line(mark,color);
-   const side=gate.width+3;
-   waymark(index===0?'RACE START':'FINISH',gate.x+gate.dz*side,gate.z-gate.dx*side,color,4.4);
+   line(mark,raceRed);
+   const {x,z}=raceGatePoint(gate,-width-3);
+   waymark(index===0?'SLALOM START':'FINISH',x,z,raceRed,4.6,Math.atan2(gate.dx,gate.dz));
+  }else{
+   const span=posts[1].clone().sub(posts[0]),center=posts[0].clone().lerp(posts[1],.5);
+   const flag=box(span.length(),.76,.12,raceRed,center.x,center.y,center.z);
+   flag.quaternion.setFromUnitVectors(new T.Vector3(1,0,0),span.normalize());
+   paintGate(gate);
   }
  }
  const rockShape=new T.DodecahedronGeometry(1,0);
@@ -422,6 +445,38 @@ export function createMountain(canvas){
  }
  const animateLifts=[JUNIPER,EXPERT,...HIGHLINE_LIFTS].map(makeLift);
  const rig=makeSkier(scene),skier=rig.root;
+ let ghostRig;
+ function renderGhost(p){
+  if(!p){
+   if(ghostRig)ghostRig.root.visible=false;
+   return;
+  }
+  if(!ghostRig){
+   ghostRig=makeSkier(scene);
+   const materials=new Set();
+   ghostRig.root.traverse(part=>{
+    if(!part.isMesh)return;
+    part.castShadow=false;
+    part.receiveShadow=false;
+    materials.add(part.material);
+   });
+   const tint=new T.Color('#2a85c6');
+   for(const material of materials){
+    material.color.lerp(tint,.78);
+    material.transparent=true;
+    material.opacity=.34;
+    material.depthWrite=false;
+   }
+  }
+  const {root,animate}=ghostRig;
+  const y=p.air?p.y+.12:height(p.x,p.z);
+  const dx=Math.sin(p.angle)*.4,dz=Math.cos(p.angle)*.4;
+  const pitch=p.air?-Math.atan2(height(p.x+dx,p.z+dz)-height(p.x-dx,p.z-dz),.8)*.65:0;
+  root.visible=true;
+  root.position.set(p.x,y,p.z);
+  root.rotation.set(pitch,p.angle,p.air?-p.yaw*Math.min(.25,p.speed*.015):0,'YXZ');
+  animate(p);
+ }
  // Two persistent ski tracks follow every grounded turn.
  const max=6000,trackPositions=new Float32Array(max*6),trackGeo=new T.BufferGeometry();trackGeo.setAttribute('position',new T.BufferAttribute(trackPositions,3));trackGeo.setDrawRange(0,0);const tracks=new T.LineSegments(trackGeo,new T.LineBasicMaterial({color:'#9cbacb',transparent:true,opacity:.55}));scene.add(tracks);let trackCount=0,previous=null;
  tracks.frustumCulled=false;
@@ -483,7 +538,7 @@ export function createMountain(canvas){
  }
  let w=0,h=0,time=0,camReady=false,camHeading=0;
  const camPos=new T.Vector3(),look=new T.Vector3(),desired=new T.Vector3();
- function render(p,dt,paused=false){time+=paused?0:dt;if(w!==canvas.clientWidth||h!==canvas.clientHeight){w=canvas.clientWidth;h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+ function render(p,dt,paused=false,ghost=null){time+=paused?0:dt;if(w!==canvas.clientWidth||h!==canvas.clientHeight){w=canvas.clientWidth;h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
  const lift=p.mode==='lift',crashed=p.mode==='crash',config=p.activeLift??JUNIPER;
  const offset=liftWorld(config,-.44,0);
  skier.position.set(lift?p.x+offset.x-config.x:p.x,p.y+(lift||p.air?.12:0),lift?p.z+offset.z-config.z:p.z);
@@ -492,6 +547,7 @@ export function createMountain(canvas){
  const airBank=!lift&&p.air?-p.yaw*Math.min(.25,p.speed*.015):0;
  skier.rotation.set(airPitch,lift?config.yaw+Math.PI:p.angle,airBank,'YXZ');
  rig.animate(p,colliders);
+ renderGhost(ghost);
  for(const animateLift of animateLifts)animateLift(p,time);
  if(!paused)animateSpray(p,dt);
  if(!lift&&!crashed&&!p.air&&p.speed>1&&!paused){
