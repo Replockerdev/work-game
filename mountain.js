@@ -1,6 +1,6 @@
 import {createMountain} from './mountain-view.js';
 import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,activeTurnStyle,nextTurnStyle,BASE,EXPERT,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
-import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_GATES} from './highline.js';
+import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_GATES,inSlalomStaging} from './highline.js';
 import {createTrailMap,mapTrails,readVisits,saveVisits} from './trail-map.js';
 import {readRaceBest,saveRaceBest,racePose,raceGhostAt} from './race-ghost.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
@@ -102,12 +102,14 @@ function ui(){
  $('route').textContent=lift?p.activeLift.name+(atTop?' · At the summit':' · Going up'):p.route;
  $('routeDot').style.background=lift?'#d6a166':mapTrails.find(r=>r.name===p.route)?.color||'#72bfb4';
  const raceStatus=$('raceStatus');
- raceStatus.hidden=!p.race&&(p.route!==RACE.name||!raceBest);
+ const atStart=p.mode==='ski'&&inSlalomStaging(p.x,p.z);
+ raceStatus.hidden=!p.race&&!atStart&&(p.route!==RACE.name||!raceBest);
  if(p.race){
   const side=RACE_GATES[p.race.next].side;
   const next=side?`Gate ${p.race.next} · ${side>0?'Right':'Left'}`:'Finish';
   raceStatus.textContent=`${p.race.time.toFixed(1)} s · ${next}`;
- }else raceStatus.textContent=raceBest?`Slalom best · ${raceBest.time.toFixed(2)} s`:'';
+ }else if(atStart)raceStatus.textContent='Ski through the start arch';
+ else raceStatus.textContent=raceBest?`Slalom best · ${raceBest.time.toFixed(2)} s`:'';
  const atJuniperSummit=p.z<juniperZ(75);
  const prompt=$('prompt');
  const atSaddle=alpine&&Math.hypot(p.x-TREELINE.x,p.z-TREELINE.z)<53;

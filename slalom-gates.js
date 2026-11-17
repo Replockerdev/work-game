@@ -6,6 +6,7 @@ const pole=right=>part(right,1.2,.13,2.4,.13);
 export const FABRIC_SEGMENTS=8;
 export function makeGateHardware(height){
  return RACE_GATES.flatMap((gate,raceIndex)=>{
+  if(raceIndex===0)return [];
   if(!gate.side)return [-RACE_LINE_WIDTH,RACE_LINE_WIDTH].map(right=>{
    const {x,z}=raceGatePoint(gate,right);
    return {...gate,x,z,raceIndex,terminalSide:Math.sign(right),

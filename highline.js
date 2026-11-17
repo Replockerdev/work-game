@@ -256,6 +256,14 @@ function treelineCrossing(x,z,y){
  const grade=TREELINE.y-.13*clamp(z-147,-8,8);
  return mix(y,grade,along*width);
 }
+function slalomStagingHeight(x,z,y){
+ if(Math.abs(x-RACE_START.x)>36||Math.abs(z-RACE_START.z)>28)return y;
+ const {right,forward}=raceStartCoordinates(x,z);
+ const sides=1-smooth((Math.abs(right)-5.5)/9);
+ const ends=smooth((forward+30)/8)*(1-smooth((forward+16)/12));
+ const grade=RACE_START.y+7.8-.085*(forward+20);
+ return mix(y,grade,sides*ends);
+}
 export function highlineHeight(x,z,original){
  if(x<30)return original;
  if(x<=OLD_EAST&&z<154)return original;
@@ -324,6 +332,7 @@ export function highlineHeight(x,z,original){
   if(x>785&&z<-89)y=summitApron(x,z,y);
   if(x>811&&x<853&&z>130&&z<173)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.bottom);
   if(x>890&&x<932&&z>-232&&z<-190)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.top);
+  y=slalomStagingHeight(x,z,y);
  }
  return y;
 }
@@ -384,7 +393,16 @@ export const RACE_GATES=[.065,...slalomGatePositions,.982]
   along:RACE.distance*progress,
   side:index===0||index===array.length-1?0:index%2?1:-1
  }));
+export const RACE_START=RACE_GATES[0],RACE_START_HALF_WIDTH=6;
 export const RACE_GATE_HALF_WIDTH=1.65,RACE_PASS_OUTER=13,RACE_LINE_WIDTH=19;
+function raceStartCoordinates(x,z){
+ const {x:startX,z:startZ,dx,dz}=RACE_START;
+ return {right:(z-startZ)*dx-(x-startX)*dz,forward:(x-startX)*dx+(z-startZ)*dz};
+}
+export function inSlalomStaging(x,z){
+ const {right,forward}=raceStartCoordinates(x,z);
+ return Math.abs(right)<RACE_START_HALF_WIDTH+3&&forward>=-24&&forward<0;
+}
 export function raceGatePoint(gate,right,forward=0){
  // The camera and the skier face downhill, so right is the negative cross-trail axis.
  return {x:gate.x-gate.dz*right+gate.dx*forward,z:gate.z+gate.dx*right+gate.dz*forward};
@@ -404,8 +422,8 @@ export function advanceRace(p,oldX,oldZ,dt,events){
  const right=(z-gate.z)*gate.dx-(x-gate.x)*gate.dz;
  const offset=right*gate.side;
  // The outside pole marks the inside of the legal line, even on a close brush.
- // Allow room for the outward deflection when the skier brushes a finish stake.
- const lineWidth=RACE_LINE_WIDTH+(p.race?.finishClip===Math.sign(right)?1.65:0);
+ // The start sensor spans the arch. Finish stakes also allow a close brush.
+ const lineWidth=index===0?RACE_START_HALF_WIDTH:RACE_LINE_WIDTH+(p.race?.finishClip===Math.sign(right)?1.65:0);
  const valid=gate.side?offset>=RACE_GATE_HALF_WIDTH&&offset<=RACE_PASS_OUTER:Math.abs(right)<=lineWidth;
  if(!valid){
   if(p.race){p.race=null;events.push('race-missed');}

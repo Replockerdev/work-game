@@ -4,7 +4,7 @@ import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from 
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
 import {FABRIC_SEGMENTS,fabricDepth,gateFlex} from './slalom-gates.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,RACE_GATES,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 export function createMountain(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
@@ -177,7 +177,8 @@ export function createMountain(canvas){
  const gladeEntrance=trailPoint(FIR_HOLLOW_APPROACH,168);
  waymark('Fir Hollow',gladeEntrance.x-gladeEntrance.dz*10,gladeEntrance.z+gladeEntrance.dx*10,
   '#487253',3.5,Math.atan2(gladeEntrance.dx,gladeEntrance.dz));
- waymark('← Ridgeline Race',823,178,'#965825',6);
+ const raceApproach=raceGatePoint(RACE_START,-10,-31);
+ waymark('Ridgeline Slalom →',raceApproach.x,raceApproach.z,'#80343b',6,Math.atan2(RACE_START.dx,RACE_START.dz));
  waymark('Sunbreak Bowl',HIGHLINE_PEAK.x+40,HIGHLINE_PEAK.z+23,'#4f7484',6.2);
  waymark('◆ Needle',HIGHLINE_PEAK.x+12,HIGHLINE_PEAK.z+25,'#4c506b',4.6);
  waymark('Windward Bowl',HIGHLINE_PEAK.x-13,HIGHLINE_PEAK.z+25,'#4b6a7e',6.2);
@@ -186,6 +187,85 @@ export function createMountain(canvas){
  const raceRed='#b42632',raceBlue=new T.MeshBasicMaterial({
   color:'#2176b8',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2
  });
+ const stagingCenter=raceGatePoint(RACE_START,0,-13);
+ function makeSlalomStart(){
+  const gate=RACE_START;
+  const origin=height(gate.x,gate.z);
+  const frame=new T.Group();
+  frame.position.set(gate.x,origin,gate.z);
+  frame.rotation.y=Math.atan2(gate.dx,gate.dz);
+  scene.add(frame);
+  const timber='#8a644c',steel='#304853',roof='#294954';
+  const roofMaterial=new T.MeshStandardMaterial({color:roof,roughness:.88,side:T.DoubleSide});
+  const back=-6.8,postX=RACE_START_HALF_WIDTH+.52;
+  const awning=postX+.58,roofBack=back-.64,roofFront=.68;
+  const eave=z=>4.65-.31*z;
+  const snow=(x,z)=>{
+   const point=raceGatePoint(gate,-x,z);
+   return height(point.x,point.z)-origin;
+  };
+  const beam=(a,b,w,d,color)=>{
+   const from=new T.Vector3(...a),to=new T.Vector3(...b);
+   const span=to.clone().sub(from);
+   const piece=box(w,span.length(),d,color,0,0,0,frame);
+   piece.position.copy(from).add(to).multiplyScalar(.5);
+   piece.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),span.normalize());
+  };
+  for(const x of [-postX,postX]){
+   for(const z of [back,0]){
+    const y=snow(x,z),top=eave(z);
+    box(.38,top-y,.38,timber,x,(top+y)/2,z,frame);
+    box(.9,1.32,.9,raceRed,x,y+.66,z,frame);
+    box(.92,.11,.92,'#eaded1',x,y+1.16,z,frame);
+    colliders.push({...raceGatePoint(gate,-x,z),top:origin+top,
+     box:{cos:gate.dz,sin:gate.dx,halfWidth:.46,halfDepth:.46}});
+    const inward=x>0?-1:1;
+    beam([x,top-.92,z],[x+inward*1.25,top,z],.18,.25,timber);
+   }
+   beam([x,eave(back),back],[x,eave(0),0],.32,.34,steel);
+   box(.15,.21,.27,steel,x,eave(0)-2.8,-.52,frame);
+  }
+  for(const z of [back,0])box(2*postX+.48,.36,.38,timber,0,eave(z),z,frame);
+
+  const roofY=(x,z)=>eave(z)+.2+1.38*(1-Math.abs(x)/awning);
+  function roofSheet(x0,x1,z0,z1,lift,color){
+   const point=(x,z)=>[x,roofY(x,z)+lift,z];
+   const a=point(x0,z0),b=point(x1,z0),c=point(x0,z1),d=point(x1,z1);
+   const geo=new T.BufferGeometry();
+   geo.setAttribute('position',new T.Float32BufferAttribute([...a,...c,...b,...b,...c,...d],3));
+   geo.computeVertexNormals();
+   const sheet=mesh(geo,color,frame);
+   if(color===roof)sheet.material=roofMaterial;
+  }
+  for(const sign of [-1,1]){
+   roofSheet(Math.min(0,sign*awning),Math.max(0,sign*awning),roofBack,roofFront,0,roof);
+   roofSheet(Math.min(0,sign*(awning-.72)),Math.max(0,sign*(awning-.72)),
+    roofBack+.25,roofFront-.28,.11,'#e3edf2');
+   for(const z of [roofBack,roofFront]){
+    beam([0,roofY(0,z),z],[sign*awning,roofY(awning,z),z],.16,.24,roof);
+   }
+  }
+  trailSign('RIDGELINE SLALOM',0,eave(back)-.18,roofBack-.07,'#80343b',9.8,-1,frame,.98);
+  trailSign('START',0,eave(0)-.27,-.3,'#80343b',4.5,-1,frame,.82);
+
+  for(const x of [-postX,postX]){
+   const rope=[];
+   for(const z of [-23,-18,-13,back]){
+    const y=snow(x,z);
+    if(z!==back)box(.14,1.08,.14,timber,x,y+.54,z,frame);
+    if(rope.length){
+     const prev=rope.at(-1);
+     rope.push([x,(prev[1]+y+.92)/2-.22,(prev[2]+z)/2]);
+    }
+    rope.push([x,y+.92,z]);
+   }
+   line(rope,'#bd5147',frame);
+  }
+  const timingMark=[];
+  for(let i=-RACE_START_HALF_WIDTH;i<=RACE_START_HALF_WIDTH;i++)timingMark.push([i,snow(i,0)+.1,0]);
+  line(timingMark,raceRed,frame);
+ }
+ makeSlalomStart();
  function paintGate(gate){
   const apex=T.MathUtils.lerp(2.8,RACE_PASS_OUTER,.41);
   for(const skiOffset of [-.34,.34]){
@@ -257,7 +337,7 @@ export function createMountain(canvas){
    geometry.computeVertexNormals();
   };
  });
- for(const [index,gate] of RACE_GATES.entries()){
+ for(const gate of RACE_GATES.slice(1)){
   if(!gate.side){
    const mark=[];
    for(let i=-10;i<=10;i++){
@@ -266,7 +346,7 @@ export function createMountain(canvas){
    }
    line(mark,raceRed);
    const {x,z}=raceGatePoint(gate,-RACE_LINE_WIDTH-3);
-   waymark(index===0?'SLALOM START':'FINISH',x,z,raceRed,4.6,Math.atan2(gate.dx,gate.dz));
+   waymark('FINISH',x,z,raceRed,4.6,Math.atan2(gate.dx,gate.dz));
   }else paintGate(gate);
  }
  const rockShape=new T.DodecahedronGeometry(1,0);
@@ -639,12 +719,14 @@ export function createMountain(canvas){
  const dock=1-T.MathUtils.smoothstep(Math.hypot(p.x-summit.x,p.z-summit.z),9,26);
  // Lower the ski camera as speed builds so nearby snow gives a clearer sense of motion.
  const moving=p.mode==='ski'?T.MathUtils.smoothstep(p.horizontalSpeed,3,14):0;
- const behind=T.MathUtils.lerp(lift?17:13.5-2.5*moving,4,dock);
+ const startView=lift?0:1-T.MathUtils.smoothstep(Math.hypot(p.x-stagingCenter.x,p.z-stagingCenter.z),12,23);
+ const behind=T.MathUtils.lerp(T.MathUtils.lerp(lift?17:13.5-2.5*moving,4,dock),7.2,startView);
  const ahead=T.MathUtils.lerp(lift?38:14,5.5,dock);
  const eyeX=p.x-forwardX*behind,eyeZ=p.z-forwardZ*behind;
  const lookX=p.x+forwardX*ahead,lookZ=p.z+forwardZ*ahead;
  const cameraHeight=p.y+(p.mode==='ski'&&!p.air?p.suspension*.78:0);
- const eyeY=Math.max(cameraHeight+T.MathUtils.lerp(lift?6:8.5-2.5*moving,3.7,dock),surfaceHeight(eyeX,eyeZ)+3);
+ const rideHeight=T.MathUtils.lerp(lift?6:8.5-2.5*moving,3.7,dock);
+ const eyeY=Math.max(cameraHeight+T.MathUtils.lerp(rideHeight,4.3,startView),surfaceHeight(eyeX,eyeZ)+3);
  const rearView=T.MathUtils.smoothstep(-forwardZ,.45,1)*(1-T.MathUtils.smoothstep(p.z,juniperZ(50),juniperZ(105)));
  const lookY=lift?p.y+T.MathUtils.lerp(2,1,dock):Math.max(cameraHeight-6,surfaceHeight(lookX,lookZ)+.6)+rearView*4;
  desired.set(eyeX,eyeY,eyeZ);
