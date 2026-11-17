@@ -985,7 +985,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  // Resolve hardware before timing a gate crossing, including the finish.
  const gateHit=p.x>OLD_EAST?sweepGate(p,{x:oldX,y:oldY,z:oldZ,angle:oldAngle},slalomHardware(),fallX,fallZ):null;
  if(gateHit){
-  const {gate,t,nx,nz,depth}=gateHit;
+  const {gate,struck,t,nx,nz,depth}=gateHit;
   const stoppedAt=Math.max(0,t-.018/Math.max(horizontal,.018));
   const pushOut=depth>0?depth+.018:0;
   p.x=oldX+actualX*stoppedAt+nx*pushOut;
@@ -997,7 +997,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
   const impact=p.speed*inward;
   const along=forwardX*gate.dx+forwardZ*gate.dz;
   const away=-nx*gate.dx-nz*gate.dz;
-  if(p.speed>.2)springGate(p,gate,Math.sign(Math.abs(away)>.15?away:along)||1,Math.max(impact,p.speed*.25));
+  if(p.speed>.2)springGate(p,gate,struck,Math.sign(Math.abs(away)>.15?away:along)||1,Math.max(impact,p.speed*.25));
   const across=(p.z-gate.z)*gate.dx-(p.x-gate.x)*gate.dz;
   const edgeClip=Math.abs(across)>=(gate.side?RACE_GATE_HALF_WIDTH:.22);
   if(edgeClip&&gate.terminalSide&&p.race?.next===gate.raceIndex)p.race.finishClip=gate.terminalSide;

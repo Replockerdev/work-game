@@ -3,6 +3,7 @@ import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,l
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
+import {FABRIC_SEGMENTS,fabricDepth,gateFlex} from './slalom-gates.js';
 import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,RACE_GATES,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 export function createMountain(canvas){
@@ -202,21 +203,58 @@ export function createMountain(canvas){
    scene.add(new T.Mesh(geometry,raceBlue));
   }
  }
+ const fabricMaterial=new T.MeshStandardMaterial({color:raceRed,roughness:.85,side:T.DoubleSide});
  const animateGates=slalomHardware().map(gate=>{
   const group=new T.Group();
   group.matrixAutoUpdate=false;
+  group.matrix.set(-gate.dz,0,gate.dx,gate.x,
+   gate.slope,1,0,gate.base,
+   gate.dx,0,gate.dz,gate.z,
+   0,0,0,1);
   scene.add(group);
-  for(const {right,y,extents:[w,h,d]} of gate.parts)box(w*2,h*2,d*2,raceRed,right,y,0,group);
-  let lastBend;
+  const mount=(shape,pole)=>{
+   const {right,y,extents:[w,h,d]}=shape;
+   const post=box(w*2,h*2,d*2,raceRed,right,y,0,group);
+   post.matrixAutoUpdate=false;
+   let previous;
+   return flex=>{
+    const bend=flex.poles[pole].bend;
+    if(previous===bend)return;
+    previous=bend;
+    post.matrix.set(1,0,0,right,0,1,0,y,0,bend,1,bend*y,0,0,0,1);
+    post.matrixWorldNeedsUpdate=true;
+   };
+  };
+  const posts=gate.poles.map(mount);
+  if(gate.terminalSide){
+   posts.push(mount(gate.banner,0));
+   return p=>{
+    const flex=gateFlex(p,gate);
+    for(const posePost of posts)posePost(flex);
+   };
+  }
+  const {y,extents:[halfWidth,halfHeight]}=gate.banner;
+  const geometry=new T.PlaneGeometry(halfWidth*2,halfHeight*2,FABRIC_SEGMENTS,2);
+  geometry.translate(0,y,0);
+  geometry.computeBoundingSphere();
+  geometry.boundingSphere.radius+=2.5;
+  const banner=new T.Mesh(geometry,fabricMaterial);
+  banner.castShadow=true;banner.receiveShadow=true;group.add(banner);
+  const positions=geometry.attributes.position;
+  positions.setUsage(T.DynamicDrawUsage);
+  let lastLeft,lastRight,lastBow;
   return p=>{
-   const bend=p.gateSprings?.get(gate.id)?.bend??0;
-   if(bend===lastBend)return;
-   lastBend=bend;
-   group.matrix.set(-gate.dz,gate.dx*bend,gate.dx,gate.x,
-    gate.slope,1,0,gate.base,
-    gate.dx,gate.dz*bend,gate.dz,gate.z,
-    0,0,0,1);
-   group.matrixWorldNeedsUpdate=true;
+   const flex=gateFlex(p,gate);
+   for(const posePost of posts)posePost(flex);
+   const left=flex.poles[0].bend,right=flex.poles[1].bend,bow=flex.fabric.bend;
+   if(left===lastLeft&&right===lastRight&&bow===lastBow)return;
+   lastLeft=left;lastRight=right;lastBow=bow;
+   for(let i=0;i<positions.count;i++){
+    const fraction=(i%(FABRIC_SEGMENTS+1))/FABRIC_SEGMENTS;
+    positions.setZ(i,fabricDepth(flex,fraction,positions.getY(i)));
+   }
+   positions.needsUpdate=true;
+   geometry.computeVertexNormals();
   };
  });
  for(const [index,gate] of RACE_GATES.entries()){
