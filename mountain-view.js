@@ -262,12 +262,12 @@ export function createMountain(canvas){
  const trees=obstacles();
  const forest=detailedTrees(scene,[...trees,...surroundingForest()]);
  const colliders=[...trees,...bowlRocks,...addRange(scene)];
- function waymark(label,x,z,color,width=5.3,heading=0){
+ function waymark(label,x,z,color,width=5.3,heading=0,panelHeight=.69){
   const y=height(x,z);
   const post=new T.Group();
   post.position.set(x,y,z);post.rotation.y=heading;scene.add(post);
   box(.15,2.2,.15,'#725c49',0,1.1,0,post);
-  trailSign(label,0,1.9,0,color,width,-1,post);
+  trailSign(label,0,1.9,0,color,width,-1,post,panelHeight);
  }
  waymark('← Hidden Hollow',86,155,'#3b6252',5.8);
  waymark('← Highline Chair',TREELINE.x,TREELINE.z-1,'#345b70',6.2);
@@ -280,6 +280,10 @@ export function createMountain(canvas){
  waymark('◆ Needle',HIGHLINE_PEAK.x+12,HIGHLINE_PEAK.z+25,'#4c506b',4.6);
  waymark('Windward Bowl',HIGHLINE_PEAK.x-13,HIGHLINE_PEAK.z+25,'#4b6a7e',6.2);
  waymark('◆ Juniper Notch',HIGHLINE_PEAK.x-38,HIGHLINE_PEAK.z+23,'#664d71',6.2);
+ const leeApproach=trailPoint(WIND_BOWL,bowlAlong-8);
+ const leeFork=trailPoint(LEE_SLOT,4);
+ waymark('◆ Lee Slot →',leeFork.x-7*leeApproach.dz,leeFork.z+7*leeApproach.dx,
+  '#543e66',5.6,Math.atan2(leeApproach.dx,leeApproach.dz),1.12);
  waymark('Juniper return →',HOLLOW_BASE.x-14,HOLLOW_BASE.z+15,'#3b6252',6);
  const raceRed='#b42632',raceBlue=new T.MeshBasicMaterial({
   color:'#2176b8',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2

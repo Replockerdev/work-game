@@ -1,6 +1,6 @@
 import {createMountain} from './mountain-view.js';
 import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,activeTurnStyle,nextTurnStyle,BASE,EXPERT,LIFT_FAST_FORWARD,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
-import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_START,RACE_GATES,LEE_SLOT,inSlalomStaging} from './highline.js';
+import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_START,RACE_GATES,WIND_BOWL,LEE_SLOT,inSlalomStaging} from './highline.js';
 import {createTrailMap,mapTrails,readVisits,saveVisits} from './trail-map.js';
 import {readRaceBest,saveRaceBest,racePose,raceGhostAt} from './race-ghost.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
@@ -139,10 +139,20 @@ function ui(){
  const atJuniperSummit=p.z<juniperZ(75);
  const prompt=$('prompt');
  const atHighlineSummit=alpine&&Math.hypot(p.x-HIGHLINE_PEAK.x,p.z-HIGHLINE_PEAK.z)<35;
- prompt.hidden=!near&&!lift&&(alpine?!atSaddle&&!atHighlineSummit:expertDescent||p.route===driftRoute.name||p.z<565&&!atJuniperSummit);
+ const leeEntrance=LEE_SLOT.points[0];
+ const approachingLeeSlot=p.mode==='ski'&&p.trailId===WIND_BOWL.id&&p.z<leeEntrance.z+24
+  &&Math.hypot(p.x-leeEntrance.x,p.z-leeEntrance.z)<62;
+ prompt.hidden=!near&&!lift&&!approachingLeeSlot&&(alpine?!atSaddle&&!atHighlineSummit:expertDescent||p.route===driftRoute.name||p.z<565&&!atJuniperSummit);
  $('interact').hidden=!near&&!atTop;
  $('interact').textContent=atTop?'E · Unload':'E · Board chair';
- $('promptText').textContent=atTop?'Your chair will wait here.':lift?(p.activeLift.autoUnload?'Unloading at '+p.activeLift.landing+'.':'Press E to unload when you reach the summit.'):near?'Press E to board '+near.name+'.':atHighlineSummit?'Turn downhill to pick a bowl or chute.':atSaddle?'Highline Chair ←    Fir Hollow ahead    Meadow Way →':atJuniperSummit?'Glades ←    Park straight ahead    Groomer & Snowdrift →':'Juniper base '+Math.round(Math.hypot(p.x-BASE.x,p.z-BASE.z))+' m · head into the base clearing';
+ $('promptText').textContent=atTop?'Your chair will wait here.':
+  lift?(p.activeLift.autoUnload?'Unloading at '+p.activeLift.landing+'.':'Press E to unload when you reach the summit.'):
+  near?'Press E to board '+near.name+'.':
+  approachingLeeSlot?'Lee Slot · Take the right fork at the purple sign':
+  atHighlineSummit?'Turn downhill to pick a bowl or chute.':
+  atSaddle?'Highline Chair ←    Fir Hollow ahead    Meadow Way →':
+  atJuniperSummit?'Glades ←    Park straight ahead    Groomer & Snowdrift →':
+  'Juniper base '+Math.round(Math.hypot(p.x-BASE.x,p.z-BASE.z))+' m · head into the base clearing';
 }
 function onSkiEvent(event){
  if(event==='land'&&!p.race)toast('Landed. '+p.jumps+' clean '+(p.jumps===1?'jump':'jumps')+'.',2);

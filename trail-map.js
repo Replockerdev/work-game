@@ -1,7 +1,7 @@
 import {BASE,JUNIPER,EXPERT,height,liftWorld,routes,pathX,juniperZ,timberlineZ,expertFaceX,
  expertRoute,chuteRoute,chuteX,timberRoute,timberX,bowlRoute,powderToGladeZ,driftRoute,
  driftX,driftExitX,ridgeDropRoute,ridgeDropX} from './mountain-core.js';
-import {HIGHLINE_TRAILS,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,FIR_GLADE,FIR_HOLLOW_APPROACH,LEE_SLOT} from './highline.js';
+import {HIGHLINE_TRAILS,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,FIR_GLADE,FIR_HOLLOW_APPROACH,WIND_BOWL,LEE_SLOT} from './highline.js';
 
 const sample=(start,end,step,point)=>Array.from(
  {length:Math.ceil((end-start)/step)+1},(_,i)=>point(Math.min(start+i*step,end))
@@ -125,6 +125,14 @@ export function createTrailMap({canvas,visitedList,unvisitedList,count,visits}){
    ctx.lineWidth=5;ctx.strokeStyle='#f4faf6';ctx.fillStyle='#172e3d';
    ctx.strokeText(trail.name,px(p.x),py(p.z)-13);
    ctx.fillText(trail.name,px(p.x),py(p.z)-13);
+  }
+  if(trail===WIND_BOWL||trail===LEE_SLOT){
+   const entrance=LEE_SLOT.points[0],x=px(entrance.x),y=py(entrance.z);
+   ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
+   ctx.fillStyle='#543e66';ctx.fill();ctx.strokeStyle='#f4faf6';ctx.lineWidth=2;ctx.stroke();
+   ctx.textAlign='right';ctx.font='700 13px Arial';ctx.lineWidth=4;
+   ctx.strokeText('Lee Slot entrance',x-11,y);
+   ctx.fillText('Lee Slot entrance',x-11,y);
   }
   const x=Math.max(12,Math.min(width-12,px(player.x)));
   const y=Math.max(12,Math.min(mapHeight-12,py(player.z)));
