@@ -23,6 +23,7 @@ export const LIFT={upX:-22,downX:-38,towerX:-30,towerWidth:.9,crossbeamClearance
  lane:8,hanger:5.2,rider:4.6,terminalHeight:5.1};
 export const SUMMIT_TERMINAL=juniperZ(12);
 export const RIDE_SECONDS=24;
+export const LIFT_FAST_FORWARD=3;
 export const liftTowers=[12,65,118,170,225,275,330,380,435,485,590,622].map(juniperZ);
 export const JUNIPER={id:'juniper',name:'Juniper Chair',center:LIFT.towerX,top:SUMMIT_TERMINAL,bottom:BASE.z,
  rideSeconds:RIDE_SECONDS,towers:liftTowers,x:0,z:0,yaw:0,hand:1};
@@ -821,7 +822,8 @@ export function step(p,input,dt,colliders=[]){const events=[];
  if(p.mode==='lift'){
   if(canUnload(p))return events;
   const lift=p.activeLift??JUNIPER;
-  p.ride=Math.min(1,p.ride+dt/lift.rideSeconds);
+  const rideRate=input.fastForward?LIFT_FAST_FORWARD:1;
+  p.ride=Math.min(1,p.ride+dt*rideRate/lift.rideSeconds);
   Object.assign(p,liftRiderPosition(lift,p.ride));
   p.angle=lift.yaw;
   if(lift.autoUnload&&p.ride>=1){
@@ -896,17 +898,11 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const grade=fallX*forwardX+fallZ*forwardZ;
  const downhillPull=gravity*grade/(1+fallX**2+fallZ**2);
 
- // Judge skating and tucking from the main slope, beyond any nearby jump lip.
- const headingX=Math.sin(p.angle),headingZ=Math.cos(p.angle);
- const downhillGrade=expert||alpine||p.x>OLD_EAST||powder>.2||ridge>.2||entry>.2
-  ?(height(p.x-12*headingX,p.z-12*headingZ)-height(p.x+12*headingX,p.z+12*headingZ))/24
-  :p.z>=590?0:(baseHeight(p.z-12*headingZ)-baseHeight(p.z+12*headingZ))/24;
- const wasTucking=p.drive==='tuck';
- const canTuck=downhillGrade>=(wasTucking?.055:.085)&&p.speed>=(wasTucking?6:7.5);
  p.drive=stopping?'brake':'glide';
- if(input.tuck&&!input.brake&&!p.air){
-  if(canTuck)p.drive='tuck';
-  else if(p.speed<11)p.drive='skate';
+ if(!input.brake&&!p.air){
+  if(input.skate){
+   if(p.speed<11)p.drive='skate';
+  }else if(input.tuck)p.drive='tuck';
  }
  if(p.drive==='skate')p.skatePhase=(p.skatePhase||0)+dt*(1.35+Math.min(6,p.speed)*.07)*Math.PI*2;
  const push=p.drive==='skate'?8.8*Math.max(0,1-p.speed/10)+.9*Math.max(0,Math.sin(p.skatePhase*2)):0;

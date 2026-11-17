@@ -1,11 +1,21 @@
 import {createMountain} from './mountain-view.js';
-import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,activeTurnStyle,nextTurnStyle,BASE,EXPERT,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
+import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,activeTurnStyle,nextTurnStyle,BASE,EXPERT,LIFT_FAST_FORWARD,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
 import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_START,RACE_GATES,inSlalomStaging} from './highline.js';
 import {createTrailMap,mapTrails,readVisits,saveVisits} from './trail-map.js';
 import {readRaceBest,saveRaceBest,racePose,raceGhostAt} from './race-ghost.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
 const $=id=>document.getElementById(id),canvas=$('game');let view;try{view=createMountain(canvas);}catch(e){$('overlay').querySelector('h1').textContent='3D graphics unavailable';$('overlay').querySelector('p').textContent='This mountain needs WebGL. Try Chrome or Edge with graphics acceleration enabled.';throw e;}
 let p=spawn(),keys={},started=false,paused=false,jump=false,last=0,toastTime=0,uiTimer=0,speedKph=0;
+const skateTapWindow=260;
+let forwardKey=null,forwardDownAt=0,skateUntil=-Infinity,skateHeld=false;
+const pushButton=document.querySelector('[data-key="skate"]');
+function clearInputs(){
+ keys={};
+ jump=false;
+ forwardKey=null;
+ skateUntil=-Infinity;
+ skateHeld=false;
+}
 try{
  p.laps=Math.max(0,Number(localStorage.getItem('work-game-three-lines-laps'))||0);
 }catch{}
@@ -13,7 +23,7 @@ function toast(s,time=3){$('toast').textContent=s;$('toast').hidden=false;toastT
 function resetSkier(){
  const {laps,turnStyle}=p;
  p=Object.assign(spawn(),{laps,turnStyle});
- speedKph=0;trackedTrail=null;trailDistance=0;keys={};jump=false;
+ speedKph=0;trackedTrail=null;trailDistance=0;clearInputs();
  racePoses=null;
  view.resetCamera();canvas.focus();
 }
@@ -51,12 +61,12 @@ function updateTurnStyle(){
 }
 function interact(){
  if(!started||paused)return;
- if(unload(p)){jump=false;speedKph=0;toast('Hold W to skate. Steer toward any run.',4);}
- else if(board(p)){keys={};view.resetCamera();toast(p.activeLift===EXPERT?'Heading up Timberline. Brake before the pitch.':'Heading up. Pick a line below the summit.',4);}
+ if(unload(p)){clearInputs();speedKph=0;toast('Tap W, then hold W to skate.',4);}
+ else if(board(p)){clearInputs();view.resetCamera();toast('Hold W to speed up the chair.',4);}
  else if(p.mode==='ski')toast('Ski into a lift loading area and press E to board.');
  canvas.focus();ui();
 }
-function pause(){if(!started)return;paused=!paused;keys={};jump=false;$('pauseOverlay').hidden=!paused;$('pause').textContent=paused?'Resume · P':'Pause · P';if(!paused)canvas.focus();}
+function pause(){if(!started)return;paused=!paused;clearInputs();$('pauseOverlay').hidden=!paused;$('pause').textContent=paused?'Resume · P':'Pause · P';if(!paused)canvas.focus();}
 const mapDialog=$('trailMap');
 let visitStorage;
 try{visitStorage=window.localStorage;}catch{}
@@ -77,14 +87,14 @@ function recordVisit(distance){
 function map(){
  if(mapDialog.open){mapDialog.close();return;}
  if(!started||paused)return;
- keys={};jump=false;
+ clearInputs();
  for(const id of readVisits(visitStorage))visits.add(id);
  trailMap.updateLists();
  trailMap.draw(p);
  mapDialog.showModal();
 }
 mapDialog.addEventListener('close',()=>{
- keys={};jump=false;
+ clearInputs();
  canvas.focus();
 });
 mapDialog.addEventListener('click',event=>{
@@ -98,7 +108,14 @@ function ui(){
  const expertDescent=p.route==='Timberline Summit'||expertRoutes.some(route=>route.name===p.route);
  $('speed').textContent=lift?'—':Math.round(speedKph);
  $('laps').textContent=p.laps;
- $('movement').textContent=p.mode==='crash'?'Wipeout · Getting back up…':atTop?'Press E when you’re ready':lift?'Chairlift · '+Math.round(p.ride*100)+'%':p.air?'In the air':p.drive==='skate'?'Skating · hold W to push':p.drive==='tuck'?'Tucking · release W to stand':p.speed<1?'Hold W to skate · A / D turns your skis':p.drive==='brake'?'Hockey stop':'Carve with A / D · S hockey stops';
+ const liftPace=forwardKey!==null||keys.touchPush?`${LIFT_FAST_FORWARD}× speed`:'Hold W to speed up';
+ const movement=lift?`Chairlift · ${Math.round(p.ride*100)}% · ${liftPace}`:
+  p.mode==='crash'?'Wipeout · Getting back up…':p.air?'In the air':
+  p.drive==='brake'?'Hockey stop':p.drive==='skate'?'Skating · release W to glide':
+  p.speed<1?'Tap W, then hold W to skate':p.drive==='tuck'?'Tucking · release W to stand':'Carve with A / D · S hockey stops';
+ $('movement').textContent=atTop?'Press E when you’re ready':movement;
+ const pushLabel=lift?'Fast':'Push';
+ if(pushButton.textContent!==pushLabel)pushButton.textContent=pushLabel;
  $('route').textContent=lift?p.activeLift.name+(atTop?' · At the summit':' · Going up'):p.route;
  $('routeDot').style.background=lift?'#d6a166':mapTrails.find(r=>r.name===p.route)?.color||'#72bfb4';
  const raceStatus=$('raceStatus');
@@ -130,8 +147,8 @@ function onSkiEvent(event){
  if(event==='land'&&!p.race)toast('Landed. '+p.jumps+' clean '+(p.jumps===1?'jump':'jumps')+'.',2);
  if(event==='bump'&&!p.race)toast('A soft bump. Brake and pick your way through.',2);
  if(event==='crash')toast('Wipeout · Getting back up…',2);
- if(event==='respawn'){keys={};jump=false;view.resetCamera();toastTime=0;}
- if(event==='unload'){keys={};jump=false;view.resetCamera();toast(p.route,3);}
+ if(event==='respawn'){clearInputs();view.resetCamera();toastTime=0;}
+ if(event==='unload'){clearInputs();view.resetCamera();toast(p.route,3);}
  if(event==='race-start'){
   racePoses=[racePose(p,0)];
   toast('Slalom carve on · Follow the blue lines, right first.',3);
@@ -165,7 +182,12 @@ function frame(t){
    let remaining=dt;
    while(remaining>0){
     const d=Math.min(remaining,1/120);
-    const events=step(p,{left:keys.a||keys.ArrowLeft,right:keys.d||keys.ArrowRight,tuck:keys.w||keys.ArrowUp,brake:keys.s||keys.ArrowDown,jump},d,view.colliders);
+    const forwardHeld=forwardKey!==null;
+    const events=step(p,{
+     left:keys.a||keys.ArrowLeft,right:keys.d||keys.ArrowRight,
+     tuck:forwardHeld&&!skateHeld,skate:skateHeld||keys.touchPush,
+     fastForward:forwardHeld||keys.touchPush,brake:keys.s||keys.ArrowDown,jump
+    },d,view.colliders);
     const motion=p.horizontalSpeed*d;
     distance+=motion;recordVisit(motion);
     jump=false;
@@ -204,6 +226,16 @@ document.addEventListener('keydown',e=>{
   return;
  }
  if([' ','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(k)&&e.target.tagName!=='BUTTON')e.preventDefault();
+ if(k==='w'||k==='ArrowUp'){
+  if(started&&!paused&&!e.repeat&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&
+   e.target.tagName!=='BUTTON'&&forwardKey===null){
+   forwardKey=k;
+   forwardDownAt=e.timeStamp;
+   skateHeld=p.mode==='ski'&&e.timeStamp<=skateUntil;
+   skateUntil=-Infinity;
+  }
+  return;
+ }
  if(!e.repeat){
   if(k==='p'||k==='Escape')pause();
   if(!paused&&started){
@@ -216,11 +248,31 @@ document.addEventListener('keydown',e=>{
  }
  if(e.target.tagName!=='BUTTON')keys[k]=true;
 });
-document.addEventListener('keyup',e=>keys[e.key.length===1?e.key.toLowerCase():e.key]=false);
+document.addEventListener('keyup',e=>{
+ const key=e.key.length===1?e.key.toLowerCase():e.key;
+ if(key===forwardKey){
+  if(p.mode==='ski'&&!skateHeld&&e.timeStamp-forwardDownAt<=skateTapWindow){
+   skateUntil=e.timeStamp+skateTapWindow;
+  }
+  forwardKey=null;
+  skateHeld=false;
+ }
+ keys[key]=false;
+});
 canvas.addEventListener('pointerdown',()=>canvas.focus());
-window.addEventListener('blur',()=>{keys={};if(started&&!paused)pause();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){keys={};if(started&&!paused)pause();}});
-const touchMap={left:'a',right:'d',tuck:'w',brake:'s'};document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys[touchMap[b.dataset.key]]=true;};b.onpointerup=b.onpointercancel=()=>keys[touchMap[b.dataset.key]]=false;});$('touchJump').onpointerdown=e=>{e.preventDefault();jump=true;};
+window.addEventListener('blur',()=>{clearInputs();if(started&&!paused)pause();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){clearInputs();if(started&&!paused)pause();}});
+const touchMap={left:'a',right:'d',skate:'touchPush',brake:'s'};
+document.querySelectorAll('[data-key]').forEach(button=>{
+ const key=touchMap[button.dataset.key];
+ button.onpointerdown=e=>{
+  e.preventDefault();
+  button.setPointerCapture(e.pointerId);
+  keys[key]=true;
+ };
+ button.onpointerup=button.onpointercancel=button.onlostpointercapture=()=>keys[key]=false;
+});
+$('touchJump').onpointerdown=e=>{e.preventDefault();jump=true;};
 if('serviceWorker'in navigator){
  const worker=navigator.serviceWorker;
  const release=Number(document.documentElement.dataset.release);
