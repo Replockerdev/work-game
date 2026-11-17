@@ -219,13 +219,44 @@ function deck(x,z,y,center,rx,rz){
 function rib(x,z,cx,cz,rx,rz,h){
  return h*Math.exp(-(((x-cx)/rx)**2+((z-cz)/rz)**2));
 }
-function chuteBanks(route,s,width){
- const edge=s.distance-width;
+// Each side has its own rock ribs. The ravines open between the ribs and
+// the outer shoulders merge back into the main face over several ski widths.
+const chuteRibs=new Map([
+ [NEEDLE,[
+  [[45,80,125,16],[108,153,198,11],[196,220,263,7]],
+  [[48,101,139,9],[115,153,183,15],[168,207,254,12]]
+ ]],
+ [WEST_NOTCH,[
+  [[53,89,134,13],[116,157,222,17],[169,204,258,9],[251,301,363,15],[358,391,448,11],[421,468,520,8]],
+  [[61,118,176,18],[155,198,242,12],[213,254,310,13],[317,345,396,10],[365,405,459,15],[436,477,523,6]]
+ ]]
+]);
+function chuteWallProfile(route,s,width){
+ const side=Number(s.across>=0),along=s.along;
  const notch=route===WEST_NOTCH;
- const face=smooth((s.along-27)/46)*(1-smooth((s.along-route.distance*.70)/(route.distance*.24)));
- const side=s.across<0?0:2.5;
- const bankHeight=(notch?20:16)+2.8*Math.sin(s.along*.043+side);
- return face*bankHeight*smooth(edge/(notch?3.5:4.6))*(1-smooth((edge-5)/(notch?15:19)));
+ const mouth=smooth((along-26)/38);
+ const fan=1-smooth((along-route.distance*.68)/(route.distance*.24));
+ const span=mouth*fan;
+ let rib=0;
+ for(const [start,crest,end,height] of chuteRibs.get(route)[side]){
+  const reach=along<crest?crest-start:end-crest;
+  rib=Math.max(rib,height*(1-smooth(Math.abs(along-crest)/reach)));
+ }
+ // Leave room for the same ski line, with longer, irregular snow pockets on the low sides.
+ const snowPocket=(1-smooth(rib/11))*(notch?2.8:3.8);
+ const edge=s.distance-width-snowPocket;
+ if(edge<=0||edge>52)return {relief:0,rock:0};
+ const slope=1-smooth(rib/18);
+ const shoulder=(notch?(side?7:10):(side?10:7))*smooth(edge/(11+5*slope));
+ const footWidth=4.1+3.2*slope+side*.65;
+ const rockFace=smooth(edge/footWidth);
+ const ledge=smooth((edge-footWidth-1)/(4+3*slope));
+ const returnToFace=1-smooth((edge-15)/(notch?37:32));
+ const spur=rib*(.72*rockFace+.28*ledge);
+ const fractures=smooth((edge-1.7)/4.2)*smooth(rib/14)*
+  (.92*Math.sin(along*.19+edge*.63+side*4.1)+.44*Math.sin(along*.43-edge*.91));
+ const rock=span*smooth(rib/10)*smooth(edge/(footWidth*.65))*(1-smooth((edge-9)/22));
+ return {relief:span*(shoulder+spur+fractures)*returnToFace,rock};
 }
 function summitApron(x,z,y){
  const across=Math.abs(x-883),front=z+210;
@@ -301,7 +332,7 @@ export function highlineHeight(x,z,original){
   const join=smooth(s.along/(route===HOLLOW_LINK?44:26))*smooth((route.distance-s.along)/23);
   let floor=s.y;
   if(route.kind==='chute'){
-   floor+=chuteBanks(route,s,width);
+   floor+=chuteWallProfile(route,s,width).relief;
   }else if(route.kind==='bowl'){
    floor+=22*smooth((s.distance-width*.45)/(width*.65));
    if(route===SUN_BOWL)floor+=mogulHeight(s.along,s.across);
@@ -343,9 +374,7 @@ export function highlineRock(x,z){
  for(const route of [NEEDLE,WEST_NOTCH]){
   const s=trailSample(route,x,z,true);
   if(!s)continue;
-  const edge=s.distance-trailWidth(route,s);
-  const span=smooth((s.along-27)/46)*(1-smooth((s.along-route.distance*.70)/(route.distance*.24)));
-  rock=Math.max(rock,span*smooth(edge/2.8)*(1-smooth((edge-11)/15)));
+  rock=Math.max(rock,chuteWallProfile(route,s,trailWidth(route,s)).rock);
  }
  return rock;
 }

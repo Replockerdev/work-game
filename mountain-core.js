@@ -118,12 +118,14 @@ function expertRelief(x,z){
   const cut=(headwall+roll)*(1-smooth((z-195)/109));
   relief-=cut*(1-smooth((edge-5)/22))*smooth((x-51)/15);
   const strength=chuteWallStrength(z,side);
-  const faceWidth=4.1+2*(1-strength)+.75*Math.sin(z*.115+side);
+  const outcrop=chuteRib(z,side<0?161:181,27,26);
+  const faceWidth=5.4+2.9*(1-strength)-1.35*outcrop+.8*Math.sin(z*.082+side);
   const face=smooth(edge/faceWidth);
-  const shoulder=1-smooth((edge-faceWidth)/19);
-  const rockHeight=18+3.1*Math.sin(z*.086+side)+2*Math.sin(z*.24+side*2);
-  const ledges=1.35*Math.sin(edge*1.82+Math.sin(z*.17+side))*Math.sin(Math.PI*face);
-  relief+=strength*shoulder*(face*rockHeight+ledges);
+  const shoulder=1-smooth((edge-faceWidth-6)/(side<0?27:32));
+  const rockHeight=(side<0?15:19)+5.4*outcrop+3.2*Math.sin(z*.068+side);
+  const stair=smooth((edge-faceWidth-1.8)/5.4);
+  const ledge=1.1*outcrop*Math.sin(Math.PI*face);
+  relief+=strength*shoulder*(rockHeight*(.8*face+.2*stair)+ledge);
  }
  for(const cliff of cliffDrops){
   const cross=1-smooth(Math.abs(x-cliff.x)/cliff.width);

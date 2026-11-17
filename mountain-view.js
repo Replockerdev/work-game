@@ -120,10 +120,12 @@ export function createMountain(canvas){
    if(alpine?.kind==='groomer'||alpine?.kind==='race')color.lerp(expertSnow,.75);
    const rock=highlineRock(x,z);
    if(rock>0){
-    const strata=terrainNoise(x*.15+y*.11,z*.14);
-    wallColor.copy(ledgeRock).lerp(weatheredRock,.33).lerp(rockShade,.6*strata);
-    color.lerp(wallColor,rock*.96);
-    rockExposure[i]=rock;
+    const strata=terrainNoise(x*.12+y*.08,z*.14-y*.07);
+    const snowPatches=terrainNoise(x*.17+z*.08,y*.19);
+    const exposed=rock*(1-.65*T.MathUtils.smoothstep(snowPatches,.49,.82));
+    wallColor.copy(ledgeRock).lerp(weatheredRock,.18+.46*strata).lerp(rockShade,.36*(1-strata));
+    color.lerp(wallColor,exposed*.98);
+    rockExposure[i]=exposed;
    }
   }
   if(alpine===HOLLOW_LINK||alpine===HOLLOW_RETURN)color.lerp(expertSnow,.58);
@@ -358,11 +360,26 @@ export function createMountain(canvas){
   }else paintGate(gate);
  }
  const rockShape=new T.DodecahedronGeometry(1,0);
+ const screeShape=new T.IcosahedronGeometry(1,1);
+ const screeVertices=screeShape.attributes.position,screeColors=[];
+ const stone=new T.Color('#45545e'),weathered=new T.Color('#7b7269'),dust=new T.Color('#dfe9ee');
+ for(let i=0;i<screeVertices.count;i++){
+  const x=screeVertices.getX(i),y=screeVertices.getY(i),z=screeVertices.getZ(i);
+  const edge=terrainNoise(x*2.3+y,z*3.1-y);
+  const profile=.94+.19*edge;
+  screeVertices.setXYZ(i,x*profile+.15*y,y*profile,z*(1.04-.14*edge)-.14*y);
+  const color=stone.clone().lerp(weathered,edge*.62);
+  color.lerp(dust,.88*T.MathUtils.smoothstep(y+.3*edge,.75,1.17));
+  screeColors.push(color.r,color.g,color.b);
+ }
+ screeShape.setAttribute('color',new T.Float32BufferAttribute(screeColors,3));
+ screeShape.computeVertexNormals();
+ const screeMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:.95,flatShading:true});
  for(const [i,{x,z,size,chuteRock}] of [...bowlRocks,...chuteFloorRocks].entries()){
-  const colors=chuteRock?['#34414c','#4d5a63']:['#535e64','#69767b'];
-  const rock=mesh(rockShape,colors[i%2]);
+  const rock=mesh(chuteRock?screeShape:rockShape,i%2?'#69767b':'#535e64');
+  if(chuteRock)rock.material=screeMaterial;
   rock.scale.set(size,size*(chuteRock?.91:.72),size*(chuteRock?.96:.85));
-  rock.rotation.set(chuteRock?.16:.18*i,.63*i,chuteRock?-.12:-.27);
+  rock.rotation.set(chuteRock?.21*Math.sin(i*2.8):.18*i,.63*i,chuteRock?.24*Math.cos(i*1.4):-.27);
   rock.position.set(x,height(x,z)+size*(chuteRock?.45:.18),z);
  }
  function makeLift(config){
