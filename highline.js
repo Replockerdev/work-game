@@ -116,7 +116,7 @@ export const LEE_SLOT={...trail('lee-slot','Lee Slot','#6d718e','chute',5.8,[
  [699,60,378],[691.5,73,357],[694,85,347.7],[705.8,95.5,344.4],
  [714,101,343.5],[723,107,342.9]
 ]),hidden:true};
-const leeMouthRibs=[[35,-9.4,4.1,10.2],[46,9.6,3.3,11.6]].map(([along,side,width,length])=>{
+const leeMouthRibs=[[32,-9.4,5.2,12],[41,10.8,4.4,13]].map(([along,side,width,length])=>{
  const {x,z,dx,dz}=trailPoint(LEE_SLOT,along);
  return {x:x+dz*side,z:z-dx*side,dx,dz,width,length};
 });
@@ -448,7 +448,7 @@ export function highlineRock(x,z){
  return rock;
 }
 export function leeMouthStone(x,z){
- if(x<706||x>748||z<17||z>58)return 0;
+ if(x<700||x>752||z<9||z>65)return 0;
  let stone=0;
  for(const rib of leeMouthRibs){
   const dx=x-rib.x,dz=z-rib.z;

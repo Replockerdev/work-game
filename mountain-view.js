@@ -4,7 +4,7 @@ import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from 
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
 import {FABRIC_SEGMENTS,fabricDepth,gateFlex} from './slalom-gates.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,NEEDLE,WEST_NOTCH,LEE_SLOT,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,leeMouthStone,trailPoint} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,NEEDLE,WEST_NOTCH,WIND_BOWL,LEE_SLOT,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,leeMouthStone,trailPoint,trailSample} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 function chuteBedrock(xs,rows){
  const floorRock=new Float32Array(xs.length*rows.length);
@@ -168,11 +168,12 @@ export function createMountain(canvas){
    color.set(y>340?'#e3edf4':'#dae9ee').multiplyScalar(.9+.16*wind);
    if(alpine?.kind==='groomer'||alpine?.kind==='race')color.lerp(expertSnow,.75);
    if(alpine===LEE_SLOT)color.lerp(bowlSnow,.58);
-   const rock=Math.max(highlineRock(x,z),leeMouthStone(x,z));
+   const mouthStone=leeMouthStone(x,z);
+   const rock=Math.max(highlineRock(x,z),mouthStone);
    if(rock>0){
     const strata=terrainNoise(x*.12+y*.08,z*.14-y*.07);
     const snowPatches=terrainNoise(x*.17+z*.08,y*.19);
-    const exposed=rock*(1-.65*T.MathUtils.smoothstep(snowPatches,.49,.82));
+    const exposed=rock*(1-(.65-.36*mouthStone)*T.MathUtils.smoothstep(snowPatches,.49,.82));
     wallColor.copy(ledgeRock).lerp(weatheredRock,.18+.46*strata).lerp(rockShade,.36*(1-strata));
     color.lerp(wallColor,exposed*.98);
     rockExposure[i]=exposed;
@@ -199,6 +200,35 @@ export function createMountain(canvas){
   const a=pos.getY(topLeft),b=pos.getY(topLeft+1),c=pos.getY(bottomLeft),d=pos.getY(bottomLeft+1);
   // Match the two triangles in the rendered terrain cell.
   return u+v<=1?a+(b-a)*u+(c-a)*v:d+(c-d)*(1-u)+(b-d)*(1-v);
+ }
+ // Old ski tracks peel gently off the bowl and disappear between the ribs.
+ const leeEntrance=LEE_SLOT.points[0];
+ const bowlAlong=trailSample(WIND_BOWL,leeEntrance.x,leeEntrance.z).along;
+ const trackMaterial=new T.MeshBasicMaterial({
+  color:'#6d93a8',side:T.DoubleSide,transparent:true,opacity:.47,depthWrite:false,
+  polygonOffset:true,polygonOffsetFactor:-1
+ });
+ for(const ski of [-.39,.39]){
+  const points=[],indices=[];
+  for(let i=0;i<=100;i++){
+   const along=-24+i*.58;
+   const p=along<0?trailPoint(WIND_BOWL,bowlAlong+along):trailPoint(LEE_SLOT,along);
+   const trace=.39*Math.sin((along+24)*.113);
+   const width=.14*Math.min(1,(along+24)/4,(34-along)/4);
+   for(const side of [-1,1]){
+    const across=ski+trace+side*width;
+    const x=p.x+p.dz*across,z=p.z-p.dx*across;
+    points.push(x,renderedSnow(x,z)+.035,z);
+   }
+   if(i>0){
+    const k=i*2;
+    indices.push(k-2,k-1,k,k,k-1,k+1);
+   }
+  }
+  const geometry=new T.BufferGeometry();
+  geometry.setAttribute('position',new T.Float32BufferAttribute(points,3));
+  geometry.setIndex(indices);
+  scene.add(new T.Mesh(geometry,trackMaterial));
  }
  // Visible trail-edge poles and arrows make all three routes converge at the base.
  for(const r of routes){for(let section=100;section<=560;section+=30){const z=juniperZ(section);for(const side of [-1,1]){const x=pathX(z,r)+r.width*side;if(r.id==='groomer'&&side===-1&&inBowl(x,z,3))continue;box(.14,1.6,.14,r.color,x,height(x,z)+.8,z);box(.55,.25,.12,r.color,x,height(x,z)+1.55,z);}}
