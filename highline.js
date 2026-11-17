@@ -111,6 +111,15 @@ export const WEST_NOTCH=trail('west-notch','Juniper Notch','#765b79','chute',6.9
  [863,-192,688],[813,-184,655],[747,-158,588],[672,-132,509],[611,-95,445],
  [582,-45,400],[607,12,373],[676,74,351],[750,123,332],[807,147,324]
 ]);
+export const LEE_SLOT={...trail('lee-slot','Lee Slot','#6d718e','chute',5.8,[
+ [745,10,440.6],[739,22,427],[728,34,414],[713,47,399],
+ [699,60,378],[691.5,73,357],[694,85,347.7],[705.8,95.5,344.4],
+ [714,101,343.5],[723,107,342.9]
+]),hidden:true};
+const leeMouthRibs=[[35,-9.4,4.1,10.2],[46,9.6,3.3,11.6]].map(([along,side,width,length])=>{
+ const {x,z,dx,dz}=trailPoint(LEE_SLOT,along);
+ return {x:x+dz*side,z:z-dx*side,dx,dz,width,length};
+});
 export const HOLLOW_RETURN=trail('hollow-return','Hollow Return','#68a69f','link',17,[
  [626,567,22],[527,581,18],[429,593,14],[322,600,10],[221,604,6],
  [137,605,2.8],[48,610,.2]
@@ -176,6 +185,8 @@ function trailWidth(route,sample){
 }
 export function highlineTrailAt(x,z){
  if(x<28||x>1115||z<-230||z>633)return null;
+ const slot=leeSlotSample(x,z);
+ if(slot&&slot.along>27&&slot.along<LEE_SLOT.distance-20&&slot.distance<leeSlotWidth(slot.along))return LEE_SLOT;
  if(x>780&&x<832&&z>156&&z<232){
   const entry=trailSample(FIR_HOLLOW_APPROACH,x,z);
   if(entry.distance<FIR_HOLLOW_APPROACH.width)return FIR_GLADE;
@@ -208,6 +219,67 @@ function deck(x,z,y,center,rx,rz){
 }
 function rib(x,z,cx,cz,rx,rz,h){
  return h*Math.exp(-(((x-cx)/rx)**2+((z-cz)/rz)**2));
+}
+// The hidden couloir cuts into the shoulder between Windward and the Notch.
+// Its first and last stretches share the existing snow surfaces.
+function leeSlotSample(x,z){
+ if(x<657||x>780||z<-25||z>129)return null;
+ return trailSample(LEE_SLOT,x,z);
+}
+function leeSlotWidth(along){
+ return 6.4-1.7*smooth((along-17)/22)+9*smooth((along-80)/39);
+}
+function interpolateSlope(a,b,slopeA,slopeB,t){
+ const t2=t*t,t3=t2*t;
+ return a*(2*t3-3*t2+1)+slopeA*(t3-2*t2+t)+b*(-2*t3+3*t2)+slopeB*(t3-t2);
+}
+function leeSlotTerrainSample(x,z){
+ const points=LEE_SLOT.grades;
+ if(x<622||x>823||z<=points[0].z||z>=points.at(-1).z)return null;
+ // Match the branch by depth down the face. Closest-point projection would
+ // jump between its upper and lower stretches in the inside of the bend.
+ const i=points.findIndex(point=>point.z>=z),a=points[i-1],b=points[i];
+ const span=b.z-a.z,t=(z-a.z)/span;
+ const center=interpolateSlope(a.x,b.x,span*a.dx/a.dz,span*b.dx/b.dz,t);
+ const elevation=interpolateSlope(a.y,b.y,span*a.grade/a.dz,span*b.grade/b.dz,t);
+ const along=mix(a.along,b.along,t);
+ const across=(x-center)*mix(a.dz,b.dz,t);
+ const distance=Math.abs(across);
+ if(distance>leeSlotWidth(along)+29)return null;
+ const tangentOffset=(x-center)*mix(a.dx,b.dx,t);
+ return {along,across,distance,y:elevation+tangentOffset*mix(a.grade,b.grade,t)};
+}
+function leeSlotProfile(s){
+ const along=s.along,left=s.across<0;
+ const fadeIn=smooth(along/27),fadeOut=smooth((LEE_SLOT.distance-along)/29);
+ const width=leeSlotWidth(along);
+ const edge=s.distance-width;
+ const sides=1-smooth(edge/29);
+ const bank=smooth(edge/5.8);
+ const mouthRib=1-smooth(Math.abs(along-(left?30:41))/(left?20:26));
+ const lowerRib=1-smooth(Math.abs(along-(left?69:61))/(left?27:20));
+ const ribHeight=(left?8:13)*mouthRib+(left?13:6)*lowerRib;
+ const shoulder=1-smooth((edge-7)/16);
+ const relief=(ribHeight+3.6)*bank*shoulder;
+ return {
+  floor:s.y+relief,
+  cut:fadeIn*fadeOut*sides,
+  rock:fadeIn*fadeOut*smooth(ribHeight/10)*smooth(edge/3.4)*shoulder,
+  core:fadeIn*fadeOut*(1-smooth(edge/5))
+ };
+}
+function leeSlotBlend(x,z){
+ const bowl=trailSample(WIND_BOWL,x,z);
+ const notch=trailSample(WEST_NOTCH,x,z);
+ const clearBowl=bowl?smooth((bowl.distance-19.7)/13):1;
+ const clearNotch=notch?smooth((notch.distance-4.5)/9):1;
+ return clearBowl*clearNotch;
+}
+function leeSlotHeight(x,z,y){
+ const sample=leeSlotTerrainSample(x,z);
+ if(!sample)return y;
+ const {floor,cut}=leeSlotProfile(sample);
+ return mix(y,floor,cut*leeSlotBlend(x,z));
 }
 // Each side has its own rock ribs. The ravines open between the ribs and
 // the outer shoulders merge back into the main face over several ski widths.
@@ -338,6 +410,7 @@ export function highlineHeight(x,z,original){
   coverage=Math.min(1,smoothMax(coverage,strength,.25*Math.min(coverage,strength)+.001));
  }
  if(weight>0)y=mix(y,target/weight,coverage);
+ y=leeSlotHeight(x,z,y);
  if(x>520){
   y=deck(x,z,y,HOLLOW_BASE,50,35);
   y=deck(x,z,y,TREELINE,76,44);
@@ -366,7 +439,25 @@ export function highlineRock(x,z){
   if(!s)continue;
   rock=Math.max(rock,chuteWallProfile(route,s,trailWidth(route,s)).rock);
  }
+ const slot=leeSlotTerrainSample(x,z);
+ if(slot){
+  const profile=leeSlotProfile(slot);
+  const blend=leeSlotBlend(x,z);
+  rock=Math.max(rock*(1-profile.core*blend),profile.rock*blend);
+ }
  return rock;
+}
+export function leeMouthStone(x,z){
+ if(x<706||x>748||z<17||z>58)return 0;
+ let stone=0;
+ for(const rib of leeMouthRibs){
+  const dx=x-rib.x,dz=z-rib.z;
+  const across=(dx*rib.dz-dz*rib.dx)/rib.width;
+  const along=(dx*rib.dx+dz*rib.dz)/rib.length;
+  const edge=Math.hypot(across+.25*along,along);
+  stone=Math.max(stone,1-smooth((edge-.44)/.56));
+ }
+ return stone;
 }
 export function highlineTrees(height,loading){
  const trees=[];

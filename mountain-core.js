@@ -1,4 +1,4 @@
-import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,RACE_GATE_HALF_WIDTH,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
+import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,LEE_SLOT,RACE_GATE_HALF_WIDTH,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
 import {Quaternion,Vector3} from './vendor/three.module.js';
 import {advanceCrashBody,advanceCrashLimbs,createCrashLimbs,crashContacts,crashHipHeight,obstacleDistance,obstacleNormal,obstacleTop} from './crash-physics.js';
 import {makeGateHardware,sweepGate,stepGateSprings,springGate,gateCrashColliders} from './slalom-gates.js';
@@ -849,7 +849,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const gladeSnow=Math.max(driftDepth(p.x,p.z),ridgeGladeDepth(p.x,p.z),alpine?.kind==='glade'?.65:0);
  const ridge=ridgeDropMask(p.x,p.z);
  const entry=driftEntryMask(p.x,p.z);
- const powder=Math.max(gladeSnow,powderDepth(p.x,p.z),alpine?.kind==='bowl'?.72:0);
+ const powder=Math.max(gladeSnow,powderDepth(p.x,p.z),alpine===LEE_SLOT?.56:alpine?.kind==='bowl'?.72:0);
  const edgeLimit=(slalom?28-8*powder:11.4-3.4*powder)/Math.max(5,p.speed);
  let turnRate=1.55/(1+p.speed*.019);
  if(carve)turnRate=Math.min(turnRate*(slalom?1.45:1),edgeLimit*.88);

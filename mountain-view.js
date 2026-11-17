@@ -4,7 +4,7 @@ import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from 
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
 import {FABRIC_SEGMENTS,fabricDepth,gateFlex} from './slalom-gates.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,NEEDLE,WEST_NOTCH,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,NEEDLE,WEST_NOTCH,LEE_SLOT,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,leeMouthStone,trailPoint} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 function chuteBedrock(xs,rows){
  const floorRock=new Float32Array(xs.length*rows.length);
@@ -167,7 +167,8 @@ export function createMountain(canvas){
    const wind=terrainNoise(x*.028,z*.028);
    color.set(y>340?'#e3edf4':'#dae9ee').multiplyScalar(.9+.16*wind);
    if(alpine?.kind==='groomer'||alpine?.kind==='race')color.lerp(expertSnow,.75);
-   const rock=highlineRock(x,z);
+   if(alpine===LEE_SLOT)color.lerp(bowlSnow,.58);
+   const rock=Math.max(highlineRock(x,z),leeMouthStone(x,z));
    if(rock>0){
     const strata=terrainNoise(x*.12+y*.08,z*.14-y*.07);
     const snowPatches=terrainNoise(x*.17+z*.08,y*.19);
@@ -189,6 +190,16 @@ export function createMountain(canvas){
  geo.setAttribute('rockExposure',new T.BufferAttribute(rockExposure,1));
  geo.setAttribute('floorRock',new T.BufferAttribute(chuteBedrock(xs,rows),1));
  geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
+ function renderedSnow(x,z){
+  const column=xs.findIndex(sample=>sample>x),row=rows.findIndex(sample=>sample>z);
+  if(column<=0||row<=0)return surfaceHeight(x,z);
+  const u=(x-xs[column-1])/(xs[column]-xs[column-1]);
+  const v=(z-rows[row-1])/(rows[row]-rows[row-1]);
+  const topLeft=(row-1)*xs.length+column-1,bottomLeft=topLeft+xs.length;
+  const a=pos.getY(topLeft),b=pos.getY(topLeft+1),c=pos.getY(bottomLeft),d=pos.getY(bottomLeft+1);
+  // Match the two triangles in the rendered terrain cell.
+  return u+v<=1?a+(b-a)*u+(c-a)*v:d+(c-d)*(1-u)+(b-d)*(1-v);
+ }
  // Visible trail-edge poles and arrows make all three routes converge at the base.
  for(const r of routes){for(let section=100;section<=560;section+=30){const z=juniperZ(section);for(const side of [-1,1]){const x=pathX(z,r)+r.width*side;if(r.id==='groomer'&&side===-1&&inBowl(x,z,3))continue;box(.14,1.6,.14,r.color,x,height(x,z)+.8,z);box(.55,.25,.12,r.color,x,height(x,z)+1.55,z);}}
  const z=juniperZ(110),x=pathX(z,r)+r.width*.65,y=height(x,z);
@@ -722,8 +733,10 @@ export function createMountain(canvas){
  const camPos=new T.Vector3(),look=new T.Vector3(),desired=new T.Vector3();
  function render(p,dt,paused=false,ghost=null){time+=paused?0:dt;if(w!==canvas.clientWidth||h!==canvas.clientHeight){w=canvas.clientWidth;h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
  const lift=p.mode==='lift',crashed=p.mode==='crash',config=p.activeLift??JUNIPER;
+ const inLeeSlot=!lift&&(p.trailId===LEE_SLOT.id||p.route===LEE_SLOT.name);
+ const skiHeight=inLeeSlot&&!crashed&&!p.air?Math.max(p.y,renderedSnow(p.x,p.z)):p.y;
  const offset=liftWorld(config,-.44,0);
- skier.position.set(lift?p.x+offset.x-config.x:p.x,p.y+(lift||p.air?.12:0),lift?p.z+offset.z-config.z:p.z);
+ skier.position.set(lift?p.x+offset.x-config.x:p.x,skiHeight+(lift||p.air?.12:0),lift?p.z+offset.z-config.z:p.z);
  const skiX=Math.sin(p.angle)*.4,skiZ=Math.cos(p.angle)*.4;
  const airPitch=!lift&&p.air?Math.atan2(height(p.x+skiX,p.z+skiZ)-height(p.x-skiX,p.z-skiZ),.8)*-.65:0;
  const airBank=!lift&&p.air?-p.yaw*Math.min(.25,p.speed*.015):0;
@@ -779,19 +792,30 @@ export function createMountain(canvas){
  // Lower the ski camera as speed builds so nearby snow gives a clearer sense of motion.
  const moving=p.mode==='ski'?T.MathUtils.smoothstep(p.horizontalSpeed,3,14):0;
  const startView=lift?0:1-T.MathUtils.smoothstep(Math.hypot(p.x-stagingCenter.x,p.z-stagingCenter.z),12,23);
- const behind=T.MathUtils.lerp(T.MathUtils.lerp(lift?17:13.5-2.5*moving,4,dock),7.2,startView);
+ const ordinaryBehind=inLeeSlot?7.6:13.5-2.5*moving;
+ const behind=T.MathUtils.lerp(T.MathUtils.lerp(lift?17:ordinaryBehind,4,dock),7.2,startView);
  const ahead=T.MathUtils.lerp(lift?38:14,5.5,dock);
  const eyeX=p.x-forwardX*behind,eyeZ=p.z-forwardZ*behind;
  const lookX=p.x+forwardX*ahead,lookZ=p.z+forwardZ*ahead;
  const cameraHeight=p.y+(p.mode==='ski'&&!p.air?p.suspension*.78:0);
  const rideHeight=T.MathUtils.lerp(lift?6:8.5-2.5*moving,3.7,dock);
- const eyeY=Math.max(cameraHeight+T.MathUtils.lerp(rideHeight,4.3,startView),surfaceHeight(eyeX,eyeZ)+3);
+ const skiingEye=cameraHeight+T.MathUtils.lerp(rideHeight,4.3,startView)+(inLeeSlot?2:0);
+ const eyeY=Math.max(skiingEye,surfaceHeight(eyeX,eyeZ)+3);
  const rearView=T.MathUtils.smoothstep(-forwardZ,.45,1)*(1-T.MathUtils.smoothstep(p.z,juniperZ(50),juniperZ(105)));
  const lookY=lift?p.y+T.MathUtils.lerp(2,1,dock):Math.max(cameraHeight-6,surfaceHeight(lookX,lookZ)+.6)+rearView*4;
  desired.set(eyeX,eyeY,eyeZ);
  if(!camReady){camPos.copy(desired);look.y=lookY;camReady=true;}
  camPos.lerp(desired,1-Math.exp(-dt*10));
  camPos.y=Math.max(camPos.y,surfaceHeight(camPos.x,camPos.z)+3);
+ if(inLeeSlot){
+  // Keep the near lip from hiding the skier while the camera follows the drop.
+  const skis=Math.max(p.y,renderedSnow(p.x,p.z))+.18;
+  for(const t of [.24,.44,.63,.78,.89,.94,.97]){
+   const snow=renderedSnow(T.MathUtils.lerp(camPos.x,p.x,t),T.MathUtils.lerp(camPos.z,p.z,t));
+   const clearEye=(snow+.14-t*skis)/(1-t);
+   camPos.y=Math.max(camPos.y,clearEye);
+  }
+ }
  camera.position.copy(camPos);
  look.set(lookX,T.MathUtils.lerp(look.y,lookY,1-Math.exp(-dt*6)),lookZ);
  camera.lookAt(look);

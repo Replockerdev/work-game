@@ -1,7 +1,7 @@
 import {BASE,JUNIPER,EXPERT,height,liftWorld,routes,pathX,juniperZ,timberlineZ,expertFaceX,
  expertRoute,chuteRoute,chuteX,timberRoute,timberX,bowlRoute,powderToGladeZ,driftRoute,
  driftX,driftExitX,ridgeDropRoute,ridgeDropX} from './mountain-core.js';
-import {HIGHLINE_TRAILS,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,FIR_GLADE,FIR_HOLLOW_APPROACH} from './highline.js';
+import {HIGHLINE_TRAILS,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,FIR_GLADE,FIR_HOLLOW_APPROACH,LEE_SLOT} from './highline.js';
 
 const sample=(start,end,step,point)=>Array.from(
  {length:Math.ceil((end-start)/step)+1},(_,i)=>point(Math.min(start+i*step,end))
@@ -21,7 +21,7 @@ export const mapTrails=[
  timberlineTrail(expertRoute,expertFaceX,26,382,'expert'),
  timberlineTrail(chuteRoute,chuteX,68,329,'chute'),
  timberlineTrail(timberRoute,timberX,182,322,'glade'),
- ...HIGHLINE_TRAILS
+ ...HIGHLINE_TRAILS,LEE_SLOT
 ];
 const trailById=new Map(mapTrails.map(trail=>[trail.id,trail]));
 const storageKey='work-game-visited-trails-v1';
@@ -90,6 +90,7 @@ export function createTrailMap({canvas,visitedList,unvisitedList,count,visits}){
   ctx.beginPath();
   points.forEach(({x,z},i)=>i?ctx.lineTo(px(x),py(z)):ctx.moveTo(px(x),py(z)));
  }
+ const visibleTrails=()=>mapTrails.filter(trail=>!trail.hidden||visits.has(trail.id));
  function draw(player){
   if(!ready){paintRelief(base);ready=true;}
   ctx.drawImage(base,0,0);
@@ -99,7 +100,7 @@ export function createTrailMap({canvas,visitedList,unvisitedList,count,visits}){
    line(ends);ctx.strokeStyle='#213e52';ctx.lineWidth=1.6;ctx.setLineDash([3,4]);ctx.stroke();
    for(const p of ends){ctx.fillStyle='#213e52';ctx.fillRect(px(p.x)-2.3,py(p.z)-2.3,4.6,4.6);}
   }
-  for(const trail of mapTrails){
+  for(const trail of visibleTrails()){
    const highlighted=trail.id===selected;
    line(trail.points);
    if(trail===FIR_GLADE&&visits.has(trail.id)){
@@ -131,10 +132,11 @@ export function createTrailMap({canvas,visitedList,unvisitedList,count,visits}){
   ctx.fillStyle='#a74427';ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=2.5;ctx.stroke();
  }
  function updateLists(){
-  count.textContent=visits.size+' / '+mapTrails.length+' trails visited';
+  const trails=visibleTrails();
+  count.textContent=visits.size+' / '+trails.length+' trails visited';
   for(const [list,visited] of [[visitedList,true],[unvisitedList,false]]){
    list.replaceChildren();
-   for(const trail of mapTrails.filter(trail=>visits.has(trail.id)===visited)){
+   for(const trail of trails.filter(trail=>visits.has(trail.id)===visited)){
     const [label,color]=types[trail.kind];
     const li=document.createElement('li');
     const button=document.createElement('button');
