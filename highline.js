@@ -111,11 +111,18 @@ export const WEST_NOTCH=trail('west-notch','Juniper Notch','#765b79','chute',6.9
  [863,-192,688],[813,-184,655],[747,-158,588],[672,-132,509],[611,-95,445],
  [582,-45,400],[607,12,373],[676,74,351],[750,123,332],[807,147,324]
 ]);
+const leeSlotShoulder={x:723,z:107,y:342.9};
 export const LEE_SLOT={...trail('lee-slot','Lee Slot','#6d718e','chute',5.8,[
  [745,10,440.6],[739,22,427],[728,34,414],[713,47,399],
  [699,60,378],[691.5,73,357],[694,85,347.7],[705.8,95.5,344.4],
- [714,101,343.5],[723,107,342.9]
+ [714,101,343.5],[leeSlotShoulder.x,leeSlotShoulder.z,leeSlotShoulder.y],
+ [733,119,334],[736,139,322],[730,162,309],[720,189,298],
+ [713,220,276],[709,246,254],[702,280,226],[691,313,195],
+ [691,349,165],[698,379,138],[708,400,123.8],[697,424,107],
+ [677,445,90],[655,466,71],[640,490,50],[635,518,31],
+ [639,536,25],[644,552,23]
 ]),hidden:true};
+const leeSlotShoulderAlong=trailSample(LEE_SLOT,leeSlotShoulder.x,leeSlotShoulder.z).along;
 const leeMouthRibs=[[32,-9.4,5.2,12],[41,10.8,4.4,13]].map(([along,side,width,length])=>{
  const {x,z,dx,dz}=trailPoint(LEE_SLOT,along);
  return {x:x+dz*side,z:z-dx*side,dx,dz,width,length};
@@ -183,10 +190,15 @@ function trailWidth(route,sample){
  return route.width-3.5*smooth((p-.16)/.21)*(1-smooth((p-.60)/.28))
   +13*smooth((p-.71)/.25);
 }
-export function highlineTrailAt(x,z){
+export function highlineTrailAt(x,z,followingLeeSlot=false){
  if(x<28||x>1115||z<-230||z>633)return null;
  const slot=leeSlotSample(x,z);
- if(slot&&slot.along>27&&slot.along<LEE_SLOT.distance-20&&slot.distance<leeSlotWidth(slot.along))return LEE_SLOT;
+ if(slot&&slot.along>27&&slot.along<LEE_SLOT.distance-12&&slot.distance<leeSlotWidth(slot.along)){
+  const sharedNotch=trailSample(WEST_NOTCH,x,z)?.distance<5.4;
+  const meadow=trailSample(MEADOW,x,z),fir=trailSample(FIR_GLADE,x,z);
+  const neighboringLine=Math.min(meadow?.distance??Infinity,fir?.distance??Infinity);
+  if(followingLeeSlot||(!sharedNotch&&slot.distance<neighboringLine))return LEE_SLOT;
+ }
  if(x>780&&x<832&&z>156&&z<232){
   const entry=trailSample(FIR_HOLLOW_APPROACH,x,z);
   if(entry.distance<FIR_HOLLOW_APPROACH.width)return FIR_GLADE;
@@ -221,13 +233,16 @@ function rib(x,z,cx,cz,rx,rz,h){
  return h*Math.exp(-(((x-cx)/rx)**2+((z-cz)/rz)**2));
 }
 // The hidden couloir cuts into the shoulder between Windward and the Notch.
-// Its first and last stretches share the existing snow surfaces.
+// The slot opens into a glade below the shoulder and runs out at Hollow Chair.
 function leeSlotSample(x,z){
- if(x<657||x>780||z<-25||z>129)return null;
+ if(x<593||x>800||z<9||z>551)return null;
  return trailSample(LEE_SLOT,x,z);
 }
 function leeSlotWidth(along){
- return 6.4-1.7*smooth((along-17)/22)+9*smooth((along-80)/39);
+ const upperWidth=6.4-1.7*smooth((along-17)/22)+9*smooth((along-80)/39);
+ const onLower=smooth((along-leeSlotShoulderAlong)/58);
+ const lowerWidth=13.4+2.5*Math.sin(along*.025)+5*smooth((along-LEE_SLOT.distance+78)/58);
+ return mix(upperWidth,lowerWidth,onLower);
 }
 function interpolateSlope(a,b,slopeA,slopeB,t){
  const t2=t*t,t3=t2*t;
@@ -235,7 +250,7 @@ function interpolateSlope(a,b,slopeA,slopeB,t){
 }
 function leeSlotTerrainSample(x,z){
  const points=LEE_SLOT.grades;
- if(x<622||x>823||z<=points[0].z||z>=points.at(-1).z)return null;
+ if(x<576||x>829||z<=points[0].z||z>=points.at(-1).z)return null;
  // Match the branch by depth down the face. Closest-point projection would
  // jump between its upper and lower stretches in the inside of the bend.
  const i=points.findIndex(point=>point.z>=z),a=points[i-1],b=points[i];
@@ -251,7 +266,7 @@ function leeSlotTerrainSample(x,z){
 }
 function leeSlotProfile(s){
  const along=s.along,left=s.across<0;
- const fadeIn=smooth(along/27),fadeOut=smooth((LEE_SLOT.distance-along)/29);
+ const fadeIn=smooth(along/27),fadeOut=smooth((leeSlotShoulderAlong-along)/29);
  const width=leeSlotWidth(along);
  const edge=s.distance-width;
  const sides=1-smooth(edge/29);
@@ -275,9 +290,27 @@ function leeSlotBlend(x,z){
  const clearNotch=notch?smooth((notch.distance-4.5)/9):1;
  return clearBowl*clearNotch;
 }
+const leeLowerNeighbors=[[WEST_NOTCH,2.5,1.8],[WIND_BOWL,19.7,10],[MEADOW,13.5,10],[FIR_GLADE,17,10]];
 function leeSlotHeight(x,z,y){
  const sample=leeSlotTerrainSample(x,z);
  if(!sample)return y;
+ if(z>leeSlotShoulder.z){
+  const {along,distance,across}=sample;
+  const width=leeSlotWidth(along);
+  const sides=1-smooth((distance-width)/22);
+  const start=smooth((along-leeSlotShoulderAlong)/24);
+  const end=smooth((LEE_SLOT.distance-along)/27);
+  // Keep the lift transfer and the centers of the two flanking runs skiable.
+  const terminalDistance=Math.hypot(x-HOLLOW_CHAIR.x,z-HOLLOW_CHAIR.z);
+  const saddle=smooth((terminalDistance-14)/15);
+  let joins=1;
+  for(const [route,clearance,feather] of leeLowerNeighbors){
+   const neighbor=trailSample(route,x,z);
+   if(neighbor)joins*=smooth((neighbor.distance-clearance)/feather);
+  }
+  const drift=.17*Math.sin(along*.073+across*.11)*smooth((z-213)/54);
+  return mix(y,sample.y+drift,start*end*sides*saddle*joins);
+ }
  const {floor,cut}=leeSlotProfile(sample);
  return mix(y,floor,cut*leeSlotBlend(x,z));
 }
@@ -410,7 +443,7 @@ export function highlineHeight(x,z,original){
   coverage=Math.min(1,smoothMax(coverage,strength,.25*Math.min(coverage,strength)+.001));
  }
  if(weight>0)y=mix(y,target/weight,coverage);
- y=leeSlotHeight(x,z,y);
+ if(z<=leeSlotShoulder.z)y=leeSlotHeight(x,z,y);
  if(x>520){
   y=deck(x,z,y,HOLLOW_BASE,50,35);
   y=deck(x,z,y,TREELINE,76,44);
@@ -428,6 +461,7 @@ export function highlineHeight(x,z,original){
   if(x>811&&x<853&&z>130&&z<173)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.bottom);
   if(x>890&&x<932&&z>-232&&z<-190)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.top);
   y=slalomStagingHeight(x,z,y);
+  if(z>leeSlotShoulder.z)y=leeSlotHeight(x,z,y);
  }
  return y;
 }
@@ -484,6 +518,22 @@ export function highlineTrees(height,loading){
  }
  const clear=trees.filter(({x,z})=>x<778||x>935||z<99||z>244||
   trailSample(FIR_HOLLOW_APPROACH,x,z).distance>=FIR_HOLLOW_APPROACH.width);
+ // Keep a skiable gap through the trees, with small groves on both banks.
+ for(let i=clear.length-1;i>=0;i--){
+  const slot=leeSlotSample(clear[i].x,clear[i].z);
+  if(slot&&slot.distance<leeSlotWidth(slot.along)*.60+2)clear.splice(i,1);
+ }
+ for(const [along,side,size] of [
+  [249,-18,1.07],[265,19,.94],[302,16,1.10],[333,-20,.98],
+  [362,16,1.13],[389,-17,.86],[436,-18,1.08],[458,18,.97],
+  [486,-16,1.06],[511,17,.92],[540,-18,1.08]
+ ]){
+  const p=trailPoint(LEE_SLOT,along);
+  const x=p.x+p.dz*side,z=p.z-p.dx*side;
+  const slope=Math.hypot(height(x+1,z)-height(x-1,z),height(x,z+1)-height(x,z-1))*.5;
+  if(height(x,z)>338||slope>1.15||clear.some(tree=>Math.hypot(tree.x-x,tree.z-z)<6))continue;
+  clear.push({x,z,s:size,r:.56+size*.25});
+ }
  // Stagger the first firs on either side of the entrance so the gap
  // reads from above. Leave the lower glade free to widen around them.
  for(const [distance,offset,s] of [[178,-16,1.14],[185,16,1.10],[192,-18,.92],[199,17,1.03]]){

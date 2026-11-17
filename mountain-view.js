@@ -201,35 +201,40 @@ export function createMountain(canvas){
   // Match the two triangles in the rendered terrain cell.
   return u+v<=1?a+(b-a)*u+(c-a)*v:d+(c-d)*(1-u)+(b-d)*(1-v);
  }
- // Old ski tracks peel gently off the bowl and disappear between the ribs.
+ // A few old tracks mark the upper turn and the continuation off the saddle.
  const leeEntrance=LEE_SLOT.points[0];
  const bowlAlong=trailSample(WIND_BOWL,leeEntrance.x,leeEntrance.z).along;
  const trackMaterial=new T.MeshBasicMaterial({
   color:'#6d93a8',side:T.DoubleSide,transparent:true,opacity:.47,depthWrite:false,
   polygonOffset:true,polygonOffsetFactor:-1
  });
- for(const ski of [-.39,.39]){
-  const points=[],indices=[];
-  for(let i=0;i<=100;i++){
-   const along=-24+i*.58;
-   const p=along<0?trailPoint(WIND_BOWL,bowlAlong+along):trailPoint(LEE_SLOT,along);
-   const trace=.39*Math.sin((along+24)*.113);
-   const width=.14*Math.min(1,(along+24)/4,(34-along)/4);
-   for(const side of [-1,1]){
-    const across=ski+trace+side*width;
-    const x=p.x+p.dz*across,z=p.z-p.dx*across;
-    points.push(x,renderedSnow(x,z)+.035,z);
+ function leeTracks(from,to){
+  const divisions=Math.ceil((to-from)/.58);
+  for(const ski of [-.39,.39]){
+   const points=[],indices=[];
+   for(let i=0;i<=divisions;i++){
+    const along=T.MathUtils.lerp(from,to,i/divisions);
+    const p=along<0?trailPoint(WIND_BOWL,bowlAlong+along):trailPoint(LEE_SLOT,along);
+    const trace=.39*Math.sin((along-from)*.113);
+    const width=.14*Math.min(1,(along-from)/4,(to-along)/4);
+    for(const side of [-1,1]){
+     const across=ski+trace+side*width;
+     const x=p.x+p.dz*across,z=p.z-p.dx*across;
+     points.push(x,renderedSnow(x,z)+.035,z);
+    }
+    if(i>0){
+     const k=i*2;
+     indices.push(k-2,k-1,k,k,k-1,k+1);
+    }
    }
-   if(i>0){
-    const k=i*2;
-    indices.push(k-2,k-1,k,k,k-1,k+1);
-   }
+   const geometry=new T.BufferGeometry();
+   geometry.setAttribute('position',new T.Float32BufferAttribute(points,3));
+   geometry.setIndex(indices);
+   scene.add(new T.Mesh(geometry,trackMaterial));
   }
-  const geometry=new T.BufferGeometry();
-  geometry.setAttribute('position',new T.Float32BufferAttribute(points,3));
-  geometry.setIndex(indices);
-  scene.add(new T.Mesh(geometry,trackMaterial));
  }
+ leeTracks(-24,34);
+ leeTracks(151,236);
  // Visible trail-edge poles and arrows make all three routes converge at the base.
  for(const r of routes){for(let section=100;section<=560;section+=30){const z=juniperZ(section);for(const side of [-1,1]){const x=pathX(z,r)+r.width*side;if(r.id==='groomer'&&side===-1&&inBowl(x,z,3))continue;box(.14,1.6,.14,r.color,x,height(x,z)+.8,z);box(.55,.25,.12,r.color,x,height(x,z)+1.55,z);}}
  const z=juniperZ(110),x=pathX(z,r)+r.width*.65,y=height(x,z);
@@ -763,7 +768,7 @@ export function createMountain(canvas){
  const camPos=new T.Vector3(),look=new T.Vector3(),desired=new T.Vector3();
  function render(p,dt,paused=false,ghost=null){time+=paused?0:dt;if(w!==canvas.clientWidth||h!==canvas.clientHeight){w=canvas.clientWidth;h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
  const lift=p.mode==='lift',crashed=p.mode==='crash',config=p.activeLift??JUNIPER;
- const inLeeSlot=!lift&&(p.trailId===LEE_SLOT.id||p.route===LEE_SLOT.name);
+ const inLeeSlot=!lift&&p.z<122&&(p.trailId===LEE_SLOT.id||p.route===LEE_SLOT.name);
  const skiHeight=inLeeSlot&&!crashed&&!p.air?Math.max(p.y,renderedSnow(p.x,p.z)):p.y;
  const offset=liftWorld(config,-.44,0);
  skier.position.set(lift?p.x+offset.x-config.x:p.x,skiHeight+(lift||p.air?.12:0),lift?p.z+offset.z-config.z:p.z);

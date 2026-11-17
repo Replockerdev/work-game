@@ -375,10 +375,10 @@ export const bowlRocks=[
  const z=juniperZ(section);
  return {x:bowlX(z)+offset,z,size,r:size*.83};
 });
-export function trailAt(x,z){
+export function trailAt(x,z,followingLeeSlot=false){
  const expert=expertLine(x,z);
  if(expert)return expert;
- const highline=highlineTrailAt(x,z);
+ const highline=highlineTrailAt(x,z,followingLeeSlot);
  if(highline)return highline;
  if(x>OLD_EAST)return null;
  if(ridgeDropMask(x,z)>.55)return driftRoute;
@@ -845,11 +845,13 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const slalom=style.id==='slalom';
  const carve=(style.id==='carve'||slalom)&&!stopping;
  const shortSkid=style.id==='skid';
- const alpine=highlineTrailAt(p.x,p.z);
+ const followingLeeSlot=p.route===LEE_SLOT.name;
+ const alpine=highlineTrailAt(p.x,p.z,followingLeeSlot);
  const gladeSnow=Math.max(driftDepth(p.x,p.z),ridgeGladeDepth(p.x,p.z),alpine?.kind==='glade'?.65:0);
  const ridge=ridgeDropMask(p.x,p.z);
  const entry=driftEntryMask(p.x,p.z);
- const powder=Math.max(gladeSnow,powderDepth(p.x,p.z),alpine===LEE_SLOT?.56:alpine?.kind==='bowl'?.72:0);
+ const powder=Math.max(gladeSnow,powderDepth(p.x,p.z),
+  alpine===LEE_SLOT?.56*(1-smooth((p.z-422)/110)):alpine?.kind==='bowl'?.72:0);
  const edgeLimit=(slalom?28-8*powder:11.4-3.4*powder)/Math.max(5,p.speed);
  let turnRate=1.55/(1+p.speed*.019);
  if(carve)turnRate=Math.min(turnRate*(slalom?1.45:1),edgeLimit*.88);
@@ -1042,7 +1044,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
   p.bump=skating?.22:.8;events.push('bump');
  }
  const stillAtTimberline=p.route==='Timberline Summit'&&!expert&&powder<=.2&&expertLocal(p.x,p.z).z<20;
- const route=stillAtTimberline?null:trailAt(p.x,p.z);
+ const route=stillAtTimberline?null:trailAt(p.x,p.z,followingLeeSlot);
  if(route&&(alpine||expert||route===driftRoute||p.z>juniperZ(105)&&p.z<570)){
   if(route.name!==p.route){p.route=route.name;events.push('route');}
   p.lastRoute=route.name;
