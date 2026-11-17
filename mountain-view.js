@@ -4,7 +4,7 @@ import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from 
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
 import {FABRIC_SEGMENTS,fabricDepth,gateFlex} from './slalom-gates.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,NEEDLE,WEST_NOTCH,WIND_BOWL,LEE_SLOT,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,leeMouthStone,trailPoint,trailSample} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,NEEDLE,WEST_NOTCH,WIND_BOWL,LEE_SLOT,LEE_SLOT_CHUTE_EXIT,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,leeMouthStone,trailPoint,trailSample} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 function chuteBedrock(xs,rows){
  const floorRock=new Float32Array(xs.length*rows.length);
@@ -81,7 +81,7 @@ export function createMountain(canvas){
   const map=new T.CanvasTexture(canvas);
   map.colorSpace=T.SRGBColorSpace;
   const panel=new T.Mesh(new T.PlaneGeometry(width,panelHeight),new T.MeshBasicMaterial({map}));
-  panel.position.set(x,y,z+facing*.073);
+  panel.position.set(x,y,z+facing*.084);
   panel.rotation.y=facing<0?Math.PI:0;
   parent.add(panel);
   box(width,panelHeight,.14,'#343e3e',x,y,z,parent);
@@ -201,22 +201,26 @@ export function createMountain(canvas){
   // Match the two triangles in the rendered terrain cell.
   return u+v<=1?a+(b-a)*u+(c-a)*v:d+(c-d)*(1-u)+(b-d)*(1-v);
  }
- // A few old tracks mark the upper turn and the continuation off the saddle.
+ // The tracks through the exit start before the chute opens onto the saddle.
  const leeEntrance=LEE_SLOT.points[0];
  const bowlAlong=trailSample(WIND_BOWL,leeEntrance.x,leeEntrance.z).along;
+ const leeExitAlong=trailSample(LEE_SLOT,LEE_SLOT_CHUTE_EXIT.x,LEE_SLOT_CHUTE_EXIT.z).along;
  const trackMaterial=new T.MeshBasicMaterial({
   color:'#6d93a8',side:T.DoubleSide,transparent:true,opacity:.47,depthWrite:false,
   polygonOffset:true,polygonOffsetFactor:-1
  });
- function leeTracks(from,to){
+ const lowerTrackMaterial=trackMaterial.clone();
+ lowerTrackMaterial.color.set('#967fae');
+ lowerTrackMaterial.opacity=.6;
+ function leeTracks(from,to,material,spacing,halfWidth){
   const divisions=Math.ceil((to-from)/.58);
-  for(const ski of [-.39,.39]){
+  for(const ski of [-spacing,spacing]){
    const points=[],indices=[];
    for(let i=0;i<=divisions;i++){
     const along=T.MathUtils.lerp(from,to,i/divisions);
     const p=along<0?trailPoint(WIND_BOWL,bowlAlong+along):trailPoint(LEE_SLOT,along);
     const trace=.39*Math.sin((along-from)*.113);
-    const width=.14*Math.min(1,(along-from)/4,(to-along)/4);
+    const width=halfWidth*Math.min(1,(along-from)/4,(to-along)/4);
     for(const side of [-1,1]){
      const across=ski+trace+side*width;
      const x=p.x+p.dz*across,z=p.z-p.dx*across;
@@ -230,11 +234,11 @@ export function createMountain(canvas){
    const geometry=new T.BufferGeometry();
    geometry.setAttribute('position',new T.Float32BufferAttribute(points,3));
    geometry.setIndex(indices);
-   scene.add(new T.Mesh(geometry,trackMaterial));
+   scene.add(new T.Mesh(geometry,material));
   }
  }
- leeTracks(-24,34);
- leeTracks(151,236);
+ leeTracks(-24,34,trackMaterial,.39,.14);
+ leeTracks(leeExitAlong-28,leeExitAlong+134,lowerTrackMaterial,.58,.19);
  // Visible trail-edge poles and arrows make all three routes converge at the base.
  for(const r of routes){for(let section=100;section<=560;section+=30){const z=juniperZ(section);for(const side of [-1,1]){const x=pathX(z,r)+r.width*side;if(r.id==='groomer'&&side===-1&&inBowl(x,z,3))continue;box(.14,1.6,.14,r.color,x,height(x,z)+.8,z);box(.55,.25,.12,r.color,x,height(x,z)+1.55,z);}}
  const z=juniperZ(110),x=pathX(z,r)+r.width*.65,y=height(x,z);
@@ -284,6 +288,16 @@ export function createMountain(canvas){
  const leeFork=trailPoint(LEE_SLOT,4);
  waymark('◆ Lee Slot →',leeFork.x-7*leeApproach.dz,leeFork.z+7*leeApproach.dx,
   '#543e66',5.6,Math.atan2(leeApproach.dx,leeApproach.dz),1.12);
+ const leeExit=trailPoint(LEE_SLOT,leeExitAlong+4);
+ const exitApproach=trailPoint(LEE_SLOT,leeExitAlong-12);
+ waymark('Lee Slot · Hollow Base →',leeExit.x-6.8*leeExit.dz,leeExit.z+6.8*leeExit.dx,
+  '#543e66',8.4,Math.atan2(exitApproach.dx,exitApproach.dz),1.5);
+ for(const offset of [38,84,122]){
+  const p=trailPoint(LEE_SLOT,leeExitAlong+offset);
+  const x=p.x+8*p.dz,z=p.z-8*p.dx,y=renderedSnow(x,z);
+  box(.16,2.3,.16,'#725c49',x,y+1.15,z);
+  box(.53,.69,.53,'#715083',x,y+1.96,z);
+ }
  waymark('Juniper return →',HOLLOW_BASE.x-14,HOLLOW_BASE.z+15,'#3b6252',6);
  const raceRed='#b42632',raceBlue=new T.MeshBasicMaterial({
   color:'#2176b8',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2

@@ -111,18 +111,18 @@ export const WEST_NOTCH=trail('west-notch','Juniper Notch','#765b79','chute',6.9
  [863,-192,688],[813,-184,655],[747,-158,588],[672,-132,509],[611,-95,445],
  [582,-45,400],[607,12,373],[676,74,351],[750,123,332],[807,147,324]
 ]);
-const leeSlotShoulder={x:723,z:107,y:342.9};
+export const LEE_SLOT_CHUTE_EXIT={x:723,z:107,y:342.9};
 export const LEE_SLOT={...trail('lee-slot','Lee Slot','#6d718e','chute',5.8,[
  [745,10,440.6],[739,22,427],[728,34,414],[713,47,399],
  [699,60,378],[691.5,73,357],[694,85,347.7],[705.8,95.5,344.4],
- [714,101,343.5],[leeSlotShoulder.x,leeSlotShoulder.z,leeSlotShoulder.y],
+ [714,101,343.5],[LEE_SLOT_CHUTE_EXIT.x,LEE_SLOT_CHUTE_EXIT.z,LEE_SLOT_CHUTE_EXIT.y],
  [733,119,334],[736,139,322],[730,162,309],[720,189,298],
  [713,220,276],[709,246,254],[702,280,226],[691,313,195],
  [691,349,165],[698,379,138],[708,400,123.8],[697,424,107],
  [677,445,90],[655,466,71],[640,490,50],[635,518,31],
  [639,536,25],[644,552,23]
 ]),hidden:true};
-const leeSlotShoulderAlong=trailSample(LEE_SLOT,leeSlotShoulder.x,leeSlotShoulder.z).along;
+const leeSlotShoulderAlong=trailSample(LEE_SLOT,LEE_SLOT_CHUTE_EXIT.x,LEE_SLOT_CHUTE_EXIT.z).along;
 const leeMouthRibs=[[32,-9.4,5.2,12],[41,10.8,4.4,13]].map(([along,side,width,length])=>{
  const {x,z,dx,dz}=trailPoint(LEE_SLOT,along);
  return {x:x+dz*side,z:z-dx*side,dx,dz,width,length};
@@ -294,7 +294,7 @@ const leeLowerNeighbors=[[WEST_NOTCH,2.5,1.8],[WIND_BOWL,19.7,10],[MEADOW,13.5,1
 function leeSlotHeight(x,z,y){
  const sample=leeSlotTerrainSample(x,z);
  if(!sample)return y;
- if(z>leeSlotShoulder.z){
+ if(z>LEE_SLOT_CHUTE_EXIT.z){
   const {along,distance,across}=sample;
   const width=leeSlotWidth(along);
   const sides=1-smooth((distance-width)/22);
@@ -443,7 +443,7 @@ export function highlineHeight(x,z,original){
   coverage=Math.min(1,smoothMax(coverage,strength,.25*Math.min(coverage,strength)+.001));
  }
  if(weight>0)y=mix(y,target/weight,coverage);
- if(z<=leeSlotShoulder.z)y=leeSlotHeight(x,z,y);
+ if(z<=LEE_SLOT_CHUTE_EXIT.z)y=leeSlotHeight(x,z,y);
  if(x>520){
   y=deck(x,z,y,HOLLOW_BASE,50,35);
   y=deck(x,z,y,TREELINE,76,44);
@@ -461,7 +461,7 @@ export function highlineHeight(x,z,original){
   if(x>811&&x<853&&z>130&&z<173)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.bottom);
   if(x>890&&x<932&&z>-232&&z<-190)y=highlineTerminal(x,z,y,HIGHLINE_CHAIR.top);
   y=slalomStagingHeight(x,z,y);
-  if(z>leeSlotShoulder.z)y=leeSlotHeight(x,z,y);
+  if(z>LEE_SLOT_CHUTE_EXIT.z)y=leeSlotHeight(x,z,y);
  }
  return y;
 }

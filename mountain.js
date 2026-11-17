@@ -1,6 +1,6 @@
 import {createMountain} from './mountain-view.js';
 import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,activeTurnStyle,nextTurnStyle,BASE,EXPERT,LIFT_FAST_FORWARD,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
-import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_START,RACE_GATES,WIND_BOWL,LEE_SLOT,inSlalomStaging} from './highline.js';
+import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_START,RACE_GATES,WIND_BOWL,LEE_SLOT,LEE_SLOT_CHUTE_EXIT,inSlalomStaging} from './highline.js';
 import {createTrailMap,mapTrails,readVisits,saveVisits} from './trail-map.js';
 import {readRaceBest,saveRaceBest,racePose,raceGhostAt} from './race-ghost.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
@@ -122,7 +122,10 @@ function ui(){
  const raceStatus=$('raceStatus');
  const atStart=p.mode==='ski'&&inSlalomStaging(p.x,p.z);
  const atSaddle=alpine&&Math.hypot(p.x-TREELINE.x,p.z-TREELINE.z)<53;
- const showSlalomDirection=p.mode==='ski'&&atSaddle;
+ const leeExitOffset=p.z-LEE_SLOT_CHUTE_EXIT.z;
+ const continuingLeeSlot=p.mode==='ski'&&p.route===LEE_SLOT.name&&leeExitOffset>-23&&leeExitOffset<112
+  &&Math.abs(p.x-LEE_SLOT_CHUTE_EXIT.x)<44;
+ const showSlalomDirection=p.mode==='ski'&&atSaddle&&!continuingLeeSlot;
  raceStatus.hidden=!p.race&&!atStart&&!showSlalomDirection&&(p.route!==RACE.name||!raceBest);
  if(p.race){
   const side=RACE_GATES[p.race.next].side;
@@ -142,13 +145,15 @@ function ui(){
  const leeEntrance=LEE_SLOT.points[0];
  const approachingLeeSlot=p.mode==='ski'&&p.trailId===WIND_BOWL.id&&p.z<leeEntrance.z+24
   &&Math.hypot(p.x-leeEntrance.x,p.z-leeEntrance.z)<62;
- prompt.hidden=!near&&!lift&&!approachingLeeSlot&&(alpine?!atSaddle&&!atHighlineSummit:expertDescent||p.route===driftRoute.name||p.z<565&&!atJuniperSummit);
+ prompt.hidden=!near&&!lift&&!approachingLeeSlot&&!continuingLeeSlot&&
+  (alpine?!atSaddle&&!atHighlineSummit:expertDescent||p.route===driftRoute.name||p.z<565&&!atJuniperSummit);
  $('interact').hidden=!near&&!atTop;
  $('interact').textContent=atTop?'E · Unload':'E · Board chair';
  $('promptText').textContent=atTop?'Your chair will wait here.':
   lift?(p.activeLift.autoUnload?'Unloading at '+p.activeLift.landing+'.':'Press E to unload when you reach the summit.'):
   near?'Press E to board '+near.name+'.':
   approachingLeeSlot?'Lee Slot · Take the right fork at the purple sign':
+  continuingLeeSlot?'Lee Slot to Hollow Base · Follow the purple markers':
   atHighlineSummit?'Turn downhill to pick a bowl or chute.':
   atSaddle?'Highline Chair ←    Fir Hollow ahead    Meadow Way →':
   atJuniperSummit?'Glades ←    Park straight ahead    Groomer & Snowdrift →':
