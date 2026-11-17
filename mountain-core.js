@@ -1,4 +1,4 @@
-import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,HIGHLINE_CHUTE_ROCKS,RACE_GATE_HALF_WIDTH,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
+import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,RACE_GATE_HALF_WIDTH,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
 import {Quaternion,Vector3} from './vendor/three.module.js';
 import {advanceCrashBody,advanceCrashLimbs,createCrashLimbs,crashContacts,crashHipHeight,obstacleDistance,obstacleNormal,obstacleTop} from './crash-physics.js';
 import {makeGateHardware,sweepGate,stepGateSprings,springGate,gateCrashColliders} from './slalom-gates.js';
@@ -220,13 +220,6 @@ export function liftChairPosition(lift,seconds){
 }
 export const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
-export const chuteFloorRocks=[
- ...[[87,-1.1,1.55],[112,.85,1.45],[142,-.85,1.5],
-  [206,.95,1.46],[237,-.9,1.55],[270,2.15,1.58]].map(([section,side,size])=>({
-   ...liftWorld(EXPERT,chuteX(section)+side,timberlineZ(section)),size
-  })),
- ...HIGHLINE_CHUTE_ROCKS
-].map(rock=>({...rock,r:rock.size*.87,chuteRock:true}));
 export const routes=[{id:'groomer',name:'The Groomer',offset:-103,width:23,color:'#72bfb4'},{id:'park',name:'The Park',offset:0,width:24,color:'#e3a36b'},{id:'glades',name:'The Glades',offset:103,width:36,color:'#8da776'}];
 export const pathX=(z,r)=>r.offset*Math.sin(Math.PI*clamp((juniperSection(z)-60)/530,0,1));
 const groomer=routes[0];
@@ -742,7 +735,7 @@ function timberlineDrop(x,z,nextX,nextZ){
 }
 function safeRecovery(x,z,colliders){
  if(x<SNOW_WEST+12||x>SNOW_EAST-12||z<SNOW_NORTH+14||z>655)return false;
- if(chuteWall(x,z)>.24||colliders.some(o=>obstacleDistance(x,z,o)<(o.chuteRock?1.1:2.3)))return false;
+ if(chuteWall(x,z)>.24||colliders.some(o=>obstacleDistance(x,z,o)<2.3))return false;
  const grade=Math.hypot(height(x+1,z)-height(x-1,z),height(x,z+1)-height(x,z-1))/2;
  return grade<1.8;
 }
@@ -1032,7 +1025,7 @@ export function step(p,input,dt,colliders=[]){const events=[];
   const inward=Math.max(0,-forwardX*nx-forwardZ*nz);
   const impactSpeed=p.speed*inward;
   const skating=p.drive==='skate'&&!p.air;
-  if((o.chuteRock&&p.speed>2)||(!skating&&impactSpeed>=3.3)){
+  if(!skating&&impactSpeed>=3.3){
    startCrash(p,colliders,nx,nz,impactSpeed);events.push('crash');return events;
   }
   p.x=clamp(p.x+nx*(.8-clearance),SNOW_WEST+10,SNOW_EAST-10);

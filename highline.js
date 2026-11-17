@@ -116,16 +116,6 @@ export const HOLLOW_RETURN=trail('hollow-return','Hollow Return','#68a69f','link
  [137,605,2.8],[48,610,.2]
 ]);
 export const HIGHLINE_TRAILS=[HOLLOW_LINK,MEADOW,RACE,FIR_GLADE,SUN_BOWL,WIND_BOWL,NEEDLE,WEST_NOTCH,HOLLOW_RETURN];
-export const HIGHLINE_CHUTE_ROCKS=[
- [NEEDLE,82,-.85,1.48],[NEEDLE,133,.65,1.35],[NEEDLE,187,-.7,1.44],
- [NEEDLE,233,.85,1.38],[NEEDLE,273,-2.3,1.26],
- [WEST_NOTCH,115,.68,1.35],[WEST_NOTCH,167,-.68,1.30],[WEST_NOTCH,219,.62,1.40],
- [WEST_NOTCH,270,.78,1.30],[WEST_NOTCH,322,-.86,1.35],[WEST_NOTCH,373,.79,1.28],
- [WEST_NOTCH,424,.72,1.40],[WEST_NOTCH,474,-1.3,1.22]
-].map(([route,along,side,size])=>{
- const p=trailPoint(route,along);
- return {x:p.x+p.dz*side,z:p.z-p.dx*side,size};
-});
 
 export function trailPoint(route,distance){
  const along=clamp(distance,0,route.distance);

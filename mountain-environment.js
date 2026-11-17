@@ -19,11 +19,12 @@ export function snowMaterial(renderer){
  tex.repeat.set((SNOW_EAST-SNOW_WEST)/5,(SNOW_SOUTH-SNOW_NORTH)/5);tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
  const material=new T.MeshStandardMaterial({vertexColors:true,map:tex,roughness:.96});
  material.onBeforeCompile=shader=>{
- shader.vertexShader='attribute float rockExposure; varying float vRockExposure; varying vec3 vSnowWorld;\n'+shader.vertexShader;
- shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvSnowWorld=(modelMatrix*vec4(transformed,1.0)).xyz;\nvRockExposure=rockExposure;');
- shader.fragmentShader='varying float vRockExposure; varying vec3 vSnowWorld;\n'+shader.fragmentShader;
+ const surfaceVaryings='varying float vRockExposure; varying float vFloorRock; varying vec3 vSnowWorld;\n';
+ shader.vertexShader='attribute float rockExposure; attribute float floorRock;\n'+surfaceVaryings+shader.vertexShader;
+ shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvSnowWorld=(modelMatrix*vec4(transformed,1.0)).xyz;\nvRockExposure=rockExposure;\nvFloorRock=floorRock;');
+ shader.fragmentShader=surfaceVaryings+shader.fragmentShader;
  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
-if(vRockExposure>.01){
+if(vRockExposure>.01||vFloorRock>.01){
  vec3 p=vSnowWorld;
  float beds=p.y*.94+p.x*.17+sin(p.z*.44)*.66;
  float seam=pow(.5+.5*sin(beds*1.65),11.0);
@@ -36,6 +37,10 @@ if(vRockExposure>.01){
  float grain=mix(mix(grains.x,grains.y,f.x),mix(grains.z,grains.w,f.x),f.y)-.5;
  float textureShade=1.21+.22*sin(beds)-.42*seam-.25*fractures+.18*grain;
  diffuseColor.rgb*=mix(1.0,textureShade,vRockExposure);
+ float edgeGrain=grain*.25+.07*sin(p.x*2.8-p.z*2.1);
+ float floorCoverage=smoothstep(.25,.53,vFloorRock+edgeGrain);
+ vec3 stone=mix(vec3(.095,.119,.132),vec3(.25,.222,.188),.36+(grain+.5)*.42);
+ diffuseColor.rgb=mix(diffuseColor.rgb,stone*textureShade,floorCoverage);
 }
 `);};return material;
 }

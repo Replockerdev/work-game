@@ -23,7 +23,7 @@ export function obstacleNormal(x,z,obstacle,forwardX,forwardZ){
  const length=Math.hypot(nx,nz);
  return length?[nx/length,nz/length]:[-forwardX,-forwardZ];
 }
-export const obstacleTop=(o,height)=>o.top??height(o.x,o.z)+(o.chuteRock?o.size*1.32:o.size??5);
+export const obstacleTop=(o,height)=>o.top??height(o.x,o.z)+(o.size??5);
 
 export const crashHipHeight=.75;
 export const crashBootOffset=new Vector3(0,.28,-.06);

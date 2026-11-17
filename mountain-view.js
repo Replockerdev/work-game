@@ -1,11 +1,52 @@
 import * as T from './vendor/three.module.js';
-import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,liftSupports,liftCycleSeconds,liftTerminalTurn,liftChairPosition,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,chuteHalfWidth,chuteRockMask,bowlX,bowlWidth,inBowl,bowlRocks,chuteFloorRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,powderToGladeMask,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ,slalomHardware,crashObstacles} from './mountain-core.js';
+import {height,pathX,routes,jumps,BASE,obstacles,LIFT,JUNIPER,EXPERT,liftWorld,liftGround,liftCableHeight,liftSupports,liftCycleSeconds,liftTerminalTurn,liftChairPosition,expertFaceX,expertLine,expertLocal,chuteX,chuteRoute,cliffDrops,chuteHalfWidth,chuteRockMask,bowlX,bowlWidth,inBowl,bowlRocks,bowlStart,bowlEnd,powderDepth,powderCliffOffset,powderCliffSpan,powderToGladeMask,driftDepth,snowDepth,ridgeDropLip,ridgeDropMask,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,juniperZ,timberlineZ,slalomHardware,crashObstacles} from './mountain-core.js';
 import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from './mountain-environment.js';
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
 import {FABRIC_SEGMENTS,fabricDepth,gateFlex} from './slalom-gates.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,NEEDLE,WEST_NOTCH,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
+function chuteBedrock(xs,rows){
+ const floorRock=new Float32Array(xs.length*rows.length);
+ const splitrock=[
+  [92,-1.7,2.4,4.3],[111,2.3,2.1,3.2],[147,-1.1,2.5,4.1],
+  [204,1.8,2.6,5.3],[242,-2.1,3.2,4.9],[271,3.8,2.6,3.4]
+ ].map(([section,side,width,length])=>{
+  const x=chuteX(section)+side;
+  const at=liftWorld(EXPERT,x,timberlineZ(section));
+  const ahead=liftWorld(EXPERT,chuteX(section+1)+side,timberlineZ(section+1));
+  const span=Math.hypot(ahead.x-at.x,ahead.z-at.z);
+  return {...at,dx:(ahead.x-at.x)/span,dz:(ahead.z-at.z)/span,width,length};
+ });
+ const highline=[
+  [NEEDLE,80,-1.4,2.6,4.3],[NEEDLE,139,.9,2.4,3.9],[NEEDLE,185,-1.7,2.5,5.2],
+  [NEEDLE,239,1.9,2.2,3.7],[NEEDLE,278,-3.9,2.7,4.6],
+  [WEST_NOTCH,119,1.4,2.6,4.1],[WEST_NOTCH,171,-1.7,2.1,4.4],[WEST_NOTCH,229,.7,2.4,3.4],
+  [WEST_NOTCH,267,1.4,2.5,4.9],[WEST_NOTCH,326,-1.6,2.4,3.9],[WEST_NOTCH,379,1.4,2.7,5.1],
+  [WEST_NOTCH,425,1,2.5,3.3],[WEST_NOTCH,481,-2.6,3,4.1]
+ ].map(([route,along,side,width,length])=>{
+  const {x,z,dx,dz}=trailPoint(route,along);
+  return {x:x+dz*side,z:z-dx*side,dx,dz,width,length};
+ });
+ for(const patch of [...splitrock,...highline]){
+  const reach=patch.width+patch.length;
+  for(let row=0;row<rows.length;row++){
+   const z=rows[row],dz=z-patch.z;
+   if(Math.abs(dz)>reach)continue;
+   for(let col=0;col<xs.length;col++){
+    const x=xs[col],dx=x-patch.x;
+    if(Math.abs(dx)>reach)continue;
+    const along=(dx*patch.dx+dz*patch.dz)/patch.length;
+    const across=(dx*patch.dz-dz*patch.dx)/patch.width;
+    const outline=(terrainNoise(x*.38,z*.44)-.5)*.36;
+    const mask=1-T.MathUtils.smoothstep(Math.hypot(across+.28*along,along)+outline,.20,1.17);
+    const index=row*xs.length+col;
+    floorRock[index]=Math.max(floorRock[index],mask);
+   }
+  }
+ }
+ return floorRock;
+}
 export function createMountain(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
  const scene=new T.Scene();scene.background=new T.Color('#a5c9dc');scene.fog=new T.Fog('#c0d4e2',1200,5500);const camera=new T.PerspectiveCamera(64,1,.15,9200);
@@ -138,6 +179,7 @@ export function createMountain(canvas){
   color.multiplyScalar(.985+.03*tint);colors.push(color.r,color.g,color.b);}
  geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));
  geo.setAttribute('rockExposure',new T.BufferAttribute(rockExposure,1));
+ geo.setAttribute('floorRock',new T.BufferAttribute(chuteBedrock(xs,rows),1));
  geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
  // Visible trail-edge poles and arrows make all three routes converge at the base.
  for(const r of routes){for(let section=100;section<=560;section+=30){const z=juniperZ(section);for(const side of [-1,1]){const x=pathX(z,r)+r.width*side;if(r.id==='groomer'&&side===-1&&inBowl(x,z,3))continue;box(.14,1.6,.14,r.color,x,height(x,z)+.8,z);box(.55,.25,.12,r.color,x,height(x,z)+1.55,z);}}
@@ -165,7 +207,7 @@ export function createMountain(canvas){
  trailSign('◆  Timberline Chair  →',expertSignX,expertSignY+1.85,expertSignZ,'#354356',5.4);
  const trees=obstacles();
  const forest=detailedTrees(scene,[...trees,...surroundingForest()]);
- const colliders=[...trees,...bowlRocks,...chuteFloorRocks,...addRange(scene)];
+ const colliders=[...trees,...bowlRocks,...addRange(scene)];
  function waymark(label,x,z,color,width=5.3,heading=0){
   const y=height(x,z);
   const post=new T.Group();
@@ -360,27 +402,11 @@ export function createMountain(canvas){
   }else paintGate(gate);
  }
  const rockShape=new T.DodecahedronGeometry(1,0);
- const screeShape=new T.IcosahedronGeometry(1,1);
- const screeVertices=screeShape.attributes.position,screeColors=[];
- const stone=new T.Color('#45545e'),weathered=new T.Color('#7b7269'),dust=new T.Color('#dfe9ee');
- for(let i=0;i<screeVertices.count;i++){
-  const x=screeVertices.getX(i),y=screeVertices.getY(i),z=screeVertices.getZ(i);
-  const edge=terrainNoise(x*2.3+y,z*3.1-y);
-  const profile=.94+.19*edge;
-  screeVertices.setXYZ(i,x*profile+.15*y,y*profile,z*(1.04-.14*edge)-.14*y);
-  const color=stone.clone().lerp(weathered,edge*.62);
-  color.lerp(dust,.88*T.MathUtils.smoothstep(y+.3*edge,.75,1.17));
-  screeColors.push(color.r,color.g,color.b);
- }
- screeShape.setAttribute('color',new T.Float32BufferAttribute(screeColors,3));
- screeShape.computeVertexNormals();
- const screeMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:.95,flatShading:true});
- for(const [i,{x,z,size,chuteRock}] of [...bowlRocks,...chuteFloorRocks].entries()){
-  const rock=mesh(chuteRock?screeShape:rockShape,i%2?'#69767b':'#535e64');
-  if(chuteRock)rock.material=screeMaterial;
-  rock.scale.set(size,size*(chuteRock?.91:.72),size*(chuteRock?.96:.85));
-  rock.rotation.set(chuteRock?.21*Math.sin(i*2.8):.18*i,.63*i,chuteRock?.24*Math.cos(i*1.4):-.27);
-  rock.position.set(x,height(x,z)+size*(chuteRock?.45:.18),z);
+ for(const [i,{x,z,size}] of bowlRocks.entries()){
+  const rock=mesh(rockShape,i%2?'#69767b':'#535e64');
+  rock.scale.set(size,size*.72,size*.85);
+  rock.rotation.set(.18*i,.63*i,-.27);
+  rock.position.set(x,height(x,z)+size*.18,z);
  }
  function makeLift(config){
   const group=new T.Group();
