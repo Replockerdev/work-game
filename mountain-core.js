@@ -982,48 +982,33 @@ export function step(p,input,dt,colliders=[]){const events=[];
  const distance=Math.hypot(horizontal,p.y-oldY);
  p.distance+=distance;
  p.horizontalSpeed=horizontal/dt;
- // Resolve hardware before timing a gate crossing, including the finish.
+ // Let light contact flex the gate while the skier keeps the same line.
  const gateHit=p.x>OLD_EAST?sweepGate(p,{x:oldX,y:oldY,z:oldZ,angle:oldAngle},slalomHardware(),fallX,fallZ):null;
  if(gateHit){
   const {gate,struck,t,nx,nz,depth}=gateHit;
-  const stoppedAt=Math.max(0,t-.018/Math.max(horizontal,.018));
-  const pushOut=depth>0?depth+.018:0;
-  p.x=oldX+actualX*stoppedAt+nx*pushOut;
-  p.z=oldZ+actualZ*stoppedAt+nz*pushOut;
-  p.y=p.air?Math.max(height(p.x,p.z),oldY+(p.y-oldY)*stoppedAt):height(p.x,p.z);
-  p.distance-=distance*(1-stoppedAt);
-  p.horizontalSpeed*=stoppedAt;
   const inward=Math.max(0,-forwardX*nx-forwardZ*nz);
   const impact=p.speed*inward;
   const along=forwardX*gate.dx+forwardZ*gate.dz;
   const away=-nx*gate.dx-nz*gate.dz;
   if(p.speed>.2)springGate(p,gate,struck,Math.sign(Math.abs(away)>.15?away:along)||1,Math.max(impact,p.speed*.25));
-  const across=(p.z-gate.z)*gate.dx-(p.x-gate.x)*gate.dz;
+  const hitX=oldX+actualX*t,hitZ=oldZ+actualZ*t;
+  const across=(hitZ-gate.z)*gate.dx-(hitX-gate.x)*gate.dz;
   const edgeClip=Math.abs(across)>=(gate.side?RACE_GATE_HALF_WIDTH:.22);
   if(edgeClip&&gate.terminalSide&&p.race?.next===gate.raceIndex)p.race.finishClip=gate.terminalSide;
   if(!edgeClip&&p.drive!=='skate'&&impact>=5.5){
+   // A direct hit still stops at the point of impact.
+   const stoppedAt=Math.max(0,t-.018/Math.max(horizontal,.018));
+   const pushOut=depth>0?depth+.018:0;
+   p.x=oldX+actualX*stoppedAt+nx*pushOut;
+   p.z=oldZ+actualZ*stoppedAt+nz*pushOut;
+   p.y=p.air?Math.max(height(p.x,p.z),oldY+(p.y-oldY)*stoppedAt):height(p.x,p.z);
+   p.distance-=distance*(1-stoppedAt);
+   p.horizontalSpeed*=stoppedAt;
    startCrash(p,colliders,nx,nz,impact,true);
    if(p.race)p.race.time+=dt;
    events.push('crash');
-  }else{
-   const side=Math.sign(across)||1;
-   if(edgeClip){
-    // Keep moving along the outside of the post even when the forward sweep is blocked.
-    const clearance=Math.min(9,1.8+p.speed*.35)*dt;
-    p.x-=gate.dz*side*clearance;
-    p.z+=gate.dx*side*clearance;
-    if(!p.air)p.y=height(p.x,p.z);
-   }
-   const slide=edgeClip?Math.max(0,.34-side*(forwardZ*gate.dx-forwardX*gate.dz)):0;
-   const vx=edgeClip?forwardX-gate.dz*side*slide:forwardX+nx*inward*1.18;
-   const vz=edgeClip?forwardZ+gate.dx*side*slide:forwardZ+nz*inward*1.18;
-   p.speed*=edgeClip?1-Math.min(.12,impact*.008):Math.min(.8,Math.hypot(vx,vz)*.8);
-   p.angle=p.travelAngle=Math.atan2(vx,vz);
-   p.yaw=0;p.slip=0;
-   if(!p.air)p.groundV=-grade*p.speed;
-   advanceRace(p,oldX,oldZ,dt,events);
+   return events;
   }
-  return events;
  }
  if(horizontal>1e-5){
   for(const offset of [-.42,0,.42]){
