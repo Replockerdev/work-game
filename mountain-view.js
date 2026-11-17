@@ -9,24 +9,25 @@ const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SO
 function chuteBedrock(xs,rows){
  const floorRock=new Float32Array(xs.length*rows.length);
  const splitrock=[
-  [92,-1.7,2.4,4.3],[111,2.3,2.1,3.2],[147,-1.1,2.5,4.1],
-  [204,1.8,2.6,5.3],[242,-2.1,3.2,4.9],[271,3.8,2.6,3.4]
- ].map(([section,side,width,length])=>{
+  [109,6.9,3.1,9.8,true],[165,-3.8,2.8,7.1,true],
+  [194,.25,1.9,3.9,false],[221,8.5,3.8,8.4,true]
+ ].map(([section,side,width,length,wall])=>{
   const x=chuteX(section)+side;
   const at=liftWorld(EXPERT,x,timberlineZ(section));
   const ahead=liftWorld(EXPERT,chuteX(section+1)+side,timberlineZ(section+1));
   const span=Math.hypot(ahead.x-at.x,ahead.z-at.z);
-  return {...at,dx:(ahead.x-at.x)/span,dz:(ahead.z-at.z)/span,width,length};
+  return {...at,dx:(ahead.x-at.x)/span,dz:(ahead.z-at.z)/span,width,length,
+   wallSide:wall?-Math.sign(side):0};
  });
  const highline=[
-  [NEEDLE,80,-1.4,2.6,4.3],[NEEDLE,139,.9,2.4,3.9],[NEEDLE,185,-1.7,2.5,5.2],
-  [NEEDLE,239,1.9,2.2,3.7],[NEEDLE,278,-3.9,2.7,4.6],
-  [WEST_NOTCH,119,1.4,2.6,4.1],[WEST_NOTCH,171,-1.7,2.1,4.4],[WEST_NOTCH,229,.7,2.4,3.4],
-  [WEST_NOTCH,267,1.4,2.5,4.9],[WEST_NOTCH,326,-1.6,2.4,3.9],[WEST_NOTCH,379,1.4,2.7,5.1],
-  [WEST_NOTCH,425,1,2.5,3.3],[WEST_NOTCH,481,-2.6,3,4.1]
- ].map(([route,along,side,width,length])=>{
+  [NEEDLE,100,-7.6,3.9,9.2,true],[NEEDLE,158,.6,2.1,4.4,false],
+  [NEEDLE,210,6.5,3.1,10.3,true],
+  [WEST_NOTCH,117,5.8,3.3,7.4,true],[WEST_NOTCH,201,-6,3,10.1,true],
+  [WEST_NOTCH,306,-5.7,3.2,8.6,true],[WEST_NOTCH,348,-.15,2.1,3.1,false],
+  [WEST_NOTCH,410,5.6,3.2,11.3,true]
+ ].map(([route,along,side,width,length,wall])=>{
   const {x,z,dx,dz}=trailPoint(route,along);
-  return {x:x+dz*side,z:z-dx*side,dx,dz,width,length};
+  return {x:x+dz*side,z:z-dx*side,dx,dz,width,length,wallSide:wall?Math.sign(side):0};
  });
  for(const patch of [...splitrock,...highline]){
   const reach=patch.width+patch.length;
@@ -38,8 +39,15 @@ function chuteBedrock(xs,rows){
     if(Math.abs(dx)>reach)continue;
     const along=(dx*patch.dx+dz*patch.dz)/patch.length;
     const across=(dx*patch.dz-dz*patch.dx)/patch.width;
-    const outline=(terrainNoise(x*.38,z*.44)-.5)*.36;
-    const mask=1-T.MathUtils.smoothstep(Math.hypot(across+.28*along,along)+outline,.20,1.17);
+    const acrossSeam=across+.28*along;
+    let outline=Math.hypot(acrossSeam,along);
+    if(patch.wallSide){
+     // A narrower offshoot runs from the rock face onto the snow at the foot.
+     const tongue=Math.hypot((acrossSeam+.68*patch.wallSide)*1.55,(along-.3)*1.65)+.14;
+     outline=Math.min(outline,tongue);
+    }
+    const edgeNoise=(terrainNoise(x*.32,z*.39)-.5)*.48;
+    const mask=1-T.MathUtils.smoothstep(outline+edgeNoise,.20,1.13);
     const index=row*xs.length+col;
     floorRock[index]=Math.max(floorRock[index],mask);
    }

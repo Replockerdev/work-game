@@ -37,10 +37,13 @@ if(vRockExposure>.01||vFloorRock>.01){
  float grain=mix(mix(grains.x,grains.y,f.x),mix(grains.z,grains.w,f.x),f.y)-.5;
  float textureShade=1.21+.22*sin(beds)-.42*seam-.25*fractures+.18*grain;
  diffuseColor.rgb*=mix(1.0,textureShade,vRockExposure);
- float edgeGrain=grain*.25+.07*sin(p.x*2.8-p.z*2.1);
+ float edgeGrain=grain*.32+.07*sin(p.x*2.8-p.z*2.1);
  float floorCoverage=smoothstep(.25,.53,vFloorRock+edgeGrain);
- vec3 stone=mix(vec3(.095,.119,.132),vec3(.25,.222,.188),.36+(grain+.5)*.42);
- diffuseColor.rgb=mix(diffuseColor.rgb,stone*textureShade,floorCoverage);
+ float join=smoothstep(.09,.64,vRockExposure);
+ float mineral=clamp(.46+grain*.66+.17*sin(beds*.72),0.0,1.0);
+ vec3 stone=mix(vec3(.078,.099,.112),vec3(.255,.211,.161),mineral)*textureShade;
+ float snowDust=smoothstep(.25,.49,grain+.11*sin(p.x*3.1+p.z*1.2));
+ diffuseColor.rgb=mix(diffuseColor.rgb,stone,floorCoverage*(1.0-.86*join)*(1.0-.35*snowDust));
 }
 `);};return material;
 }
