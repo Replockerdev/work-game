@@ -4,7 +4,7 @@ import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from 
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
 import {FABRIC_SEGMENTS,fabricDepth,gateFlex} from './slalom-gates.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,trailPoint} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 export function createMountain(canvas){
  const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1;
@@ -172,13 +172,12 @@ export function createMountain(canvas){
   trailSign(label,0,1.9,0,color,width,-1,post);
  }
  waymark('← Hidden Hollow',86,155,'#3b6252',5.8);
- waymark('← Highline Chair',TREELINE.x-2,TREELINE.z+14,'#345b70',6.2);
+ waymark('← Highline Chair',TREELINE.x,TREELINE.z-1,'#345b70',6.2);
  waymark('Meadow Way →',737,177,'#347652');
  const gladeEntrance=trailPoint(FIR_HOLLOW_APPROACH,168);
- waymark('Fir Hollow',gladeEntrance.x-gladeEntrance.dz*10,gladeEntrance.z+gladeEntrance.dx*10,
+ waymark('Fir Hollow',gladeEntrance.x+gladeEntrance.dz*16,gladeEntrance.z-gladeEntrance.dx*16,
   '#487253',3.5,Math.atan2(gladeEntrance.dx,gladeEntrance.dz));
- const raceApproach=raceGatePoint(RACE_START,-10,-31);
- waymark('Ridgeline Slalom →',raceApproach.x,raceApproach.z,'#80343b',6,Math.atan2(RACE_START.dx,RACE_START.dz));
+ waymark('Slalom Start →',779,171,'#a52d33',7.4,HOLLOW_CHAIR.yaw+Math.PI);
  waymark('Sunbreak Bowl',HIGHLINE_PEAK.x+40,HIGHLINE_PEAK.z+23,'#4f7484',6.2);
  waymark('◆ Needle',HIGHLINE_PEAK.x+12,HIGHLINE_PEAK.z+25,'#4c506b',4.6);
  waymark('Windward Bowl',HIGHLINE_PEAK.x-13,HIGHLINE_PEAK.z+25,'#4b6a7e',6.2);
@@ -187,6 +186,7 @@ export function createMountain(canvas){
  const raceRed='#b42632',raceBlue=new T.MeshBasicMaterial({
   color:'#2176b8',side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2
  });
+ const fabricMaterial=new T.MeshStandardMaterial({color:raceRed,roughness:.85,side:T.DoubleSide});
  const stagingCenter=raceGatePoint(RACE_START,0,-13);
  function makeSlalomStart(){
   const gate=RACE_START;
@@ -199,7 +199,7 @@ export function createMountain(canvas){
   const roofMaterial=new T.MeshStandardMaterial({color:roof,roughness:.88,side:T.DoubleSide});
   const back=-6.8,postX=RACE_START_HALF_WIDTH+.52;
   const awning=postX+.58,roofBack=back-.64,roofFront=.68;
-  const eave=z=>4.65-.31*z;
+  const eave=z=>7.8-.31*z;
   const snow=(x,z)=>{
    const point=raceGatePoint(gate,-x,z);
    return height(point.x,point.z)-origin;
@@ -223,7 +223,7 @@ export function createMountain(canvas){
     beam([x,top-.92,z],[x+inward*1.25,top,z],.18,.25,timber);
    }
    beam([x,eave(back),back],[x,eave(0),0],.32,.34,steel);
-   box(.15,.21,.27,steel,x,eave(0)-2.8,-.52,frame);
+   box(.15,.21,.27,steel,x,snow(x,-.52)+1.82,-.52,frame);
   }
   for(const z of [back,0])box(2*postX+.48,.36,.38,timber,0,eave(z),z,frame);
 
@@ -245,8 +245,17 @@ export function createMountain(canvas){
     beam([0,roofY(0,z),z],[sign*awning,roofY(awning,z),z],.16,.24,roof);
    }
   }
-  trailSign('RIDGELINE SLALOM',0,eave(back)-.18,roofBack-.07,'#80343b',9.8,-1,frame,.98);
-  trailSign('START',0,eave(0)-.27,-.3,'#80343b',4.5,-1,frame,.82);
+  trailSign('RIDGELINE SLALOM',0,eave(back)-.4,roofBack-.07,'#a52d33',11.7,-1,frame,1.32);
+  trailSign('START',0,eave(0)-.35,-.3,'#a52d33',5.3,-1,frame,1.02);
+
+  // Tall course flags frame the route off the saddle before the shelter comes into view.
+  for(const x of [-8.7,8.7]){
+   const z=-46,y=snow(x,z);
+   box(.15,4.7,.15,steel,x,y+2.35,z,frame);
+   const pennant=new T.Mesh(new T.PlaneGeometry(1.3,2.75),fabricMaterial);
+   pennant.position.set(x+(x<0?.65:-.65),y+3.14,z);
+   frame.add(pennant);
+  }
 
   for(const x of [-postX,postX]){
    const rope=[];
@@ -283,7 +292,6 @@ export function createMountain(canvas){
    scene.add(new T.Mesh(geometry,raceBlue));
   }
  }
- const fabricMaterial=new T.MeshStandardMaterial({color:raceRed,roughness:.85,side:T.DoubleSide});
  const animateGates=slalomHardware().map(gate=>{
   const group=new T.Group();
   group.matrixAutoUpdate=false;

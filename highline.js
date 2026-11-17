@@ -257,12 +257,13 @@ function treelineCrossing(x,z,y){
  return mix(y,grade,along*width);
 }
 function slalomStagingHeight(x,z,y){
- if(Math.abs(x-RACE_START.x)>36||Math.abs(z-RACE_START.z)>28)return y;
+ if(z<=156||Math.abs(x-RACE_START.x)>80||z>RACE_START.z+18)return y;
  const {right,forward}=raceStartCoordinates(x,z);
- const sides=1-smooth((Math.abs(right)-5.5)/9);
- const ends=smooth((forward+30)/8)*(1-smooth((forward+16)/12));
- const grade=RACE_START.y+7.8-.085*(forward+20);
- return mix(y,grade,sides*ends);
+ const sides=1-smooth((Math.abs(right)-7.5)/12);
+ const ends=smooth((forward+74)/15)*(1-smooth((forward+16)/12));
+ const aboveStaging=Math.max(0,-22-forward);
+ const grade=RACE_START.y+7.8-.085*(forward+20)+.23*aboveStaging*smooth(aboveStaging/9);
+ return mix(y,grade,sides*ends*smooth((z-156)/10));
 }
 export function highlineHeight(x,z,original){
  if(x<30)return original;
