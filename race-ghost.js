@@ -1,5 +1,5 @@
 // Times and replays belong to this layout of the slalom.
-const storageKey='work-game-ridgeline-slalom-v1';
+const storageKey='work-game-ridgeline-slalom-v2';
 const poseFields=['x','y','z','angle','speed','yaw','edgeAngle','suspension','skatePhase'];
 const drives=['glide','skate','tuck','brake','crash'];
 

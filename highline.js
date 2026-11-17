@@ -375,7 +375,10 @@ export function highlineTrees(height,loading){
  return clear;
 }
 
-export const RACE_GATES=[.065,.14,.22,.30,.38,.46,.54,.62,.70,.78,.86,.93,.982]
+const SLALOM_GATE_COUNT=12;
+const slalomGatePositions=Array.from({length:SLALOM_GATE_COUNT},(_,i)=>
+ mix(.14,.93,i/(SLALOM_GATE_COUNT-1)));
+export const RACE_GATES=[.065,...slalomGatePositions,.982]
  .map((progress,index,array)=>({
   ...trailPoint(RACE,RACE.distance*progress),
   along:RACE.distance*progress,
