@@ -115,23 +115,24 @@ export const WEST_NOTCH=trail('west-notch','Juniper Notch','#765b79','chute',6.9
 export const HIGHLINE_SIDE_CHUTES=[
  trail('north-rib','North Rib','#526985','chute',8,[
   [856,-244,692],[808,-263,675],[765,-270,650],[728,-263,623],[685,-244,590],
-  [635,-236,550],[588,-220,508],[537,-198,462],
-  [443,-153,370],[351,-104,287],[268,-49,218],[207,6,194],[163,53,174],
+  [635,-236,550],[588,-220,508],[537,-198,462],[487,-193,415],
+  [443,-171,370],[403,-143,333],[351,-104,287],[268,-49,218],[207,6,194],[163,53,174],
   [120,101,155],[95,130,145],[86,149,139]
  ]),
  trail('west-spine','West Spine','#706184','chute',6.7,[
   [860,-224,697],[810,-234,677],[768,-231,652],[734,-225,631],[690,-202,600],
-  [639,-191,565],[592,-171,528],[543,-143,487],
-  [450,-93,399],[358,-44,309],[277,22,228],[218,82,192],[168,138,156],
+  [639,-202,565],[592,-188,528],[543,-151,487],[501,-119,447],
+  [450,-91,399],[358,-44,309],[277,22,228],[218,82,192],[168,138,156],
   [128,178,135],[107,202,121],[100,231,108]
  ]),
  trail('spruce-slot','Spruce Slot','#685d72','chute',8.6,[
   [866,-206,695],[810,-208,672],[733,-194,618],[686,-173,580],[644,-159,544],
-  [597,-142,501],[551,-109,458],[501,-67,408],[460,-38,364],
-  [368,44,268],[289,103,196],[221,160,151],[169,209,116],
+  [597,-142,501],[551,-109,458],[501,-68,408],[460,-47,364],
+  [422,-22,325],[388,9,291],[353,52,253],[289,103,196],[221,160,151],[169,209,116],
   [127,251,100],[108,281,88],[103,310,76]
  ])
 ];
+const [northRib,westSpine,spruceSlot]=HIGHLINE_SIDE_CHUTES;
 export const LEE_SLOT_CHUTE_EXIT={x:723,z:107,y:342.9};
 export const LEE_SLOT={...trail('lee-slot','Lee Slot','#6d718e','chute',5.8,[
  [745,10,440.6],[739,22,427],[728,34,414],[713,47,399],
@@ -283,16 +284,26 @@ function sideChuteSample(route,x,z){
  const span=next.x-a.x,t=(x-a.x)/span;
  const center=interpolateSlope(a.z,next.z,span*a.dz/a.dx,span*next.dz/next.dx,t);
  const across=(center-z)*mix(a.dx,next.dx,t);
- if(Math.abs(across)>52)return null;
+ if(Math.abs(across)>64)return null;
  const elevation=interpolateSlope(a.y,next.y,span*a.grade/a.dx,span*next.grade/next.dx,t);
  const tilt=(z-center)*mix(a.dz,next.dz,t)*mix(a.grade,next.grade,t);
  return {along:mix(a.along,next.along,t),across,y:elevation+tilt};
 }
+const sideChuteShapes=new Map([
+ [northRib,{fan:.47,wallEnd:.45,flare:[324,417,528,3.7],pinch:2.3}],
+ [westSpine,{fan:.62,wallEnd:.60,flare:[211,257,323,2],pinch:2.55}],
+ [spruceSlot,{fan:.53,wallEnd:.51,flare:[137,176,218,1.9],pinch:2.35}]
+]);
 function sideChuteWidth(route,along){
- const fan=smooth((along-route.distance*.55)/(route.distance*.25));
+ const shape=sideChuteShapes.get(route);
+ const fan=smooth((along-route.distance*shape.fan)/(route.distance*.25));
  const pinch=smooth((along-39)/62)*(1-fan);
- const unevenEdge=.65*Math.sin(along*.031+route.width)+.3*Math.sin(along*.072);
- return route.width+fan*10-pinch*(2.65+unevenEdge);
+ const [start,crest,end,width]=shape.flare;
+ const pocket=smooth((along-start)/(crest-start))*(1-smooth((along-crest)/(end-crest)));
+ const upper=route.width+fan*10+pocket*width-pinch*(shape.pinch+.42*Math.sin(along*.026+route.width));
+ const runout=smooth((along-route.distance*.55)/(route.distance*.25));
+ const apron=route.width+runout*10-(1-runout)*(2.65+.65*Math.sin(along*.031+route.width)+.3*Math.sin(along*.072));
+ return mix(upper,apron,smooth((along-route.distance*.57)/(route.distance*.12)));
 }
 function sideChuteAt(x,z){
  if(x<87||x>867||z<-284||z>320)return null;
@@ -309,19 +320,57 @@ export function inSideChuteLane(x,z){
  const line=sideChuteAt(x,z);
  return Boolean(line&&line.ratio<.58);
 }
-function highlineWestFace(x,z,original,y,clearance){
- if(x<=145||x>=888||z<=-335||z>=382)return y;
+export function westFaceCoverage(x,z){
+ if(x<=145||x>=888||z<=-335||z>=382)return 0;
  // Round the ridge into a broad slope, spreading its foot toward the glades.
  const spread=clamp((866-x)/665);
  const north=-335+95*smooth(spread);
- const south=-210+385*spread**1.42;
- const outline=smooth((z-north)/79)*(1-smooth((z-south+24)/156));
+ const shoulder=27*Math.exp(-(((x-535)/53)**2))-14*Math.exp(-(((x-477)/30)**2))
+  +25*Math.exp(-(((x-414)/46)**2));
+ const south=-210+385*spread**1.42+shoulder;
+ const shoulderFoot=76*Math.exp(-(((x-454)/113)**2));
+ const outline=smooth((z-north)/79)*(1-smooth((z-south+24)/(156+.45*shoulder+shoulderFoot)));
  const extent=smooth((x-145)/108)*(1-smooth((x-793)/95));
- if(extent*outline===0)return y;
+ return extent*outline;
+}
+// Short spurs and benches cross the fall line at different angles.
+const westFaceLandforms=[
+ [752,-268,38,17,-.63,14,.48],[645,-279,88,31,-.38,38,.74],
+ [555,-246,72,32,-.69,23,.41],[603,-207,63,18,.32,18,.62],
+ [507,-168,48,22,.62,21,.73],[456,-126,64,31,-.29,18,.44],
+ [566,-54,57,30,.54,26,.58],[492,-26,36,30,-.26,20,.55],
+ [526,48,65,31,.37,22,.36],[463,61,57,32,-.46,-21,0],
+ [422,113,79,49,-.34,25,.31],[361,17,58,29,.44,16,.33],
+ [307,-21,69,35,-.47,13,0],[271,71,59,43,.14,10,0],
+ [400,-183,78,30,-.21,-16,0],[445,47,67,35,.68,-12,0]
+].map(([x,z,length,width,bearing,rise,stone])=>({x,z,length,width,cos:Math.cos(bearing),sin:Math.sin(bearing),rise,stone}));
+function westFaceLandform(x,z){
+ let relief=0,rock=0;
+ for(const form of westFaceLandforms){
+  const dx=x-form.x,dz=z-form.z;
+  if(Math.abs(dx)>form.length||Math.abs(dz)>form.length)continue;
+  const along=(dx*form.cos+dz*form.sin)/form.length;
+  const across=(dz*form.cos-dx*form.sin)/form.width;
+  const footprint=1-along**2-across**2;
+  if(footprint<=0)continue;
+  relief+=form.rise*footprint**2;
+  // Expose the downhill face of the spur and leave a snow cap on its crest.
+  const ledge=smooth((footprint-.22)/.39)*(1-smooth((footprint-.69)/.26));
+  rock=Math.max(rock,form.stone*ledge*smooth((.38-along)/.65));
+ }
+ return {relief,rock};
+}
+export function westFaceOutcrop(x,z,coverage){
+ if(coverage<.08||x<305||x>826||z<-320||z>151||inSideChuteLane(x,z))return 0;
+ return westFaceLandform(x,z).rock*coverage;
+}
+function highlineWestFace(x,z,original,y,clearance){
+ const coverage=westFaceCoverage(x,z);
+ if(coverage===0)return y;
  const rise=476*smooth((x-116)/748);
- const folds=(2.6*Math.sin(.017*x+.036*z)+1.15*Math.sin(.048*x-.028*z))*
+ const folds=(4.6*Math.sin(.017*x+.036*z)+1.4*Math.sin(.048*x-.028*z))*
   smooth((x-190)/153);
- return mix(y,original+rise+folds,outline*extent*clearance);
+ return mix(y,original+rise+folds+westFaceLandform(x,z).relief,coverage*clearance);
 }
 function sideTerrainClearance(x,z,notchFeather=42){
  if(x>88&&x<430&&z>126&&z<415){
@@ -360,10 +409,12 @@ function sideChuteSurface(x,z){
   const edge=distance-width;
   const entry=smooth((s.along-5)/37);
   const exit=smooth((route.distance-s.along)/84);
-  const feather=1-smooth(edge/33);
+  const upperTerrain=1-smooth((s.along-route.distance*.58)/(route.distance*.10));
+  const shoulderWidth=33+upperTerrain*(1+8*Math.sin(s.along*.013+route.width));
+  const feather=1-smooth(edge/shoulderWidth);
   const influence=entry*exit*feather;
   if(influence<=0)continue;
-  const wall=chuteWallProfile(route,{...s,distance},width,.54);
+  const wall=chuteWallProfile(route,{...s,distance},width,sideChuteShapes.get(route).wallEnd);
   // Let the nearby rib shape the lane and blend gently into the open face.
   const weight=influence/(1+(distance/(width+5))**4);
   height+=(s.y+wall.relief)*weight;
@@ -451,17 +502,17 @@ const chuteRibs=new Map([
   [[53,89,134,13],[116,157,222,17],[169,204,258,9],[251,301,363,15],[358,391,448,11],[421,468,520,8]],
   [[61,118,176,18],[155,198,242,12],[213,254,310,13],[317,345,396,10],[365,405,459,15],[436,477,523,6]]
  ]],
- [HIGHLINE_SIDE_CHUTES[0],[
-  [[55,97,155,16],[133,178,224,12],[239,294,359,15],[345,386,460,10],[471,521,576,8]],
-  [[79,126,182,12],[173,217,279,18],[266,321,373,13],[392,441,508,14],[495,547,601,9]]
+ [northRib,[
+  [[58,112,172,16],[179,234,318,12],[411,464,518,5]],
+  [[78,113,154,13],[181,237,294,19],[309,353,411,9]]
  ]],
- [HIGHLINE_SIDE_CHUTES[1],[
-  [[57,107,157,20],[149,198,249,14],[223,265,322,19],[305,351,410,17],[429,473,532,14],[501,555,618,11]],
-  [[75,136,182,17],[171,227,278,20],[260,304,356,17],[346,395,453,19],[437,489,543,13],[524,574,631,8]]
+ [westSpine,[
+  [[70,130,239,17],[182,222,273,18],[279,345,454,19],[476,548,649,8]],
+  [[106,145,196,10],[168,222,286,19],[329,382,475,17],[487,545,588,7]]
  ]],
- [HIGHLINE_SIDE_CHUTES[2],[
-  [[69,112,180,14],[157,209,273,17],[259,314,365,13],[356,403,464,16],[456,508,558,11],[536,584,627,8]],
-  [[59,103,153,13],[151,190,240,11],[230,281,334,17],[312,366,424,19],[410,462,522,14],[507,556,614,10]]
+ [spruceSlot,[
+  [[76,124,183,13],[247,308,405,18],[337,379,460,17],[487,519,574,6]],
+  [[122,165,224,8],[236,277,324,12],[305,365,461,17],[456,502,560,10]]
  ]]
 ]);
 function chuteWallProfile(route,s,width,fanStart=.68){
@@ -691,6 +742,22 @@ export function highlineTrees(height,loading){
   const x=p.x+p.dz*offset,z=p.z-p.dx*offset;
   if(clear.some(tree=>Math.hypot(tree.x-x,tree.z-z)<6))continue;
   clear.push({x,z,s,r:.56+s*.25});
+ }
+ // Small groves carry the glades uphill wherever the lower ribs flatten out.
+ for(const [cx,cz,radius] of [
+  [281,-50,26],[295,23,31],[271,85,21],[352,104,32],[358,147,23],[457,179,22],[481,136,26]
+ ]){
+  for(let i=0;i<18;i++){
+   const angle=rand()*Math.PI*2,offset=radius*Math.sqrt(rand());
+   const x=cx+Math.cos(angle)*offset,z=cz+Math.sin(angle)*offset;
+   const y=height(x,z);
+   if(y<120||y>319||sideChuteAt(x,z)||sideTerrainClearance(x,z)<.85)continue;
+   if(clear.some(tree=>Math.hypot(tree.x-x,tree.z-z)<7.5))continue;
+   const grade=Math.hypot(height(x+1,z)-height(x-1,z),height(x,z+1)-height(x,z-1))*.5;
+   if(grade>.85)continue;
+   const s=.45+rand()*.56;
+   clear.push({x,z,s,r:.56+s*.25});
+  }
  }
  return clear;
 }

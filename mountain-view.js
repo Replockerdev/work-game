@@ -4,7 +4,7 @@ import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from 
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
 import {FABRIC_SEGMENTS,fabricDepth,gateFlex} from './slalom-gates.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,HIGHLINE_WEST_ENTRY,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,NEEDLE,WEST_NOTCH,WIND_BOWL,HIGHLINE_SIDE_CHUTES,LEE_SLOT,LEE_SLOT_CHUTE_EXIT,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,leeMouthStone,trailPoint,trailSample} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,HIGHLINE_WEST_ENTRY,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,NEEDLE,WEST_NOTCH,WIND_BOWL,HIGHLINE_SIDE_CHUTES,LEE_SLOT,LEE_SLOT_CHUTE_EXIT,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,westFaceCoverage,westFaceOutcrop,leeMouthStone,trailPoint,trailSample} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 function chuteBedrock(xs,rows){
  const floorRock=new Float32Array(xs.length*rows.length);
@@ -105,6 +105,7 @@ export function createMountain(canvas){
  geo.translate((SNOW_WEST+SNOW_EAST)/2,0,(SNOW_NORTH+SNOW_SOUTH)/2);
  const pos=geo.attributes.position,uv=geo.attributes.uv,colors=[];
  const rockExposure=new Float32Array(pos.count);
+ const westFaceMask=new Float32Array(pos.count);
  for(let i=0;i<pos.count;i++){
   const z=rows[Math.floor(i/(columns+1))];
   const x=xs[i%(columns+1)];
@@ -117,6 +118,7 @@ export function createMountain(canvas){
  const expertSnow=new T.Color('#e8eff8');
  const chuteSnow=new T.Color('#cfdfe9'),ledgeRock=new T.Color('#65717e');
  const rockShade=new T.Color('#37444e'),weatheredRock=new T.Color('#847468'),wallColor=new T.Color();
+ const windCrust=new T.Color('#e9e8df'),driftShade=new T.Color('#b7cdd9'),slate=new T.Color('#657882');
  for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let color=new T.Color('#dbe7ef');const trail=routes.find(r=>Math.abs(x-pathX(z,r))<r.width);if(z<flatSummit||z>575)color.set('#e9f0f2');else if(trail){color.set(trail.id==='groomer'?'#eaf1f4':trail.id==='park'?'#e4edf4':'#d2e1e8');}const bank=routes.some(r=>Math.abs(Math.abs(x-pathX(z,r))-r.width)<3);if(bank&&z>bankStart&&z<560)color.multiplyScalar(.88);
   if(inBowl(x,z)){
    const edgeFade=T.MathUtils.smoothstep(bowlWidth(z)-Math.abs(x-bowlX(z)),0,10);
@@ -172,13 +174,24 @@ export function createMountain(canvas){
    color.set(y>340?'#e3edf4':'#dae9ee').multiplyScalar(.9+.16*wind);
    if(alpine?.kind==='groomer'||alpine?.kind==='race')color.lerp(expertSnow,.75);
    if(alpine===LEE_SLOT)color.lerp(bowlSnow,.58);
+   const west=westFaceCoverage(x,z);
+   westFaceMask[i]=west;
+   let drift=0;
+   if(west>.01){
+    const scoured=terrainNoise(x*.038+z*.021,z*.015-x*.006);
+    const soft=terrainNoise(x*.019-z*.010,z*.029+y*.012);
+    drift=T.MathUtils.smoothstep(soft,.40,.80);
+    color.lerp(windCrust,.38*west*scoured).lerp(driftShade,.40*west*drift);
+   }
    const mouthStone=leeMouthStone(x,z);
-   const rock=Math.max(highlineRock(x,z),mouthStone);
+   const rock=Math.max(highlineRock(x,z),mouthStone,westFaceOutcrop(x,z,west));
    if(rock>0){
     const strata=terrainNoise(x*.12+y*.08,z*.14-y*.07);
     const snowPatches=terrainNoise(x*.17+z*.08,y*.19);
-    const exposed=rock*(1-(.65-.36*mouthStone)*T.MathUtils.smoothstep(snowPatches,.49,.82));
+    const exposed=rock*(1-(.65-.36*mouthStone)*T.MathUtils.smoothstep(snowPatches,.49,.82))
+     *(1-.25*west*drift);
     wallColor.copy(ledgeRock).lerp(weatheredRock,.18+.46*strata).lerp(rockShade,.36*(1-strata));
+    wallColor.lerp(slate,.35*west*drift);
     color.lerp(wallColor,exposed*.98);
     rockExposure[i]=exposed;
    }
@@ -193,6 +206,7 @@ export function createMountain(canvas){
   color.multiplyScalar(.985+.03*tint);colors.push(color.r,color.g,color.b);}
  geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));
  geo.setAttribute('rockExposure',new T.BufferAttribute(rockExposure,1));
+ geo.setAttribute('westFaceMask',new T.BufferAttribute(westFaceMask,1));
  geo.setAttribute('floorRock',new T.BufferAttribute(chuteBedrock(xs,rows),1));
  geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
  function renderedSnow(x,z){

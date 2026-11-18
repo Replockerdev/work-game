@@ -20,9 +20,9 @@ export function snowMaterial(renderer){
  tex.repeat.set((SNOW_EAST-SNOW_WEST)/5,(SNOW_SOUTH-SNOW_NORTH)/5);tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
  const material=new T.MeshStandardMaterial({vertexColors:true,map:tex,roughness:.96});
  material.onBeforeCompile=shader=>{
- const surfaceVaryings='varying float vRockExposure; varying float vFloorRock; varying vec3 vSnowWorld;\n';
- shader.vertexShader='attribute float rockExposure; attribute float floorRock;\n'+surfaceVaryings+shader.vertexShader;
- shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvSnowWorld=(modelMatrix*vec4(transformed,1.0)).xyz;\nvRockExposure=rockExposure;\nvFloorRock=floorRock;');
+ const surfaceVaryings='varying float vRockExposure; varying float vFloorRock; varying float vWestFace; varying vec3 vSnowWorld;\n';
+ shader.vertexShader='attribute float rockExposure; attribute float floorRock; attribute float westFaceMask;\n'+surfaceVaryings+shader.vertexShader;
+ shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvSnowWorld=(modelMatrix*vec4(transformed,1.0)).xyz;\nvRockExposure=rockExposure;\nvFloorRock=floorRock;\nvWestFace=westFaceMask;');
  shader.fragmentShader=surfaceVaryings+shader.fragmentShader;
  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
 if(vRockExposure>.01||vFloorRock>.01){
@@ -37,6 +37,12 @@ if(vRockExposure>.01||vFloorRock>.01){
  vec4 grains=fract(sin(seed+vec4(0.0,127.1,311.7,438.8))*43758.5453);
  float grain=mix(mix(grains.x,grains.y,f.x),mix(grains.z,grains.w,f.x),f.y)-.5;
  float textureShade=1.21+.22*sin(beds)-.42*seam-.25*fractures+.18*grain;
+ if(vWestFace>.01){
+  float warped=p.y*.66+p.x*.24-p.z*.22+1.9*sin(p.x*.047+p.z*.064)+2.4*grain;
+  float layers=.08*sin(warped)+.12*sin(warped*.44+p.z*.13);
+  float brokenBed=.21*pow(.5+.5*sin(warped),6.0)*(.55+grain);
+  textureShade=mix(textureShade,1.12+layers-brokenBed-.13*fractures+.24*grain,vWestFace);
+ }
  diffuseColor.rgb*=mix(1.0,textureShade,vRockExposure);
  float edgeGrain=grain*.32+.07*sin(p.x*2.8-p.z*2.1);
  float floorCoverage=smoothstep(.25,.53,vFloorRock+edgeGrain);
