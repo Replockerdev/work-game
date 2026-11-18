@@ -19,12 +19,16 @@ function chuteBedrock(xs,rows){
   return {...at,dx:(ahead.x-at.x)/span,dz:(ahead.z-at.z)/span,width,length,
    wallSide:wall?-Math.sign(side):0};
  });
+ const [northRib,westSpine,spruceSlot]=HIGHLINE_SIDE_CHUTES;
  const highline=[
   [NEEDLE,100,-7.6,3.9,9.2,true],[NEEDLE,158,.6,2.1,4.4,false],
   [NEEDLE,210,6.5,3.1,10.3,true],
   [WEST_NOTCH,117,5.8,3.3,7.4,true],[WEST_NOTCH,201,-6,3,10.1,true],
   [WEST_NOTCH,306,-5.7,3.2,8.6,true],[WEST_NOTCH,348,-.15,2.1,3.1,false],
-  [WEST_NOTCH,410,5.6,3.2,11.3,true]
+  [WEST_NOTCH,410,5.6,3.2,11.3,true],
+  [northRib,126,5.7,2.2,8.4,true],[northRib,294,-5.8,2.7,10.2,true],[northRib,425,.8,1.7,3.7,false],
+  [westSpine,109,-4.5,2.5,9.2,true],[westSpine,226,4.3,2.3,7.5,true],[westSpine,347,-4.1,2.5,9.6,true],
+  [spruceSlot,189,6,2.4,8.8,true],[spruceSlot,404,-6.6,2.6,11.2,true],[spruceSlot,476,-.85,1.8,4.1,false]
  ].map(([route,along,side,width,length,wall])=>{
   const {x,z,dx,dz}=trailPoint(route,along);
   return {x:x+dz*side,z:z-dx*side,dx,dz,width,length,wallSide:wall?Math.sign(side):0};
