@@ -1,7 +1,7 @@
 import {BASE,JUNIPER,EXPERT,height,liftWorld,routes,pathX,juniperZ,timberlineZ,expertFaceX,
  expertRoute,chuteRoute,chuteX,timberRoute,timberX,bowlRoute,powderToGladeZ,driftRoute,
  driftX,driftExitX,ridgeDropRoute,ridgeDropX} from './mountain-core.js';
-import {HIGHLINE_TRAILS,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,FIR_GLADE,FIR_HOLLOW_APPROACH,WIND_BOWL,LEE_SLOT,LEE_SLOT_CHUTE_EXIT} from './highline.js';
+import {HIGHLINE_TRAILS,HIGHLINE_SIDE_CHUTES,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_BASE,FIR_GLADE,FIR_HOLLOW_APPROACH,WIND_BOWL,LEE_SLOT,LEE_SLOT_CHUTE_EXIT} from './highline.js';
 
 const sample=(start,end,step,point)=>Array.from(
  {length:Math.ceil((end-start)/step)+1},(_,i)=>point(Math.min(start+i*step,end))
@@ -21,7 +21,7 @@ export const mapTrails=[
  timberlineTrail(expertRoute,expertFaceX,26,382,'expert'),
  timberlineTrail(chuteRoute,chuteX,68,329,'chute'),
  timberlineTrail(timberRoute,timberX,182,322,'glade'),
- ...HIGHLINE_TRAILS,LEE_SLOT
+ ...HIGHLINE_TRAILS,...HIGHLINE_SIDE_CHUTES,LEE_SLOT
 ];
 const trailById=new Map(mapTrails.map(trail=>[trail.id,trail]));
 const storageKey='work-game-visited-trails-v1';
@@ -48,7 +48,7 @@ const places=[
  ['JUNIPER SUMMIT',liftWorld(JUNIPER,JUNIPER.center,JUNIPER.top),14,-13,'left'],
  ['JUNIPER BASE',BASE,-13,17,'right'],
  ['TIMBERLINE',liftWorld(EXPERT,EXPERT.center,EXPERT.top),-3,15,'center'],
- ['HIGHLINE SUMMIT',HIGHLINE_PEAK,14,-12,'right'],
+ ['HIGHLINE SUMMIT',HIGHLINE_PEAK,14,-33,'right'],
  ['TREELINE SADDLE',TREELINE,-14,-4,'right'],
  ['HOLLOW BASE',HOLLOW_BASE,12,20,'left']
 ];

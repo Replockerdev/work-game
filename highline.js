@@ -3,6 +3,7 @@ export const HIGHLINE_EAST=1195;
 export const HOLLOW_BASE={x:636,z:550,y:23};
 export const TREELINE={x:783,z:151,y:324};
 export const HIGHLINE_PEAK={x:888,z:-210,y:700};
+export const HIGHLINE_WEST_ENTRY={x:888,z:-225};
 const clamp=(value,min=0,max=1)=>Math.max(min,Math.min(max,value));
 const smooth=value=>{const t=clamp(value);return t*t*(3-2*t);};
 const mix=(a,b,t)=>a+(b-a)*t;
@@ -111,6 +112,23 @@ export const WEST_NOTCH=trail('west-notch','Juniper Notch','#765b79','chute',6.9
  [863,-192,688],[813,-184,655],[747,-158,588],[672,-132,509],[611,-95,445],
  [582,-45,400],[607,12,373],[676,74,351],[750,123,332],[807,147,324]
 ]);
+export const HIGHLINE_SIDE_CHUTES=[
+ trail('north-rib','North Rib','#526985','chute',8,[
+  [856,-244,692],[808,-263,675],[728,-262,623],[635,-236,550],[537,-198,462],
+  [443,-153,370],[351,-104,287],[268,-49,218],[207,6,194],[163,53,174],
+  [120,101,155],[95,130,145],[86,149,139]
+ ]),
+ trail('west-spine','West Spine','#706184','chute',6.7,[
+  [860,-224,697],[810,-234,677],[734,-226,631],[639,-191,565],[543,-143,487],
+  [450,-93,399],[358,-44,309],[277,22,228],[218,82,192],[168,138,156],
+  [128,178,135],[107,202,121],[100,231,108]
+ ]),
+ trail('spruce-slot','Spruce Slot','#685d72','chute',8.6,[
+  [866,-206,695],[810,-208,672],[733,-194,618],[644,-158,544],[551,-109,458],
+  [460,-38,364],[368,44,268],[289,103,196],[221,160,151],[169,209,116],
+  [127,251,100],[108,281,88],[103,310,76]
+ ])
+];
 export const LEE_SLOT_CHUTE_EXIT={x:723,z:107,y:342.9};
 export const LEE_SLOT={...trail('lee-slot','Lee Slot','#6d718e','chute',5.8,[
  [745,10,440.6],[739,22,427],[728,34,414],[713,47,399],
@@ -191,7 +209,9 @@ function trailWidth(route,sample){
   +13*smooth((p-.71)/.25);
 }
 export function highlineTrailAt(x,z,followingLeeSlot=false){
- if(x<28||x>1115||z<-230||z>633)return null;
+ if(x<28||x>1115||z<-284||z>633)return null;
+ const sideChute=sideChuteAt(x,z);
+ if(z<-230)return sideChute?.route??null;
  const slot=leeSlotSample(x,z);
  if(slot&&slot.along>27&&slot.along<LEE_SLOT.distance-12&&slot.distance<leeSlotWidth(slot.along)){
   const sharedNotch=trailSample(WEST_NOTCH,x,z)?.distance<5.4;
@@ -204,6 +224,10 @@ export function highlineTrailAt(x,z,followingLeeSlot=false){
   if(entry.distance<FIR_HOLLOW_APPROACH.width)return FIR_GLADE;
  }
  let nearest=null,best=Infinity;
+ if(sideChute){
+  nearest=sideChute.route;
+  best=sideChute.ratio;
+ }
  for(const route of HIGHLINE_TRAILS){
   const sample=trailSample(route,x,z);
   if(!sample)continue;
@@ -247,6 +271,108 @@ function leeSlotWidth(along){
 function interpolateSlope(a,b,slopeA,slopeB,t){
  const t2=t*t,t3=t2*t;
  return a*(2*t3-3*t2+1)+slopeA*(t3-2*t2+t)+b*(-2*t3+3*t2)+slopeB*(t3-t2);
+}
+function sideChuteSample(route,x,z){
+ const points=route.grades;
+ const b=route.bounds;
+ if(x>=points[0].x||x<=points.at(-1).x||z<b.top||z>b.bottom)return null;
+ const i=points.findIndex(point=>point.x<=x),a=points[i-1],next=points[i];
+ const span=next.x-a.x,t=(x-a.x)/span;
+ const center=interpolateSlope(a.z,next.z,span*a.dz/a.dx,span*next.dz/next.dx,t);
+ const across=(center-z)*mix(a.dx,next.dx,t);
+ if(Math.abs(across)>52)return null;
+ const elevation=interpolateSlope(a.y,next.y,span*a.grade/a.dx,span*next.grade/next.dx,t);
+ const tilt=(z-center)*mix(a.dz,next.dz,t)*mix(a.grade,next.grade,t);
+ return {along:mix(a.along,next.along,t),across,y:elevation+tilt};
+}
+function sideChuteWidth(route,along){
+ const fan=smooth((along-route.distance*.55)/(route.distance*.25));
+ const pinch=smooth(along/95)*(1-fan);
+ return route.width+fan*10-pinch*(1.2+.9*Math.sin(along*.026+route.width));
+}
+function sideChuteAt(x,z){
+ if(x<87||x>867||z<-284||z>320)return null;
+ let nearest=null;
+ for(const route of HIGHLINE_SIDE_CHUTES){
+  const sample=sideChuteSample(route,x,z);
+  if(!sample||sample.along<18||sample.along>route.distance-16)continue;
+  const ratio=Math.abs(sample.across)/sideChuteWidth(route,sample.along);
+  if(ratio<1&&(!nearest||ratio<nearest.ratio))nearest={route,ratio};
+ }
+ return nearest;
+}
+export function inSideChuteLane(x,z){
+ const line=sideChuteAt(x,z);
+ return Boolean(line&&line.ratio<.58);
+}
+function highlineWestFace(x,z,original,y,clearance){
+ if(x<=145||x>=888||z<=-335||z>=382)return y;
+ // Round the ridge into a broad slope, spreading its foot toward the glades.
+ const spread=clamp((866-x)/665);
+ const north=-335+95*smooth(spread);
+ const south=-210+385*spread**1.42;
+ const outline=smooth((z-north)/79)*(1-smooth((z-south+24)/156));
+ const extent=smooth((x-145)/108)*(1-smooth((x-793)/95));
+ if(extent*outline===0)return y;
+ const rise=476*smooth((x-116)/748);
+ const folds=(2.6*Math.sin(.017*x+.036*z)+1.15*Math.sin(.048*x-.028*z))*
+  smooth((x-190)/153);
+ return mix(y,original+rise+folds,outline*extent*clearance);
+}
+function sideTerrainClearance(x,z,notchFeather=42){
+ if(x>88&&x<430&&z>126&&z<415){
+  const approach=trailSample(HOLLOW_LINK,x,z);
+  if(approach)return smooth((approach.distance-18)/30);
+ }
+ if(x>520&&x<920&&z>-258&&z<187){
+  const notch=trailSample(WEST_NOTCH,x,z);
+  if(notch)return smooth((notch.distance-16)/notchFeather);
+ }
+ return 1;
+}
+function westSummitTraverse(x,z,y){
+ if(x<820||x>911||z<-284||z>-192)return y;
+ const area=smooth((x-820)/28)*(1-smooth((x-897)/14))*
+  smooth((z+284)/24)*(1-smooth((z+209)/17));
+ const apron=700-.102*(909-x)+.045*(z+214);
+ return mix(y,apron,area);
+}
+function roundNotchShoulder(x,z,y){
+ if(x<550||x>827||z<-116||z>166)return y;
+ const notch=trailSample(WEST_NOTCH,x,z,true);
+ if(!notch||notch.across<8||notch.along<355)return y;
+ const bank=smooth((notch.across-8)/13)*(1-smooth((notch.across-50)/32));
+ const extent=smooth((notch.along-355)/45)*(1-smooth((notch.along-475)/58));
+ const snow=notch.y+3*smooth(notch.across/15)+.016*(notch.across-6)**2;
+ return mix(y,Math.min(y,snow),bank*extent);
+}
+function sideChuteSurface(x,z){
+ if(x<85||x>868||z<-318||z>330)return null;
+ let total=0,height=0,coverage=0,rock=0,core=0;
+ for(const route of HIGHLINE_SIDE_CHUTES){
+  const s=sideChuteSample(route,x,z);
+  if(!s)continue;
+  const width=sideChuteWidth(route,s.along),distance=Math.abs(s.across);
+  const edge=distance-width;
+  const entry=smooth((s.along-5)/37);
+  const exit=smooth((route.distance-s.along)/84);
+  const feather=1-smooth(edge/33);
+  const influence=entry*exit*feather;
+  if(influence<=0)continue;
+  // Stagger the rock ribs and let their ends disappear under the snow fans.
+  const bank=smooth((s.along-56)/37)*(1-smooth((s.along-route.distance*.57)/(route.distance*.19)));
+  const phase=s.along*.025+route.width*3+Math.sign(s.across)*2.5;
+  const outcrop=smooth((Math.sin(phase)+.48*Math.sin(2.15*phase)-.06)/1.18);
+  const stone=outcrop*bank*smooth(edge/4.6)*(1-smooth((edge-11)/18));
+  const relief=bank*(3.8+10*outcrop)*smooth(edge/9)*(1-smooth((edge-15)/18));
+  const weight=influence/(1+(distance/(width+3))**4);
+  height+=(s.y+relief)*weight;
+  total+=weight;
+  coverage=Math.max(coverage,influence);
+  rock=Math.max(rock,stone);
+  core=Math.max(core,entry*exit*(1-smooth((distance-width*.8)/3.5)));
+ }
+ return total>0?{height:height/total,coverage,rock,core}:null;
 }
 function leeSlotTerrainSample(x,z){
  const points=LEE_SLOT.grades;
@@ -393,7 +519,12 @@ function slalomStagingHeight(x,z,y){
 }
 export function highlineHeight(x,z,original){
  if(x<30)return original;
- if(x<=OLD_EAST&&z<154)return original;
+ const sideClearance=sideTerrainClearance(x,z);
+ if(x<=OLD_EAST&&z<154){
+  const y=highlineWestFace(x,z,original,original,sideClearance);
+  const side=sideChuteSurface(x,z);
+  return side?mix(y,side.height,side.coverage*sideClearance):y;
+ }
  let y=original;
  if(x>OLD_EAST){
   const fallLine=880-.28*Math.max(0,z+210);
@@ -410,6 +541,7 @@ export function highlineHeight(x,z,original){
   const newGround=Math.max(face,shoulder)+ridgeNoise+woodedFold+outerBank;
   y=mix(original,newGround,smooth((x-OLD_EAST)/133));
  }
+ y=highlineWestFace(x,z,original,y,sideClearance);
  let target=0,weight=0,coverage=0;
  for(const route of HIGHLINE_TRAILS){
   const s=trailSample(route,x,z,true);
@@ -443,6 +575,7 @@ export function highlineHeight(x,z,original){
   coverage=Math.min(1,smoothMax(coverage,strength,.25*Math.min(coverage,strength)+.001));
  }
  if(weight>0)y=mix(y,target/weight,coverage);
+ y=roundNotchShoulder(x,z,y);
  if(z<=LEE_SLOT_CHUTE_EXIT.z)y=leeSlotHeight(x,z,y);
  if(x>520){
   y=deck(x,z,y,HOLLOW_BASE,50,35);
@@ -463,23 +596,28 @@ export function highlineHeight(x,z,original){
   y=slalomStagingHeight(x,z,y);
   if(z>LEE_SLOT_CHUTE_EXIT.z)y=leeSlotHeight(x,z,y);
  }
+ y=westSummitTraverse(x,z,y);
+ const side=sideChuteSurface(x,z);
+ if(side)y=mix(y,side.height,side.coverage*sideTerrainClearance(x,z,23));
  return y;
 }
 export function highlineRock(x,z){
- if(x<541||z<-204||z>114)return 0;
- let rock=0;
- for(const route of [NEEDLE,WEST_NOTCH]){
-  const s=trailSample(route,x,z,true);
-  if(!s)continue;
-  rock=Math.max(rock,chuteWallProfile(route,s,trailWidth(route,s)).rock);
+ const side=sideChuteSurface(x,z);
+ let rock=side?.rock?side.rock*sideTerrainClearance(x,z):0;
+ if(x>=541&&z>=-204&&z<=114){
+  for(const route of [NEEDLE,WEST_NOTCH]){
+   const s=trailSample(route,x,z,true);
+   if(!s)continue;
+   rock=Math.max(rock,chuteWallProfile(route,s,trailWidth(route,s)).rock);
+  }
+  const slot=leeSlotTerrainSample(x,z);
+  if(slot){
+   const profile=leeSlotProfile(slot);
+   const blend=leeSlotBlend(x,z);
+   rock=Math.max(rock*(1-profile.core*blend),profile.rock*blend);
+  }
  }
- const slot=leeSlotTerrainSample(x,z);
- if(slot){
-  const profile=leeSlotProfile(slot);
-  const blend=leeSlotBlend(x,z);
-  rock=Math.max(rock*(1-profile.core*blend),profile.rock*blend);
- }
- return rock;
+ return rock*(1-(side?.core??0));
 }
 export function leeMouthStone(x,z){
  if(x<700||x>752||z<9||z>65)return 0;

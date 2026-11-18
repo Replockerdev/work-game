@@ -1,4 +1,4 @@
-import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,LEE_SLOT,RACE_GATE_HALF_WIDTH,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,advanceRace} from './highline.js';
+import {OLD_EAST,HIGHLINE_EAST,HIGHLINE_LIFTS,HOLLOW_LINK,HOLLOW_RETURN,LEE_SLOT,RACE_GATE_HALF_WIDTH,highlineHeight,highlineRock,highlineTrailAt,highlineTrees,inSideChuteLane,advanceRace} from './highline.js';
 import {Quaternion,Vector3} from './vendor/three.module.js';
 import {advanceCrashBody,advanceCrashLimbs,createCrashLimbs,crashContacts,crashHipHeight,obstacleDistance,obstacleNormal,obstacleTop} from './crash-physics.js';
 import {makeGateHardware,sweepGate,stepGateSprings,springGate,gateCrashColliders} from './slalom-gates.js';
@@ -88,7 +88,7 @@ export function chuteRockMask(x,z){
  return exposure*smooth((edge+.3)/2.1)*(1-smooth((edge-6)/15));
 }
 function chuteWall(x,z){
- if(x>540)return highlineRock(x,z);
+ if(x>OLD_EAST)return highlineRock(x,z);
  if(x> -85||z<440)return 0;
  const local=expertLocal(x,z);
  return chuteRockMask(local.x,local.z);
@@ -640,6 +640,7 @@ export function obstacles(){const a=[];let seed=7182;function rand(){seed=(Math.
   liftWorld(lift,lift.center+8,lift.top),liftWorld(lift,lift.center+8,lift.bottom)
  ]));
  return [...existing,...lowerGlade,...shoulderTrees,...alpine].filter(tree=>{
+  if(inSideChuteLane(tree.x,tree.z))return false;
   return ![JUNIPER,EXPERT,...HIGHLINE_LIFTS].some(lift=>{
    const p=liftLocal(lift,tree.x,tree.z),across=p.x-lift.center;
    if(p.z<lift.top-16||p.z>lift.bottom+16||Math.abs(across)>18)return false;

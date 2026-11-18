@@ -1,6 +1,6 @@
 import {createMountain} from './mountain-view.js';
 import {spawn,step,board,boardingLift,canUnload,unload,turnStyles,activeTurnStyle,nextTurnStyle,BASE,EXPERT,LIFT_FAST_FORWARD,liftWorld,height,expertRoute,chuteRoute,timberRoute,juniperZ,bowlRoute,driftRoute} from './mountain-core.js';
-import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,TREELINE,RACE,RACE_START,RACE_GATES,WIND_BOWL,LEE_SLOT,LEE_SLOT_CHUTE_EXIT,inSlalomStaging} from './highline.js';
+import {OLD_EAST,HOLLOW_CHAIR,HIGHLINE_CHAIR,HIGHLINE_PEAK,HIGHLINE_WEST_ENTRY,TREELINE,RACE,RACE_START,RACE_GATES,WIND_BOWL,LEE_SLOT,LEE_SLOT_CHUTE_EXIT,inSlalomStaging} from './highline.js';
 import {createTrailMap,mapTrails,readVisits,saveVisits} from './trail-map.js';
 import {readRaceBest,saveRaceBest,racePose,raceGhostAt} from './race-ghost.js';
 const expertRoutes=[expertRoute,chuteRoute,timberRoute,bowlRoute];
@@ -94,6 +94,11 @@ function map(){
  trailMap.draw(p);
  mapDialog.showModal();
 }
+function directionArrow(target){
+ const bearing=Math.atan2(target.x-p.x,target.z-p.z)-p.angle;
+ const turn=Math.atan2(Math.sin(bearing),Math.cos(bearing));
+ return Math.abs(turn)<.45?'↑':Math.abs(turn)>2.55?'↓':turn<0?'→':'←';
+}
 mapDialog.addEventListener('close',()=>{
  clearInputs();
  canvas.focus();
@@ -132,12 +137,7 @@ function ui(){
   const next=side?`Gate ${p.race.next} · ${side>0?'Right':'Left'}`:'Finish';
   raceStatus.textContent=`${p.race.time.toFixed(1)} s · ${next}`;
  }else if(atStart)raceStatus.textContent='Ski through the start arch';
- else if(showSlalomDirection){
-  const bearing=Math.atan2(RACE_START.x-p.x,RACE_START.z-p.z)-p.angle;
-  const turn=Math.atan2(Math.sin(bearing),Math.cos(bearing));
-  const arrow=Math.abs(turn)<.45?'↑':Math.abs(turn)>2.55?'↓':turn<0?'→':'←';
-  raceStatus.textContent='Slalom start '+arrow;
- }
+ else if(showSlalomDirection)raceStatus.textContent='Slalom start '+directionArrow(RACE_START);
  else raceStatus.textContent=raceBest?`Slalom best · ${raceBest.time.toFixed(2)} s`:'';
  const atJuniperSummit=p.z<juniperZ(75);
  const prompt=$('prompt');
@@ -154,7 +154,7 @@ function ui(){
   near?'Press E to board '+near.name+'.':
   approachingLeeSlot?'Lee Slot · Take the right fork at the purple sign':
   continuingLeeSlot?'Lee Slot to Hollow Base · Follow the purple markers':
-  atHighlineSummit?'Turn downhill to pick a bowl or chute.':
+  atHighlineSummit?'West face '+directionArrow(HIGHLINE_WEST_ENTRY)+' · Three chutes to The Glades':
   atSaddle?'Highline Chair ←    Fir Hollow ahead    Meadow Way →':
   atJuniperSummit?'Glades ←    Park straight ahead    Groomer & Snowdrift →':
   'Juniper base '+Math.round(Math.hypot(p.x-BASE.x,p.z-BASE.z))+' m · head into the base clearing';

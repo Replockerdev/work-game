@@ -1,5 +1,6 @@
 import * as T from './vendor/three.module.js';
 import {height,pathX,routes,SNOW_WEST,SNOW_EAST,SNOW_NORTH,SNOW_SOUTH,inBowl,driftDepth,ridgeDropMask,juniperZ} from './mountain-core.js';
+import {inSideChuteLane} from './highline.js';
 import {basinHeight,terrainNoise} from './basin-terrain.js';
 const fract=x=>x-Math.floor(x),lerp=(a,b,t)=>a+(b-a)*t;
 function hash(x,z){return fract(Math.sin(x*127.1+z*311.7)*43758.5453);}
@@ -76,7 +77,8 @@ export function addRange(scene){
  const o=new T.Object3D(),rockColliders=[];
  for(let i=0;i<100;i++){
   const side=i%2?-1:1,z=juniperZ(60+hash(i,17)*530),x=side*(160+hash(i,19)*45);
-  if(routes.some(r=>Math.abs(x-pathX(z,r))<r.width+5)||Math.abs(x+30)<15||inBowl(x,z,4)||driftDepth(x,z)>.15||ridgeDropMask(x,z)>.18)continue;
+  if(routes.some(r=>Math.abs(x-pathX(z,r))<r.width+5)||Math.abs(x+30)<15||inBowl(x,z,4)||
+    driftDepth(x,z)>.15||ridgeDropMask(x,z)>.18||inSideChuteLane(x,z))continue;
   const s=1+hash(i,4)*2.3,y=height(x,z)-.3;
   o.position.set(x,y,z);o.scale.set(s,s*.65,s*.8);o.rotation.set(i*.3,i*.8,.2);o.updateMatrix();
   rocks.setMatrixAt(rockColliders.length,o.matrix);

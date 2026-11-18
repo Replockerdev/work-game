@@ -4,7 +4,7 @@ import {snowMaterial,addRange,detailedTrees,surroundingForest,rangeHeight} from 
 import {terrainNoise} from './basin-terrain.js';
 import {makeSkier} from './skier-model.js';
 import {FABRIC_SEGMENTS,fabricDepth,gateFlex} from './slalom-gates.js';
-import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,NEEDLE,WEST_NOTCH,WIND_BOWL,LEE_SLOT,LEE_SLOT_CHUTE_EXIT,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,leeMouthStone,trailPoint,trailSample} from './highline.js';
+import {OLD_EAST,HIGHLINE_LIFTS,HIGHLINE_PEAK,HIGHLINE_WEST_ENTRY,TREELINE,HOLLOW_CHAIR,HOLLOW_BASE,HOLLOW_LINK,HOLLOW_RETURN,FIR_HOLLOW_APPROACH,NEEDLE,WEST_NOTCH,WIND_BOWL,HIGHLINE_SIDE_CHUTES,LEE_SLOT,LEE_SLOT_CHUTE_EXIT,RACE_GATES,RACE_START,RACE_START_HALF_WIDTH,RACE_LINE_WIDTH,RACE_PASS_OUTER,raceGatePoint,highlineTrailAt,highlineRock,leeMouthStone,trailPoint,trailSample} from './highline.js';
 const surfaceHeight=(x,z)=>x>=SNOW_WEST&&x<=SNOW_EAST&&z>=SNOW_NORTH&&z<=SNOW_SOUTH?height(x,z):rangeHeight(x,z);
 function chuteBedrock(xs,rows){
  const floorRock=new Float32Array(xs.length*rows.length);
@@ -90,7 +90,7 @@ export function createMountain(canvas){
  const snowWidth=SNOW_EAST-SNOW_WEST,snowLength=SNOW_SOUTH-SNOW_NORTH;
  const xs=[],rows=[];
  for(let x=SNOW_WEST;x<OLD_EAST;x+=2.5)xs.push(x);
- for(let x=OLD_EAST;x<SNOW_EAST;x+=x<535?4:x<855?2:3)xs.push(x);
+ for(let x=OLD_EAST;x<SNOW_EAST;x+=x<535?3:x<855?2:3)xs.push(x);
  xs.push(SNOW_EAST);
  const columns=xs.length-1;
  // Finer cross-slope samples through Splitrock keep its steep walls readable.
@@ -284,6 +284,12 @@ export function createMountain(canvas){
  waymark('◆ Needle',HIGHLINE_PEAK.x+12,HIGHLINE_PEAK.z+25,'#4c506b',4.6);
  waymark('Windward Bowl',HIGHLINE_PEAK.x-13,HIGHLINE_PEAK.z+25,'#4b6a7e',6.2);
  waymark('◆ Juniper Notch',HIGHLINE_PEAK.x-38,HIGHLINE_PEAK.z+23,'#664d71',6.2);
+ waymark('West face chutes',HIGHLINE_WEST_ENTRY.x-5,HIGHLINE_WEST_ENTRY.z+4,'#42556c',7.6,-Math.PI/2,1.05);
+ for(const route of HIGHLINE_SIDE_CHUTES){
+  const mouth=trailPoint(route,19);
+  const x=mouth.x-5.5*mouth.dz,z=mouth.z+5.5*mouth.dx;
+  waymark('◆ '+route.name,x,z,route.color,6.2,Math.atan2(mouth.dx,mouth.dz),.95);
+ }
  const leeApproach=trailPoint(WIND_BOWL,bowlAlong-8);
  const leeFork=trailPoint(LEE_SLOT,4);
  waymark('◆ Lee Slot →',leeFork.x-7*leeApproach.dz,leeFork.z+7*leeApproach.dx,
