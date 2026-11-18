@@ -283,11 +283,12 @@ function sideChuteSample(route,x,z){
  const i=points.findIndex(point=>point.x<=x),a=points[i-1],next=points[i];
  const span=next.x-a.x,t=(x-a.x)/span;
  const center=interpolateSlope(a.z,next.z,span*a.dz/a.dx,span*next.dz/next.dx,t);
- const across=(center-z)*mix(a.dx,next.dx,t);
+ const crossDirection=-mix(a.dx,next.dx,t);
+ const across=(z-center)*crossDirection;
  if(Math.abs(across)>64)return null;
  const elevation=interpolateSlope(a.y,next.y,span*a.grade/a.dx,span*next.grade/next.dx,t);
- const tilt=(z-center)*mix(a.dz,next.dz,t)*mix(a.grade,next.grade,t);
- return {along:mix(a.along,next.along,t),across,y:elevation+tilt};
+ const slope=mix(a.dz,next.dz,t)*mix(a.grade,next.grade,t);
+ return {along:mix(a.along,next.along,t),across,y:elevation+(z-center)*slope,crossDirection,slope};
 }
 const sideChuteShapes=new Map([
  [northRib,{fan:.47,wallEnd:.45,flare:[324,417,528,3.7],pinch:2.3}],
@@ -335,14 +336,14 @@ export function westFaceCoverage(x,z){
 }
 // Short spurs and benches cross the fall line at different angles.
 const westFaceLandforms=[
- [752,-268,38,17,-.63,14,.48],[645,-279,88,31,-.38,38,.74],
- [555,-246,72,32,-.69,23,.41],[603,-207,63,18,.32,18,.62],
- [507,-168,48,22,.62,21,.73],[456,-126,64,31,-.29,18,.44],
+ [752,-268,38,17,-.63,14,.48],[645,-279,88,42,-.38,26,.52],
+ [555,-246,72,41,-.69,13,.32],[603,-207,68,26,.32,10,.40],
+ [507,-168,55,29,.62,11,.54],[456,-126,67,36,-.29,13,.38],
  [566,-54,57,30,.54,26,.58],[492,-26,36,30,-.26,20,.55],
  [526,48,65,31,.37,22,.36],[463,61,57,32,-.46,-21,0],
  [422,113,79,49,-.34,25,.31],[361,17,58,29,.44,16,.33],
  [307,-21,69,35,-.47,13,0],[271,71,59,43,.14,10,0],
- [400,-183,78,30,-.21,-16,0],[445,47,67,35,.68,-12,0]
+ [445,47,67,35,.68,-12,0]
 ].map(([x,z,length,width,bearing,rise,stone])=>({x,z,length,width,cos:Math.cos(bearing),sin:Math.sin(bearing),rise,stone}));
 function westFaceLandform(x,z){
  let relief=0,rock=0;
@@ -401,7 +402,9 @@ function roundNotchShoulder(x,z,y){
 }
 function sideChuteSurface(x,z){
  if(x<85||x>868||z<-318||z>330)return null;
- let total=0,height=0,coverage=0,rock=0,core=0;
+ const openFace=smooth((x-315)/83)*(1-smooth((x-782)/54));
+ let total=0,height=0,coverage=0,rock=0,core=0,bank=0;
+ let north=null,south=null;
  for(const route of HIGHLINE_SIDE_CHUTES){
   const s=sideChuteSample(route,x,z);
   if(!s)continue;
@@ -413,8 +416,21 @@ function sideChuteSurface(x,z){
   const shoulderWidth=33+upperTerrain*(1+8*Math.sin(s.along*.013+route.width));
   const feather=1-smooth(edge/shoulderWidth);
   const influence=entry*exit*feather;
+  const wallEnd=sideChuteShapes.get(route).wallEnd;
+  if(openFace>0&&entry>0&&exit>0&&s.crossDirection>.5){
+   const lowerZ=s.across>0,nearest=lowerZ?north:south;
+   if(!nearest||edge<nearest.edge){
+    const rim=width+3.5;
+    const offset=(distance-rim)/s.crossDirection;
+    const rise=chuteWallProfile(route,{...s,distance:rim},width,wallEnd).relief;
+    const weight=entry*exit*(1-smooth((distance-46)/18));
+    const lip={edge,offset,weight,y:s.y+(lowerZ?-1:1)*offset*s.slope+rise};
+    if(lowerZ)north=lip;
+    else south=lip;
+   }
+  }
   if(influence<=0)continue;
-  const wall=chuteWallProfile(route,{...s,distance},width,sideChuteShapes.get(route).wallEnd);
+  const wall=chuteWallProfile(route,{...s,distance},width,wallEnd);
   // Let the nearby rib shape the lane and blend gently into the open face.
   const weight=influence/(1+(distance/(width+5))**4);
   height+=(s.y+wall.relief)*weight;
@@ -422,8 +438,17 @@ function sideChuteSurface(x,z){
   coverage=Math.max(coverage,influence);
   rock=Math.max(rock,wall.rock);
   core=Math.max(core,entry*exit*(1-smooth((distance-width*.68)/2.8)));
+  bank=Math.max(bank,1-smooth((edge-2.8)/12));
  }
- return total>0?{height:height/total,coverage,rock,core}:null;
+ if(total===0)return null;
+ let ridge=0,fill=0;
+ if(north?.offset>0&&south?.offset>0){
+  // Connect the two rims with one rounded ridge across the intervening snow.
+  const span=north.offset+south.offset,t=north.offset/span;
+  ridge=mix(north.y,south.y,t)+Math.min(10,span*.48)*4*t*(1-t);
+  fill=openFace*north.weight*south.weight*smooth(Math.min(north.offset,south.offset)/5);
+ }
+ return {height:height/total,coverage,rock:rock*(1-openFace*(1-bank)),core,ridge,fill};
 }
 function leeSlotTerrainSample(x,z){
  const points=LEE_SLOT.grades;
@@ -661,7 +686,11 @@ export function highlineHeight(x,z,original){
  }
  y=westSummitTraverse(x,z,y);
  const side=sideChuteSurface(x,z);
- if(side)y=mix(y,side.height,side.coverage*sideTerrainClearance(x,z,23));
+ if(side){
+  const clearance=sideTerrainClearance(x,z,23);
+  y=mix(y,side.height,side.coverage*clearance);
+  y=mix(y,Math.max(y,side.ridge),side.fill*clearance);
+ }
  return y;
 }
 export function highlineRock(x,z){
