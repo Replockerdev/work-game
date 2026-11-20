@@ -289,12 +289,13 @@ function sideChuteSample(route,x,z,reach=64){
  if(Math.abs(across)>reach)return null;
  const elevation=interpolateSlope(a.y,next.y,span*a.grade/a.dx,span*next.grade/next.dx,t);
  const slope=mix(a.dz,next.dz,t)*mix(a.grade,next.grade,t);
- return {along:mix(a.along,next.along,t),across,y:elevation+(z-center)*slope,crossDirection,slope};
+ return {along:mix(a.along,next.along,t),across,y:elevation+(z-center)*slope,crossDirection,slope,
+  centerZ:center,centerY:elevation};
 }
 const sideChuteShapes=new Map([
- [northRib,{fan:.47,wallEnd:.45,flare:[324,417,528,3.7],pinch:2.3}],
- [westSpine,{fan:.62,wallEnd:.60,flare:[211,257,323,2],pinch:2.55}],
- [spruceSlot,{fan:.53,wallEnd:.51,flare:[137,176,218,1.9],pinch:2.35}]
+ [northRib,{fan:.32,wallEnd:.33,flare:[324,417,528,3.7],pinch:2.3}],
+ [westSpine,{fan:.48,wallEnd:.46,flare:[211,257,323,2],pinch:2.55}],
+ [spruceSlot,{fan:.37,wallEnd:.35,flare:[137,176,218,1.9],pinch:2.35}]
 ]);
 function sideChuteWidth(route,along){
  const shape=sideChuteShapes.get(route);
@@ -368,11 +369,45 @@ export function westFaceOutcrop(x,z,coverage){
 }
 function highlineWestFace(x,z,original,y,clearance){
  const coverage=westFaceCoverage(x,z);
- if(coverage===0)return y;
+ const shared=westFaceSection(x,z);
+ if(coverage===0&&!shared)return y;
  const rise=476*smooth((x-116)/748);
  const folds=(4.6*Math.sin(.017*x+.036*z)+1.4*Math.sin(.048*x-.028*z))*
   smooth((x-190)/153);
- return mix(y,original+rise+folds+westFaceLandform(x,z).relief,coverage*clearance);
+ const face=mix(y,original+rise+folds+westFaceLandform(x,z).relief,coverage*clearance);
+ return shared?mix(face,shared.y,shared.weight*clearance):face;
+}
+function westFaceSection(x,z){
+ if(x<=230||x>=854||z<-335||z>346)return null;
+ const sections=HIGHLINE_SIDE_CHUTES.map(route=>sideChuteSample(route,x,z,260));
+ if(sections.some(section=>!section))return null;
+ const north=sections[0],south=sections.at(-1);
+ const outerDistance=Math.max(0,north.centerZ-z,z-south.centerZ);
+ if(outerDistance>=126)return null;
+ const across=1-smooth((outerDistance-20)/106);
+ const ends=smooth((x-230)/115)*(1-smooth((x-793)/61));
+ let elevation;
+ if(z<north.centerZ||z>south.centerZ){
+  const edge=z<north.centerZ?north:south;
+  const crossfall=clamp((z-edge.centerZ)*edge.slope,-18,20);
+  elevation=edge.centerY+crossfall+16*smooth(outerDistance/29);
+  elevation+=westFaceLandform(x,z).relief*.58*smooth(outerDistance/21);
+ }else{
+  const i=sections.findIndex(section=>section.centerZ>=z);
+  if(i===0)return {y:north.centerY,weight:ends};
+  const a=sections[i-1],b=sections[i];
+  const t=(z-a.centerZ)/(b.centerZ-a.centerZ);
+  const spur=i===1
+   ?9+17*Math.exp(-(((x-680)/63)**2))+13*Math.exp(-(((x-492)/71)**2))
+   :7+23*Math.exp(-(((x-604)/74)**2))+10*Math.exp(-(((x-413)/59)**2));
+  const crest=i===1?.34+.14*smooth((x-420)/205):.67-.18*smooth((x-548)/174);
+  const reach=t<crest?crest:1-crest;
+  const ridge=Math.max(0,1-Math.abs(t-crest)/reach)**1.15;
+  elevation=mix(a.centerY,b.centerY,smooth(t))+spur*ridge;
+  const away=Math.min(z-a.centerZ,b.centerZ-z);
+  elevation+=westFaceLandform(x,z).relief*.58*smooth((away-9)/17);
+ }
+ return {y:elevation,weight:across*ends};
 }
 function sideTerrainClearance(x,z,notchFeather=42){
  if(x>88&&x<430&&z>126&&z<415){
@@ -423,15 +458,16 @@ function sideChuteSurface(x,z){
   const upperTerrain=1-smooth((s.along-route.distance*.58)/(route.distance*.10));
   const shoulderWidth=33+upperTerrain*(1+8*Math.sin(s.along*.013+route.width));
   const feather=1-smooth(edge/shoulderWidth);
-  const influence=entry*exit*feather;
   const wallEnd=sideChuteShapes.get(route).wallEnd;
+  const enclosed=1-.78*smooth((s.along-route.distance*wallEnd)/(route.distance*.24));
+  const influence=entry*exit*feather*enclosed;
   if(openFace>0&&entry>0&&exit>0&&s.crossDirection>.5){
    const lowerZ=s.across>0,nearest=lowerZ?north:south;
    if(!nearest||edge<nearest.edge){
     const rim=width+3.5;
     const offset=(distance-rim)/s.crossDirection;
     const rise=chuteWallProfile(route,{...s,distance:rim},width,wallEnd).relief;
-    const weight=entry*exit*(1-smooth((distance-46)/18));
+    const weight=entry*exit*enclosed*(1-smooth((distance-46)/18));
     const lip={edge,offset,weight,y:s.y+(lowerZ?-1:1)*offset*s.slope+rise};
     if(lowerZ)north=lip;
     else south=lip;

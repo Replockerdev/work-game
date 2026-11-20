@@ -208,7 +208,25 @@ export function createMountain(canvas){
  geo.setAttribute('rockExposure',new T.BufferAttribute(rockExposure,1));
  geo.setAttribute('westFaceMask',new T.BufferAttribute(westFaceMask,1));
  geo.setAttribute('floorRock',new T.BufferAttribute(chuteBedrock(xs,rows),1));
- geo.computeVertexNormals();const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
+ geo.computeVertexNormals();
+ const normals=geo.attributes.normal,vertexColors=geo.attributes.color;
+ const exposedStone=new T.Color('#6d7476'),snowTint=new T.Color();
+ for(let i=0;i<pos.count;i++){
+  if(westFaceMask[i]<.08)continue;
+  const x=pos.getX(i),z=pos.getZ(i),y=pos.getY(i);
+  const steep=T.MathUtils.smoothstep(1-normals.getY(i),.35,.66);
+  const ledges=terrainNoise(x*.031+y*.009,z*.026-y*.015);
+  const dust=terrainNoise(x*.079,z*.065);
+  const exposure=steep*T.MathUtils.smoothstep(ledges,.24,.64)*westFaceMask[i]*
+   (1-.58*T.MathUtils.smoothstep(y,595,704));
+  if(exposure<.01)continue;
+  exposedStone.set('#6d7476').lerp(weatheredRock,.37*ledges).lerp(rockShade,.31*dust);
+  snowTint.setRGB(vertexColors.getX(i),vertexColors.getY(i),vertexColors.getZ(i));
+  snowTint.lerp(exposedStone,exposure*.83);
+  vertexColors.setXYZ(i,snowTint.r,snowTint.g,snowTint.b);
+  rockExposure[i]=Math.max(rockExposure[i],exposure*.82);
+ }
+ const ground=new T.Mesh(geo,snowMaterial(renderer));ground.receiveShadow=true;scene.add(ground);
  function renderedSnow(x,z){
   const column=xs.findIndex(sample=>sample>x),row=rows.findIndex(sample=>sample>z);
   if(column<=0||row<=0)return surfaceHeight(x,z);
