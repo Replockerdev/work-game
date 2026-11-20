@@ -6,25 +6,56 @@ const fract=x=>x-Math.floor(x),lerp=(a,b,t)=>a+(b-a)*t;
 function hash(x,z){return fract(Math.sin(x*127.1+z*311.7)*43758.5453);}
 function noise(x,z){const ix=Math.floor(x),iz=Math.floor(z),u=fract(x),v=fract(z),sx=u*u*(3-2*u),sz=v*v*(3-2*v);return lerp(lerp(hash(ix,iz),hash(ix+1,iz),sx),lerp(hash(ix,iz+1),hash(ix+1,iz+1),sx),sz);}
 function fbm(x,z){let sum=0,amp=.5;for(let i=0;i<5;i++){sum+=noise(x,z)*amp;x=x*2.03+11;z=z*2.01-13;amp*=.5;}return sum;}
+const snowDetailFunctions=`
+float snowNoise(vec2 p){
+ vec2 cell=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+ float seed=dot(cell,vec2(127.1,311.7));
+ vec4 n=fract(sin(seed+vec4(0.0,127.1,311.7,438.8))*43758.5453);
+ return mix(mix(n.x,n.y,f.x),mix(n.z,n.w,f.x),f.y);
+}
+vec3 snowSurface(vec3 p){
+ float drift=snowNoise(p.xz*.055);
+ float patches=snowNoise(p.xz*.23+vec2(drift*3.1,-drift*2.3));
+ float wind=p.x*.56+p.z*.32+4.4*drift+1.8*patches;
+ float ripples=pow(.5+.5*sin(wind),5.0);
+ float broken=snowNoise(p.xz*.71+vec2(patches));
+ float shade=.96+.15*(patches-.5)+.10*(drift-.5)-.065*ripples*(.35+.65*broken);
+ return vec3(shade-.014*(1.0-patches),shade+.003,shade+.016*(1.0-patches));
+}
+`;
 export function snowMaterial(renderer){
- const c=document.createElement('canvas');c.width=c.height=1024;
+ const c=document.createElement('canvas');c.width=c.height=512;
+ const relief=document.createElement('canvas');relief.width=relief.height=512;
  const ctx=c.getContext('2d'),im=ctx.createImageData(c.width,c.height);
+ const reliefCtx=relief.getContext('2d'),bumps=reliefCtx.createImageData(512,512);
  let seed=12388;
  for(let k=0;k<im.data.length;k+=4){
   seed=(Math.imul(seed,1664525)+1013904223)>>>0;
-  const snow=232+(seed/4294967296-.5)*16;
-  im.data[k]=snow-3;im.data[k+1]=snow;im.data[k+2]=snow+5;im.data[k+3]=255;
+  const u=(k/4%512)/512*Math.PI*2,v=Math.floor(k/2048)/512*Math.PI*2;
+  const grain=seed/4294967296-.5;
+  // Integer wave frequencies make the fine, packed powder tile seamless.
+  const crust=.48*Math.sin(3*u+2*v+.7*Math.sin(u-v))+
+   .24*Math.sin(9*u-5*v+.9*Math.sin(2*u+v))+
+   .16*Math.sin(21*u+13*v)+.08*Math.sin(43*u-27*v);
+  const snow=237+crust*10+grain*13;
+  im.data[k]=snow-2;im.data[k+1]=snow;im.data[k+2]=snow+4;im.data[k+3]=255;
+  const bump=128+crust*45+grain*32;
+  bumps.data[k]=bumps.data[k+1]=bumps.data[k+2]=bump;bumps.data[k+3]=255;
  }
- ctx.putImageData(im,0,0);
+ ctx.putImageData(im,0,0);reliefCtx.putImageData(bumps,0,0);
  const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;tex.wrapS=tex.wrapT=T.RepeatWrapping;
- tex.repeat.set((SNOW_EAST-SNOW_WEST)/5,(SNOW_SOUTH-SNOW_NORTH)/5);tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
- const material=new T.MeshStandardMaterial({vertexColors:true,map:tex,roughness:.96});
+ tex.repeat.set((SNOW_EAST-SNOW_WEST)/8,(SNOW_SOUTH-SNOW_NORTH)/8);tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+ const bumpMap=new T.CanvasTexture(relief);bumpMap.wrapS=bumpMap.wrapT=T.RepeatWrapping;
+ bumpMap.repeat.copy(tex.repeat);bumpMap.anisotropy=tex.anisotropy;
+ const material=new T.MeshStandardMaterial({vertexColors:true,map:tex,bumpMap,bumpScale:.045,roughness:.94});
  material.onBeforeCompile=shader=>{
  const surfaceVaryings='varying float vRockExposure; varying float vFloorRock; varying float vWestFace; varying vec3 vSnowWorld;\n';
  shader.vertexShader='attribute float rockExposure; attribute float floorRock; attribute float westFaceMask;\n'+surfaceVaryings+shader.vertexShader;
  shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvSnowWorld=(modelMatrix*vec4(transformed,1.0)).xyz;\nvRockExposure=rockExposure;\nvFloorRock=floorRock;\nvWestFace=westFaceMask;');
- shader.fragmentShader=surfaceVaryings+shader.fragmentShader;
+ shader.fragmentShader=surfaceVaryings+snowDetailFunctions+shader.fragmentShader;
  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+float snowCoverage=(1.0-smoothstep(.08,.65,vRockExposure))*(1.0-smoothstep(.1,.7,vFloorRock));
+diffuseColor.rgb*=mix(vec3(1.0),snowSurface(vSnowWorld),snowCoverage);
 if(vRockExposure>.01||vFloorRock>.01){
  vec3 p=vSnowWorld;
  float beds=p.y*.94+p.x*.17+sin(p.z*.44)*.66;
@@ -77,7 +108,7 @@ export function addRange(scene){
  }
  function tri(a,b,c){for(const p of[a,b,c]){verts.push(p.x,p.y,p.z);normals.push(p.n.x,p.n.y,p.n.z);cols.push(p.color.r,p.color.g,p.color.b);}}
  for(let j=0;j<zs.length-1;j++)for(let i=0;i<xs.length-1;i++){const x=xs[i],xx=xs[i+1],z=zs[j],zz=zs[j+1];if(x>=SNOW_WEST&&xx<=SNOW_EAST&&z>=SNOW_NORTH&&zz<=SNOW_SOUTH)continue;const a=point(x,z),b=point(xx,z),c=point(x,zz),d=point(xx,zz);tri(a,c,b);tri(b,c,d);}
- const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setAttribute('color',new T.Float32BufferAttribute(cols,3));geo.setAttribute('normal',new T.Float32BufferAttribute(normals,3));const rangeMat=new T.MeshStandardMaterial({vertexColors:true,roughness:1});rangeMat.onBeforeCompile=shader=>{shader.vertexShader='varying vec3 vRangeWorld;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvRangeWorld=(modelMatrix*vec4(transformed,1.0)).xyz;');shader.fragmentShader='varying vec3 vRangeWorld;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\nfloat rocky=1.0-smoothstep(.28,.55,dot(diffuseColor.rgb,vec3(.333)));float strata=sin(vRangeWorld.x*.19+vRangeWorld.y*.23+vRangeWorld.z*.07)*sin(vRangeWorld.y*.31-vRangeWorld.z*.11);float fleck=fract(sin(dot(floor(vRangeWorld.xz*2.0),vec2(12.9898,78.233)))*43758.5453);diffuseColor.rgb*=1.0-rocky*(.035+.045*strata+.025*fleck);');};const terrain=new T.Mesh(geo,rangeMat);terrain.receiveShadow=true;scene.add(terrain);
+ const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setAttribute('color',new T.Float32BufferAttribute(cols,3));geo.setAttribute('normal',new T.Float32BufferAttribute(normals,3));const rangeMat=new T.MeshStandardMaterial({vertexColors:true,roughness:1});rangeMat.onBeforeCompile=shader=>{shader.vertexShader='varying vec3 vRangeWorld;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvRangeWorld=(modelMatrix*vec4(transformed,1.0)).xyz;');shader.fragmentShader='varying vec3 vRangeWorld;\n'+snowDetailFunctions+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\nfloat rocky=1.0-smoothstep(.28,.55,dot(diffuseColor.rgb,vec3(.333)));diffuseColor.rgb*=mix(snowSurface(vRangeWorld),vec3(1.0),rocky);float strata=sin(vRangeWorld.x*.19+vRangeWorld.y*.23+vRangeWorld.z*.07)*sin(vRangeWorld.y*.31-vRangeWorld.z*.11);float fleck=fract(sin(dot(floor(vRangeWorld.xz*2.0),vec2(12.9898,78.233)))*43758.5453);diffuseColor.rgb*=1.0-rocky*(.035+.045*strata+.025*fleck);');};const terrain=new T.Mesh(geo,rangeMat);terrain.receiveShadow=true;scene.add(terrain);
  const sky=new T.Mesh(new T.SphereGeometry(7800,32,16),new T.ShaderMaterial({side:T.BackSide,depthWrite:false,vertexShader:'varying vec3 vDir; void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:`varying vec3 vDir;void main(){vec3 d=normalize(vDir);float h=max(d.y,0.0);vec3 color=mix(vec3(.80,.88,.92),vec3(.29,.58,.79),pow(h,.42));float sun=pow(max(dot(d,normalize(vec3(-.7,.5,.25))),0.0),650.0);color+=vec3(1.0,.86,.60)*sun*.45;float streak=sin(d.x*28.0+d.z*14.0+sin(d.z*35.0)*.5);float cloud=smoothstep(.75,1.0,streak)*smoothstep(.15,.4,h)*(1.0-smoothstep(.4,.56,h));color=mix(color,vec3(.91,.94,.94),cloud*.24);gl_FragColor=vec4(color,1.0);}`}));sky.renderOrder=-100;scene.add(sky);
  const rocks=new T.InstancedMesh(new T.IcosahedronGeometry(1,1),new T.MeshStandardMaterial({color:'#7f888b',roughness:1,flatShading:true}),100);
  const o=new T.Object3D(),rockColliders=[];
