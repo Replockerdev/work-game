@@ -276,7 +276,7 @@ function interpolateSlope(a,b,slopeA,slopeB,t){
  const t2=t*t,t3=t2*t;
  return a*(2*t3-3*t2+1)+slopeA*(t3-2*t2+t)+b*(-2*t3+3*t2)+slopeB*(t3-t2);
 }
-function sideChuteSample(route,x,z){
+function sideChuteSample(route,x,z,reach=64){
  const points=route.grades;
  const b=route.bounds;
  if(x>=points[0].x||x<=points.at(-1).x||z<b.top||z>b.bottom)return null;
@@ -285,7 +285,7 @@ function sideChuteSample(route,x,z){
  const center=interpolateSlope(a.z,next.z,span*a.dz/a.dx,span*next.dz/next.dx,t);
  const crossDirection=-mix(a.dx,next.dx,t);
  const across=(z-center)*crossDirection;
- if(Math.abs(across)>64)return null;
+ if(Math.abs(across)>reach)return null;
  const elevation=interpolateSlope(a.y,next.y,span*a.grade/a.dx,span*next.grade/next.dx,t);
  const slope=mix(a.dz,next.dz,t)*mix(a.grade,next.grade,t);
  return {along:mix(a.along,next.along,t),across,y:elevation+(z-center)*slope,crossDirection,slope};
@@ -363,7 +363,7 @@ function westFaceLandform(x,z){
 }
 export function westFaceOutcrop(x,z,coverage){
  if(coverage<.08||x<305||x>826||z<-320||z>151||inSideChuteLane(x,z))return 0;
- return westFaceLandform(x,z).rock*coverage;
+ return westFaceLandform(x,z).rock*coverage*(1-(spruceLeftApronSample(x,z)?.weight??0));
 }
 function highlineWestFace(x,z,original,y,clearance){
  const coverage=westFaceCoverage(x,z);
@@ -605,7 +605,37 @@ function slalomStagingHeight(x,z,y){
  const grade=RACE_START.y+7.8-.085*(forward+20)+.23*aboveStaging*smooth(aboveStaging/9);
  return mix(y,grade,sides*ends*smooth((z-156)/10));
 }
+function spruceLeftApronSample(x,z){
+ if(x<=260||x>=812||z<-284||z>435)return null;
+ const s=sideChuteSample(spruceSlot,x,z,151);
+ if(!s)return null;
+ const rim=sideChuteWidth(spruceSlot,s.along)+8;
+ const offset=s.across-rim;
+ if(offset<=0||s.across>=147)return null;
+ const innerZ=z-offset/s.crossDirection;
+ const outerZ=z+(147-s.across)/s.crossDirection;
+ const t=offset/(147-rim);
+ const width=smooth(offset/13)*(1-smooth((s.across-118)/29));
+ const ends=smooth((s.along-110)/58)*(1-smooth((s.along-525)/205));
+ const extent=smooth((x-260)/145)*(1-smooth((x-778)/34));
+ const slot=leeSlotSample(x,z);
+ const leeClearance=slot?smooth((slot.distance-15)/22):1;
+ return {innerZ,outerZ,t,weight:width*ends*extent*sideTerrainClearance(x,z,31)*leeClearance};
+}
+function spruceLeftApron(x,z,original,y){
+ const sample=spruceLeftApronSample(x,z);
+ if(!sample||sample.weight===0)return y;
+ const {innerZ,outerZ,t,weight}=sample;
+ const inner=highlineTerrainHeight(x,innerZ,original);
+ const outer=highlineTerrainHeight(x,outerZ,original);
+ const apron=mix(inner,outer,t)+2.8*4*t*(1-t);
+ return mix(y,apron,weight);
+}
 export function highlineHeight(x,z,original){
+ const y=highlineTerrainHeight(x,z,original);
+ return spruceLeftApron(x,z,original,y);
+}
+function highlineTerrainHeight(x,z,original){
  if(x<30)return original;
  const sideClearance=sideTerrainClearance(x,z);
  if(x<=OLD_EAST&&z<154){
@@ -709,7 +739,7 @@ export function highlineRock(x,z){
    rock=Math.max(rock*(1-profile.core*blend),profile.rock*blend);
   }
  }
- return rock*(1-(side?.core??0));
+ return rock*(1-(side?.core??0))*(1-(spruceLeftApronSample(x,z)?.weight??0));
 }
 export function leeMouthStone(x,z){
  if(x<700||x>752||z<9||z>65)return 0;
