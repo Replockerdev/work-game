@@ -301,7 +301,7 @@ export function createMountain(canvas){
  waymark('Sunbreak Bowl',HIGHLINE_PEAK.x+40,HIGHLINE_PEAK.z+23,'#4f7484',6.2);
  waymark('◆ Needle',HIGHLINE_PEAK.x+12,HIGHLINE_PEAK.z+25,'#4c506b',4.6);
  waymark('Windward Bowl',HIGHLINE_PEAK.x-13,HIGHLINE_PEAK.z+25,'#4b6a7e',6.2);
- waymark('◆ Juniper Notch',HIGHLINE_PEAK.x-38,HIGHLINE_PEAK.z+23,'#664d71',6.2);
+ waymark('◆ '+WEST_NOTCH.name,HIGHLINE_PEAK.x-38,HIGHLINE_PEAK.z+23,'#664d71',6.2);
  waymark('West face chutes',HIGHLINE_WEST_ENTRY.x-5,HIGHLINE_WEST_ENTRY.z+4,'#42556c',7.6,-Math.PI/2,1.05);
  for(const route of HIGHLINE_SIDE_CHUTES){
   const mouth=trailPoint(route,19);
