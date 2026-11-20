@@ -109,8 +109,8 @@ export const NEEDLE=trail('needle','Needle Chute','#546079','chute',7.6,[
  [839,-27,493],[829,25,438],[819,78,385],[815,126,336],[816,145,324]
 ]);
 export const WEST_NOTCH=trail('west-notch','Juniper Notch','#765b79','chute',6.9,[
- [863,-192,688],[813,-184,655],[747,-158,588],[672,-132,509],[611,-95,445],
- [582,-45,400],[607,12,373],[676,74,351],[750,123,332],[807,147,324]
+ [863,-192,688],[813,-184,655],[755,-154,599],[712,-119,557],
+ [682,-63,510],[712,-35,485],[752,5,445],[768,73,376],[807,147,324]
 ]);
 export const HIGHLINE_SIDE_CHUTES=[
  trail('north-rib','North Rib','#526985','chute',8,[
@@ -207,7 +207,8 @@ function trailWidth(route,sample){
  if(route===WEST_NOTCH){
   const slot=smooth((p-.08)/.14)*(1-smooth((p-.66)/.22));
   const pinch=.65+.45*Math.sin(sample.along*.053);
-  return route.width-slot*(3.45+pinch)+13*smooth((p-.71)/.25);
+  const turn=4*(1-smooth(Math.abs(sample.along-244)/63));
+  return route.width-slot*(3.45+pinch)+turn+13*smooth((p-.71)/.25);
  }
  return route.width-3.5*smooth((p-.16)/.21)*(1-smooth((p-.60)/.28))
   +13*smooth((p-.71)/.25);
@@ -397,8 +398,15 @@ function roundNotchShoulder(x,z,y){
  if(!notch||notch.across<8||notch.along<355)return y;
  const bank=smooth((notch.across-8)/13)*(1-smooth((notch.across-50)/32));
  const extent=smooth((notch.along-355)/45)*(1-smooth((notch.along-475)/58));
+ const clearance=notchNeighborClearance(x,z);
  const snow=notch.y+3*smooth(notch.across/15)+.016*(notch.across-6)**2;
- return mix(y,Math.min(y,snow),bank*extent);
+ return mix(y,Math.min(y,snow),bank*extent*clearance);
+}
+function notchNeighborClearance(x,z){
+ const needle=trailSample(NEEDLE,x,z),bowl=trailSample(WIND_BOWL,x,z);
+ const clearNeedle=needle?smooth((needle.distance-NEEDLE.width-4)/17):1;
+ const clearBowl=bowl?smooth((bowl.distance-21)/17):1;
+ return clearNeedle*clearBowl;
 }
 function sideChuteSurface(x,z){
  if(x<85||x>868||z<-318||z>330)return null;
@@ -468,7 +476,7 @@ function leeSlotTerrainSample(x,z){
 }
 function leeSlotProfile(s){
  const along=s.along,left=s.across<0;
- const fadeIn=smooth(along/27),fadeOut=smooth((leeSlotShoulderAlong-along)/29);
+ const fadeIn=smooth(along/27);
  const width=leeSlotWidth(along);
  const edge=s.distance-width;
  const sides=1-smooth(edge/29);
@@ -480,17 +488,14 @@ function leeSlotProfile(s){
  const relief=(ribHeight+3.6)*bank*shoulder;
  return {
   floor:s.y+relief,
-  cut:fadeIn*fadeOut*sides,
-  rock:fadeIn*fadeOut*smooth(ribHeight/10)*smooth(edge/3.4)*shoulder,
-  core:fadeIn*fadeOut*(1-smooth(edge/5))
+  cut:fadeIn*sides,
+  rock:fadeIn*smooth(ribHeight/10)*smooth(edge/3.4)*shoulder,
+  core:fadeIn*(1-smooth(edge/5))
  };
 }
 function leeSlotBlend(x,z){
  const bowl=trailSample(WIND_BOWL,x,z);
- const notch=trailSample(WEST_NOTCH,x,z);
- const clearBowl=bowl?smooth((bowl.distance-19.7)/13):1;
- const clearNotch=notch?smooth((notch.distance-4.5)/9):1;
- return clearBowl*clearNotch;
+ return bowl?smooth((bowl.distance-19.7)/13):1;
 }
 const leeLowerNeighbors=[[WEST_NOTCH,2.5,1.8],[WIND_BOWL,19.7,10],[MEADOW,13.5,10],[FIR_GLADE,17,10]];
 function leeSlotHeight(x,z,y){
@@ -500,7 +505,6 @@ function leeSlotHeight(x,z,y){
   const {along,distance,across}=sample;
   const width=leeSlotWidth(along);
   const sides=1-smooth((distance-width)/22);
-  const start=smooth((along-leeSlotShoulderAlong)/24);
   const end=smooth((LEE_SLOT.distance-along)/27);
   // Keep the lift transfer and the centers of the two flanking runs skiable.
   const terminalDistance=Math.hypot(x-HOLLOW_CHAIR.x,z-HOLLOW_CHAIR.z);
@@ -511,7 +515,7 @@ function leeSlotHeight(x,z,y){
    if(neighbor)joins*=smooth((neighbor.distance-clearance)/feather);
   }
   const drift=.17*Math.sin(along*.073+across*.11)*smooth((z-213)/54);
-  return mix(y,sample.y+drift,start*end*sides*saddle*joins);
+  return mix(y,sample.y+drift,end*sides*saddle*joins);
  }
  const {floor,cut}=leeSlotProfile(sample);
  return mix(y,floor,cut*leeSlotBlend(x,z));
@@ -677,7 +681,8 @@ function highlineTerrainHeight(x,z,original){
   const fade=route===HOLLOW_LINK?48+60*smooth((x-211)/141):
    route.kind==='bowl'?66:route.kind==='chute'?44:route.kind==='glade'?52:44;
   const envelope=route===WEST_NOTCH?width+3.5:width;
-  const influence=1-smooth((s.distance-envelope)/fade);
+  let influence=1-smooth((s.distance-envelope)/fade);
+  if(route===WEST_NOTCH)influence*=notchNeighborClearance(x,z);
   if(influence<=0)continue;
   const upper=route.kind==='bowl'||route.kind==='chute';
   const level=upper?1-smooth((z-150)/28):
@@ -739,7 +744,8 @@ export function highlineRock(x,z){
   for(const route of [NEEDLE,WEST_NOTCH]){
    const s=trailSample(route,x,z,true);
    if(!s)continue;
-   rock=Math.max(rock,chuteWallProfile(route,s,trailWidth(route,s)).rock);
+   const clearance=route===WEST_NOTCH?notchNeighborClearance(x,z):1;
+   rock=Math.max(rock,chuteWallProfile(route,s,trailWidth(route,s)).rock*clearance);
   }
   const slot=leeSlotTerrainSample(x,z);
   if(slot){
