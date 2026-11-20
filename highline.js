@@ -551,6 +551,11 @@ function chuteWallProfile(route,s,width,fanStart=.68){
   const reach=along<crest?crest-start:end-crest;
   rib=Math.max(rib,height*(1-smooth(Math.abs(along-crest)/reach)));
  }
+ if(notch){
+  // One continuous bank replaces the scalloped ribs beside Spruce Slot.
+  const sharedShoulder=smooth((along-65)/45)*(1-smooth((along-335)/55));
+  rib=mix(rib,side?7.5:17,sharedShoulder);
+ }
  // Leave room for the same ski line, with longer, irregular snow pockets on the low sides.
  const snowPocket=(1-smooth(rib/11))*(notch?2.8:3.8);
  const edge=s.distance-width-snowPocket;
@@ -609,18 +614,22 @@ function spruceLeftApronSample(x,z){
  if(x<=260||x>=812||z<-284||z>435)return null;
  const s=sideChuteSample(spruceSlot,x,z,151);
  if(!s)return null;
- const rim=sideChuteWidth(spruceSlot,s.along)+8;
+ const rim=sideChuteWidth(spruceSlot,s.along)+3.5;
  const offset=s.across-rim;
  if(offset<=0||s.across>=147)return null;
  const innerZ=z-offset/s.crossDirection;
  const outerZ=z+(147-s.across)/s.crossDirection;
  const t=offset/(147-rim);
- const width=smooth(offset/13)*(1-smooth((s.across-118)/29));
- const ends=smooth((s.along-110)/58)*(1-smooth((s.along-525)/205));
+ const width=smooth(offset/9)*(1-smooth((s.across-118)/29));
+ const ends=smooth((s.along-43)/47)*(1-smooth((s.along-525)/205));
  const extent=smooth((x-260)/145)*(1-smooth((x-778)/34));
  const slot=leeSlotSample(x,z);
  const leeClearance=slot?smooth((slot.distance-15)/22):1;
- return {innerZ,outerZ,t,weight:width*ends*extent*sideTerrainClearance(x,z,31)*leeClearance};
+ const notch=trailSample(WEST_NOTCH,x,z);
+ const notchClearance=notch?smooth((notch.distance-8)/9):1;
+ const approach=trailSample(HOLLOW_LINK,x,z);
+ const hollowClearance=approach?smooth((approach.distance-18)/30):1;
+ return {innerZ,outerZ,t,weight:width*ends*extent*notchClearance*hollowClearance*leeClearance};
 }
 function spruceLeftApron(x,z,original,y){
  const sample=spruceLeftApronSample(x,z);
